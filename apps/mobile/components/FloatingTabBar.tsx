@@ -8,6 +8,11 @@ import { BlurView } from 'expo-blur'
 export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets()
 
+  // Completely hide bottom tab navigation when inside full-screen Create Composer
+  if (state.routes[state.index]?.name === 'create') {
+    return null
+  }
+
   const getTabIcon = (routeName: string, isFocused: boolean) => {
     const iconColor = isFocused ? '#3b82f6' : '#9ca3af'
     const iconSize = 22

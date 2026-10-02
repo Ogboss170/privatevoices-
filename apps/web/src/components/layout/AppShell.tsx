@@ -17,6 +17,11 @@ const NAV_ITEMS = [
 export default function AppShell({ children }: { children: React.ReactNode }): React.JSX.Element {
   const pathname = usePathname()
 
+  const isCreatePage = pathname === '/create' || pathname.startsWith('/create/')
+  if (isCreatePage) {
+    return <div className="min-h-screen bg-white text-gray-900">{children}</div>
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* ── Sidebar (desktop) ── */}
