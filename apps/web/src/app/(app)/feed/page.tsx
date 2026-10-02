@@ -118,7 +118,7 @@ export default function FeedPage() {
           Private Voices
         </h1>
         <Link
-          href="/inbox"
+          href="/notifications"
           className="relative p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-700"
           aria-label="Notifications"
         >

@@ -164,3 +164,42 @@ export type TabParamList = {
   communities: undefined;
   profile: undefined;
 };
+
+// ─── Notifications ─────────────────────────────────────────────────────────────
+
+export type NotificationType =
+  | 'follow'
+  | 'follow_accept'
+  | 'post_like'
+  | 'post_comment'
+  | 'comment_reply'
+  | 'mention'
+  | 'whisper'
+  | 'whisper_reply'
+  | 'message'
+  | 'story_mention'
+  | 'community'
+  | 'system';
+
+export interface NotificationActor {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
+export interface AppNotification {
+  id: string;
+  recipientId: string;
+  actorId?: string | null;
+  actor?: NotificationActor | null;
+  type: NotificationType;
+  title: string;
+  message: string;
+  entityType?: 'post' | 'comment' | 'profile' | 'whisper' | 'chat' | 'community' | 'security' | null;
+  entityId?: string | null;
+  isRead: boolean;
+  groupCount?: number;
+  createdAt: string;
+  updatedAt?: string;
+}
