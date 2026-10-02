@@ -50,6 +50,8 @@ export default function HomeScreen() {
       const followingIds = (follows ?? []).map((f) => f.following_id)
       followingIds.push(currentUserId)
       query = query.in('author_id', followingIds)
+    } else if (activeTab === 'community') {
+      query = query.not('community_id', 'is', null)
     }
 
     const { data, error } = await query
@@ -78,10 +80,10 @@ export default function HomeScreen() {
             id: p.id,
             authorId: p.author_id,
             author: {
-              id: p.author.id,
-              username: p.author.username,
-              displayName: p.author.display_name,
-              avatarUrl: p.author.avatar_url,
+              id: p.author?.id || p.author_id,
+              username: p.author?.username || 'user',
+              displayName: p.author?.display_name || 'User',
+              avatarUrl: p.author?.avatar_url || null,
             },
             content: p.content,
             imageUrls: p.image_urls ?? [],
@@ -105,6 +107,22 @@ export default function HomeScreen() {
 
   useEffect(() => {
     fetchPosts()
+
+    // Realtime listener for instant feed updates
+    const channel = supabase
+      .channel('mobile:feed_posts')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'posts' },
+        () => {
+          fetchPosts()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [fetchPosts])
 
   const handleRefresh = () => {
@@ -207,3 +225,4 @@ const styles = StyleSheet.create({
   emptyBody: { fontSize: 14, color: colors.gray500, textAlign: 'center', lineHeight: 20 },
   listContent: { padding: 16, paddingBottom: 100 },
 })
+

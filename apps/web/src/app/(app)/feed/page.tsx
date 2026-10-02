@@ -45,6 +45,8 @@ export default function FeedPage() {
       const followingIds = (follows ?? []).map((f) => f.following_id)
       followingIds.push(currentUserId)
       query = query.in('author_id', followingIds)
+    } else if (activeTab === 'community') {
+      query = query.not('community_id', 'is', null)
     }
 
     const { data, error } = await query
@@ -78,10 +80,10 @@ export default function FeedPage() {
             id: p.id,
             authorId: p.author_id,
             author: {
-              id: p.author.id,
-              username: p.author.username,
-              displayName: p.author.display_name,
-              avatarUrl: p.author.avatar_url,
+              id: p.author?.id || p.author_id,
+              username: p.author?.username || 'user',
+              displayName: p.author?.display_name || 'User',
+              avatarUrl: p.author?.avatar_url || null,
             },
             content: p.content,
             imageUrls: p.image_urls ?? [],
@@ -104,7 +106,23 @@ export default function FeedPage() {
 
   useEffect(() => {
     fetchPosts()
-  }, [fetchPosts])
+
+    // Realtime listener for instant feed updates upon new post creation
+    const channel = supabase
+      .channel('public:feed_posts')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'posts' },
+        () => {
+          fetchPosts()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [fetchPosts, supabase])
 
   function handleDeletePost(deletedId: string) {
     setPosts((prev) => prev.filter((p) => p.id !== deletedId))
