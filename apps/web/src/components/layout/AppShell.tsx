@@ -3,7 +3,7 @@
 import React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Search, PlusSquare, Inbox, Users, User } from 'lucide-react'
+import { Home, Search, PlusSquare, Inbox, Users, User, Shield } from 'lucide-react'
 
 const NAV_ITEMS = [
   { href: '/feed',        label: 'Home',        Icon: Home },
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: '/inbox',       label: 'Inbox',       Icon: Inbox },
   { href: '/communities', label: 'Communities', Icon: Users },
   { href: '/profile',     label: 'Profile',     Icon: User },
+  { href: '/admin',       label: 'Admin',       Icon: Shield },
 ]
 
 export default function AppShell({ children }: { children: React.ReactNode }): React.JSX.Element {
