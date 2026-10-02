@@ -7,6 +7,7 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  Share,
 } from 'react-native'
 import { Edit3, Lock, LogOut } from 'lucide-react-native'
 import { supabase } from '../../lib/supabase'
@@ -127,6 +128,37 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Anonymous Whisper Link Card */}
+      {profile && (
+        <View style={styles.whisperLinkCard}>
+          <View style={styles.whisperLinkHeader}>
+            <Text style={styles.whisperIcon}>🤫</Text>
+            <Text style={styles.whisperTitle}>Your Anonymous Whisper Link</Text>
+          </View>
+          <Text style={styles.whisperSubtitle}>
+            Let people send you anonymous messages. Share on WhatsApp, Instagram, X, or your bio.
+          </Text>
+          <View style={styles.whisperUrlRow}>
+            <Text style={styles.whisperUrlText} numberOfLines={1}>
+              privatevoices.app/w/@{profile.username}
+            </Text>
+            <TouchableOpacity
+              style={styles.shareBtn}
+              onPress={() => {
+                const url = `https://privatevoices.app/w/@${profile.username}`
+                Share.share({
+                  title: `Send an Anonymous Whisper to ${profile.display_name}`,
+                  message: `Send me an anonymous Whisper on Private Voices: ${url}`,
+                  url,
+                })
+              }}
+            >
+              <Text style={styles.shareBtnText}>Share Link</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {/* Edit Profile Modal */}
       {profile && (
         <EditProfileModal
@@ -210,4 +242,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#fef2f2',
   },
+  whisperLinkCard: {
+    width: '100%',
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: colors.brand,
+    borderRadius: 16,
+    gap: 8,
+  },
+  whisperLinkHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  whisperIcon: { fontSize: 18 },
+  whisperTitle: { fontSize: 14, fontWeight: '700', color: '#ffffff' },
+  whisperSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.8)', lineHeight: 16 },
+  whisperUrlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 10,
+    padding: 8,
+    marginTop: 4,
+  },
+  whisperUrlText: { flex: 1, fontSize: 12, color: '#ffffff', fontFamily: 'monospace', marginRight: 8 },
+  shareBtn: { backgroundColor: '#ffffff', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 12 },
+  shareBtnText: { fontSize: 12, fontWeight: '700', color: colors.brand },
 })

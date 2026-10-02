@@ -162,6 +162,24 @@ export default function InboxPage(): React.JSX.Element {
                   <div className="flex items-center gap-2 text-xs text-gray-400">
                     <span>{new Date(whisper.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
                     <button
+                      onClick={async () => {
+                        const reason = prompt('Reason for reporting this whisper:')
+                        if (reason !== null) {
+                          const { error } = await supabase.from('reports').insert({
+                            reporter_id: currentUserId,
+                            target_id: whisper.id,
+                            target_type: 'whisper',
+                            reason: reason || 'Abusive anonymous whisper',
+                          })
+                          if (!error) alert('Whisper reported to moderators.')
+                        }
+                      }}
+                      className="text-gray-400 hover:text-amber-600 p-1 transition-colors"
+                      title="Report whisper"
+                    >
+                      🚩
+                    </button>
+                    <button
                       onClick={() => handleDeleteWhisper(whisper.id)}
                       className="text-gray-400 hover:text-red-500 p-1 transition-colors"
                       title="Delete whisper"
@@ -186,7 +204,7 @@ export default function InboxPage(): React.JSX.Element {
                   </div>
                 )}
 
-                {/* Reply Form */}
+                {/* Reply Form & Share Actions */}
                 <div className="pt-2 flex items-center justify-between gap-2">
                   {!whisper.reply_content ? (
                     <form
@@ -213,13 +231,15 @@ export default function InboxPage(): React.JSX.Element {
                       </button>
                     </form>
                   ) : (
-                    <button
-                      onClick={() => handleShareWhisperAsPost(whisper)}
-                      className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 ml-auto"
-                    >
-                      <Share2 size={13} />
-                      <span>Share as Post</span>
-                    </button>
+                    <div className="flex items-center gap-2 ml-auto">
+                      <button
+                        onClick={() => handleShareWhisperAsPost(whisper)}
+                        className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5"
+                      >
+                        <Share2 size={13} />
+                        <span>Share to Feed</span>
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>

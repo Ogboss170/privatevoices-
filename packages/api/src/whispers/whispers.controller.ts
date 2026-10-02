@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Param,
   Body,
@@ -22,8 +23,17 @@ export class WhispersController {
   constructor(private readonly whispersService: WhispersService) {}
 
   /**
+   * GET /api/whispers/profile/:username
+   * Fetch public recipient profile and whisper settings for anonymous submission page
+   */
+  @Get('profile/:username')
+  getRecipientProfile(@Param('username') username: string) {
+    return this.whispersService.getRecipientProfile(username);
+  }
+
+  /**
    * POST /api/whispers/send
-   * Send an anonymous whisper to a user (no login required for sender, but recipient username specified)
+   * Send an anonymous whisper to a user
    */
   @Post('send')
   @HttpCode(HttpStatus.CREATED)
@@ -33,13 +43,65 @@ export class WhispersController {
   }
 
   /**
-   * GET /api/whispers/inbox
+   * POST /api/whispers/:username
+   * Send an anonymous whisper directly to username (e.g., from /w/@username public route)
+   */
+  @Post(':username')
+  @HttpCode(HttpStatus.CREATED)
+  sendWhisperToUser(
+    @Param('username') username: string,
+    @Body() body: { content: string; senderSessionHash?: string },
+    @Req() req: any,
+  ) {
+    const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1';
+    return this.whispersService.sendWhisper(
+      {
+        recipientUsername: username,
+        content: body.content,
+        senderSessionHash: body.senderSessionHash,
+      },
+      String(ip),
+    );
+  }
+
+  /**
+   * GET /api/whispers (and /api/whispers/inbox)
    * Fetch all anonymous whispers received by current user
    */
+  @Get()
+  @UseGuards(SupabaseAuthGuard)
+  getMyWhispersRoot(@CurrentUser() user: User) {
+    return this.whispersService.getMyWhispers(user);
+  }
+
   @Get('inbox')
   @UseGuards(SupabaseAuthGuard)
   getMyWhispers(@CurrentUser() user: User) {
     return this.whispersService.getMyWhispers(user);
+  }
+
+  /**
+   * PATCH /api/whispers/:id/read
+   * Mark a whisper as read
+   */
+  @Patch(':id/read')
+  @UseGuards(SupabaseAuthGuard)
+  markAsRead(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.whispersService.markAsRead(user, id);
+  }
+
+  /**
+   * POST /api/whispers/:id/report
+   * Report an abusive whisper
+   */
+  @Post(':id/report')
+  @UseGuards(SupabaseAuthGuard)
+  reportWhisper(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Body() body: { reason?: string },
+  ) {
+    return this.whispersService.reportWhisper(user, id, body.reason);
   }
 
   /**

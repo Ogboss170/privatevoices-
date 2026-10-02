@@ -166,13 +166,14 @@ export default function ProfileDashboardPage(): React.JSX.Element {
           </button>
 
           <a
-            href={`/@${profile.username}`}
+            href={`/w/@${profile.username}`}
             target="_blank"
+            rel="noopener noreferrer"
             className="btn-secondary text-xs py-2 px-3 flex items-center gap-1.5"
-            title="View Public Profile Link"
+            title="Preview Whisper Link"
           >
             <ExternalLink size={14} />
-            <span>Public Link</span>
+            <span>Whisper Link</span>
           </a>
 
           <button
@@ -182,6 +183,65 @@ export default function ProfileDashboardPage(): React.JSX.Element {
           >
             <LogOut size={16} />
           </button>
+        </div>
+      </div>
+
+      {/* Your Anonymous Whisper Link Card */}
+      <div className="card p-5 bg-gradient-to-r from-purple-900 to-indigo-900 text-white space-y-3 shadow-lg">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <span className="text-xl">🤫</span>
+            <h3 className="font-bold text-sm">Your Anonymous Whisper Link</h3>
+          </div>
+          <span className="text-[10px] bg-white/20 px-2.5 py-0.5 rounded-full font-mono text-purple-200 font-semibold">
+            Public Link
+          </span>
+        </div>
+        <p className="text-xs text-purple-200 leading-relaxed">
+          Let people send you anonymous messages. Share on WhatsApp, Instagram, X, TikTok, or your bio.
+        </p>
+        <div className="flex flex-wrap items-center gap-2 bg-black/40 border border-white/20 rounded-xl p-2.5 text-xs font-mono">
+          <span className="truncate flex-1 min-w-[140px] text-purple-200">
+            privatevoices.app/w/@{profile.username}
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => {
+                const url = `${window.location.origin}/w/@${profile.username}`
+                navigator.clipboard.writeText(url)
+                alert('Whisper link copied to clipboard!')
+              }}
+              className="px-3 py-1.5 bg-white text-purple-950 font-bold rounded-lg text-xs hover:bg-purple-100 transition-colors shadow-sm"
+            >
+              Copy Link
+            </button>
+            <button
+              onClick={() => {
+                const url = `${window.location.origin}/w/@${profile.username}`
+                if (navigator.share) {
+                  navigator.share({
+                    title: `Send an Anonymous Whisper to ${profile.display_name}`,
+                    text: 'Receive honest thoughts from people around you — anonymously.',
+                    url,
+                  })
+                } else {
+                  navigator.clipboard.writeText(url)
+                  alert('Whisper link copied to clipboard!')
+                }
+              }}
+              className="px-3 py-1.5 bg-purple-500 hover:bg-purple-600 text-white font-bold rounded-lg text-xs transition-colors shadow-sm"
+            >
+              Share
+            </button>
+            <a
+              href={`/w/@${profile.username}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-lg text-xs transition-colors"
+            >
+              Preview
+            </a>
+          </div>
         </div>
       </div>
 
