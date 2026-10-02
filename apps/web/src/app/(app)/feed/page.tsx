@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
+import { Bell } from 'lucide-react'
 import PostCard from '@/components/feed/PostCard'
 import StoriesTray from '@/components/stories/StoriesTray'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
@@ -110,10 +112,25 @@ export default function FeedPage() {
 
   return (
     <div className="space-y-4 max-w-2xl mx-auto">
-      {/* 24-Hour Temporary Stories Tray */}
+      {/* 1. Header: Left Title + Right Notification Bell */}
+      <header className="flex items-center justify-between py-2 px-1">
+        <h1 className="text-xl font-bold tracking-tight text-gray-900">
+          Private Voices
+        </h1>
+        <Link
+          href="/inbox"
+          className="relative p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-700"
+          aria-label="Notifications"
+        >
+          <Bell size={22} />
+          <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full ring-2 ring-white" />
+        </Link>
+      </header>
+
+      {/* 2. 24-Hour Temporary Stories Tray */}
       <StoriesTray />
 
-      {/* Feed Filter Tabs */}
+      {/* 3. Feed Filter Tabs */}
       <div className="flex gap-1 border-b border-gray-200 bg-white px-2 rounded-lg overflow-x-auto">
         {TABS.map((tab) => (
           <button
@@ -130,7 +147,7 @@ export default function FeedPage() {
         ))}
       </div>
 
-      {/* Feed Posts */}
+      {/* 4. Feed Content */}
       {loading ? (
         <div className="card p-12 text-center text-gray-400">
           <p className="text-sm">Loading feed...</p>

@@ -1,21 +1,23 @@
 import React from 'react'
 import { View, TouchableOpacity, StyleSheet } from 'react-native'
-import { Tabs } from 'expo-router'
+import { Tabs, useRouter } from 'expo-router'
 import { Bell } from 'lucide-react-native'
 import { FloatingTabBar } from '../../components/FloatingTabBar'
 
 export default function TabLayout() {
+  const router = useRouter()
+
   return (
     <Tabs
       tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{
         headerStyle: { backgroundColor: '#ffffff' },
         headerShadowVisible: false,
-        headerTitleStyle: { fontWeight: '700', color: '#111827' },
+        headerTitleStyle: { fontWeight: '700', fontSize: 20, color: '#111827' },
         headerRight: () => (
           <TouchableOpacity
             style={styles.notificationHeaderBtn}
-            onPress={() => console.log('Notification pressed')}
+            onPress={() => router.push('/inbox')}
             activeOpacity={0.7}
           >
             <Bell color="#111827" size={22} />
