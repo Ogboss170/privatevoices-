@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Home, Search, PlusSquare, Inbox, Users, User } from 'lucide-react'
@@ -13,7 +14,7 @@ const NAV_ITEMS = [
   { href: '/profile',     label: 'Profile',     Icon: User },
 ]
 
-export default function AppShell({ children }: { children: React.ReactNode }) {
+export default function AppShell({ children }: { children: React.ReactNode }): React.JSX.Element {
   const pathname = usePathname()
 
   return (

@@ -1,0 +1,255 @@
+'use client'
+
+import React, { useState } from 'react'
+import Image from 'next/image'
+import Link from 'next/link'
+import { Heart, MessageCircle, Bookmark, Share2, Trash2 } from 'lucide-react'
+import type { Post } from '@private-voices/shared'
+import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+
+interface PostCardProps {
+  post: Post
+  currentUserId?: string
+  onDelete?: (postId: string) => void
+}
+
+export default function PostCard({ post, currentUserId, onDelete }: PostCardProps): React.JSX.Element {
+  const supabase = createSupabaseBrowserClient()
+  const [isLiked, setIsLiked] = useState(post.isLikedByMe)
+  const [likeCount, setLikeCount] = useState(post.likeCount)
+  const [isSaved, setIsSaved] = useState(post.isSavedByMe)
+  const [showComments, setShowComments] = useState(false)
+  const [comments, setComments] = useState<any[]>([])
+  const [commentText, setCommentText] = useState('')
+  const [loadingComments, setLoadingComments] = useState(false)
+  const [submittingComment, setSubmittingComment] = useState(false)
+
+  const isOwner = currentUserId === post.authorId
+
+  async function handleToggleLike() {
+    const prevLiked = isLiked
+    const prevCount = likeCount
+    setIsLiked(!prevLiked)
+    setLikeCount(prevLiked ? prevCount - 1 : prevCount + 1)
+
+    try {
+      if (prevLiked) {
+        await supabase.from('likes').delete().match({ post_id: post.id })
+      } else {
+        const { data: user } = await supabase.auth.getUser()
+        if (user.user) {
+          await supabase.from('likes').insert({ user_id: user.user.id, post_id: post.id })
+        }
+      }
+    } catch {
+      setIsLiked(prevLiked)
+      setLikeCount(prevCount)
+    }
+  }
+
+  async function handleToggleSave() {
+    const prevSaved = isSaved
+    setIsSaved(!prevSaved)
+
+    try {
+      if (prevSaved) {
+        await supabase.from('saved_posts').delete().match({ post_id: post.id })
+      } else {
+        const { data: user } = await supabase.auth.getUser()
+        if (user.user) {
+          await supabase.from('saved_posts').insert({ user_id: user.user.id, post_id: post.id })
+        }
+      }
+    } catch {
+      setIsSaved(prevSaved)
+    }
+  }
+
+  async function handleLoadComments() {
+    if (!showComments && comments.length === 0) {
+      setLoadingComments(true)
+      const { data } = await supabase
+        .from('comments')
+        .select('*, author:profiles(id, username, display_name, avatar_url)')
+        .eq('post_id', post.id)
+        .order('created_at', { ascending: true })
+
+      setComments(data ?? [])
+      setLoadingComments(false)
+    }
+    setShowComments(!showComments)
+  }
+
+  async function handleAddComment(e: React.FormEvent) {
+    e.preventDefault()
+    if (!commentText.trim()) return
+    setSubmittingComment(true)
+
+    const { data: user } = await supabase.auth.getUser()
+    if (!user.user) return
+
+    const { data: newComment, error } = await supabase
+      .from('comments')
+      .insert({
+        post_id: post.id,
+        author_id: user.user.id,
+        content: commentText.trim(),
+      })
+      .select('*, author:profiles(id, username, display_name, avatar_url)')
+      .single()
+
+    if (!error && newComment) {
+      setComments((prev) => [...prev, newComment])
+      setCommentText('')
+    }
+    setSubmittingComment(false)
+  }
+
+  async function handleDelete() {
+    if (!confirm('Are you sure you want to delete this post?')) return
+    const { error } = await supabase.from('posts').delete().eq('id', post.id)
+    if (!error && onDelete) {
+      onDelete(post.id)
+    }
+  }
+
+  return (
+    <article className="card p-5 space-y-4 hover:border-gray-300 transition-colors">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <Link href={`/@${post.author.username}`} className="flex items-center gap-3 group">
+          <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center font-bold text-brand-600 flex-shrink-0">
+            {post.author.avatarUrl ? (
+              <Image
+                src={post.author.avatarUrl}
+                alt={post.author.displayName}
+                width={40}
+                height={40}
+                className="rounded-full object-cover"
+              />
+            ) : (
+              post.author.displayName.charAt(0).toUpperCase()
+            )}
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900 group-hover:text-brand-600 transition-colors">
+              {post.author.displayName}
+            </h3>
+            <p className="text-xs text-gray-500">@{post.author.username}</p>
+          </div>
+        </Link>
+
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400">
+            {new Date(post.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+          </span>
+          {isOwner && (
+            <button
+              onClick={handleDelete}
+              className="text-gray-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+              title="Delete post"
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Content */}
+      <p className="text-gray-800 text-sm whitespace-pre-line leading-relaxed">{post.content}</p>
+
+      {/* Images */}
+      {post.imageUrls && post.imageUrls.length > 0 && (
+        <div className="rounded-xl overflow-hidden border border-gray-200">
+          {post.imageUrls.map((url, i) => (
+            <Image
+              key={i}
+              src={url}
+              alt="Post attachment"
+              width={600}
+              height={400}
+              className="w-full object-cover max-h-96"
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="flex items-center justify-between pt-2 border-t border-gray-100 text-gray-500 text-xs">
+        <button
+          onClick={handleToggleLike}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 transition-colors ${
+            isLiked ? 'text-red-500 font-semibold' : ''
+          }`}
+        >
+          <Heart size={18} fill={isLiked ? 'currentColor' : 'none'} />
+          <span>{likeCount}</span>
+        </button>
+
+        <button
+          onClick={handleLoadComments}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+        >
+          <MessageCircle size={18} />
+          <span>{post.commentCount}</span>
+        </button>
+
+        <button
+          onClick={handleToggleSave}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 transition-colors ${
+            isSaved ? 'text-brand-600' : ''
+          }`}
+        >
+          <Bookmark size={18} fill={isSaved ? 'currentColor' : 'none'} />
+        </button>
+
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(`${window.location.origin}/post/${post.id}`)
+            alert('Post link copied to clipboard!')
+          }}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+        >
+          <Share2 size={18} />
+        </button>
+      </div>
+
+      {/* Comments section */}
+      {showComments && (
+        <div className="pt-3 border-t border-gray-100 space-y-3">
+          <form onSubmit={handleAddComment} className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Write a comment…"
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              className="input-field text-xs py-2 flex-1"
+            />
+            <button
+              type="submit"
+              disabled={submittingComment || !commentText.trim()}
+              className="btn-primary text-xs py-2 px-3"
+            >
+              Post
+            </button>
+          </form>
+
+          {loadingComments ? (
+            <p className="text-xs text-gray-400 text-center py-2">Loading comments…</p>
+          ) : comments.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-2">No comments yet. Be the first!</p>
+          ) : (
+            <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+              {comments.map((comment) => (
+                <div key={comment.id} className="flex gap-2 text-xs bg-gray-50 p-2.5 rounded-lg">
+                  <span className="font-semibold text-gray-900">@{comment.author?.username}:</span>
+                  <span className="text-gray-700 flex-1">{comment.content}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </article>
+  )
+}

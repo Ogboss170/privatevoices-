@@ -30,7 +30,7 @@ CREATE TYPE visibility_anyone_followers_nobody AS ENUM ('anyone', 'followers', '
 CREATE TYPE story_visibility_type AS ENUM ('everyone', 'followers', 'close_friends', 'custom');
 
 CREATE TABLE public.privacy_settings (
-  id                        UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id                        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id                   UUID UNIQUE NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
 
   -- Who can interact with this user

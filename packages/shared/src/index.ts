@@ -45,6 +45,60 @@ export interface PrivacySettings {
   allowProfileIndexing: boolean;
 }
 
+// ─── Phase 2: Social Feed, Posts, Comments ──────────────────────────────────────
+
+export type FeedType = 'for-you' | 'following' | 'trending' | 'latest';
+
+export interface PostAuthor {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
+export interface Post {
+  id: string;
+  authorId: string;
+  author: PostAuthor;
+  content: string;
+  imageUrls: string[];
+  hashtags: string[];
+  likeCount: number;
+  commentCount: number;
+  repostCount: number;
+  isLikedByMe: boolean;
+  isSavedByMe: boolean;
+  isRepostedByMe: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePostDto {
+  content: string;
+  imageUrls?: string[];
+}
+
+export interface Comment {
+  id: string;
+  postId: string;
+  authorId: string;
+  author: PostAuthor;
+  content: string;
+  createdAt: string;
+}
+
+export interface CreateCommentDto {
+  postId: string;
+  content: string;
+}
+
+export interface ReportContentDto {
+  targetType: 'post' | 'comment' | 'profile';
+  targetId: string;
+  reason: string;
+  details?: string;
+}
+
 // ─── Auth ───────────────────────────────────────────────────────────────────────
 
 export interface AuthTokens {

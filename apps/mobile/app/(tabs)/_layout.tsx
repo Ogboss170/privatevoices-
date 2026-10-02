@@ -1,27 +1,33 @@
+import React from 'react'
+import { View, TouchableOpacity, StyleSheet } from 'react-native'
 import { Tabs } from 'expo-router'
-import { Home, Search, PlusSquare, Inbox, Users, User } from 'lucide-react-native'
-import { colors } from '../../constants/colors'
+import { Bell } from 'lucide-react-native'
+import { FloatingTabBar } from '../../components/FloatingTabBar'
 
 export default function TabLayout() {
   return (
     <Tabs
+      tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{
-        tabBarActiveTintColor: colors.brand,
-        tabBarInactiveTintColor: colors.gray400,
-        tabBarStyle: {
-          borderTopColor: colors.gray200,
-          backgroundColor: colors.white,
-        },
-        headerStyle: { backgroundColor: colors.white },
+        headerStyle: { backgroundColor: '#ffffff' },
         headerShadowVisible: false,
-        headerTitleStyle: { fontWeight: '700', color: colors.gray900 },
+        headerTitleStyle: { fontWeight: '700', color: '#111827' },
+        headerRight: () => (
+          <TouchableOpacity
+            style={styles.notificationHeaderBtn}
+            onPress={() => console.log('Notification pressed')}
+            activeOpacity={0.7}
+          >
+            <Bell color="#111827" size={22} />
+            <View style={styles.headerBadge} />
+          </TouchableOpacity>
+        ),
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
           headerTitle: 'Private Voices',
         }}
       />
@@ -29,37 +35,51 @@ export default function TabLayout() {
         name="explore"
         options={{
           title: 'Explore',
-          tabBarIcon: ({ color, size }) => <Search color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="create"
         options={{
           title: 'Create',
-          tabBarIcon: ({ color, size }) => <PlusSquare color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="inbox"
         options={{
-          title: 'Inbox',
-          tabBarIcon: ({ color, size }) => <Inbox color={color} size={size} />,
+          title: 'Chat',
         }}
       />
       <Tabs.Screen
         name="communities"
         options={{
           title: 'Communities',
-          tabBarIcon: ({ color, size }) => <Users color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
         }}
       />
     </Tabs>
   )
 }
+
+const styles = StyleSheet.create({
+  notificationHeaderBtn: {
+    marginRight: 16,
+    position: 'relative',
+    padding: 4,
+  },
+  headerBadge: {
+    position: 'absolute',
+    top: 3,
+    right: 3,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#ef4444',
+    borderWidth: 1.5,
+    borderColor: '#ffffff',
+  },
+})
