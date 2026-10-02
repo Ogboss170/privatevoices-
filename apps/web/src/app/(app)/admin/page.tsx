@@ -1,20 +1,21 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Shield, Users, MessageSquare, AlertTriangle, CheckCircle, Trash2, XCircle } from 'lucide-react'
+import { Shield, Users, MessageSquare, AlertTriangle, CheckCircle, Trash2, XCircle, FileText, Ban } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 export default function AdminDashboardPage(): React.JSX.Element {
   const supabase = createSupabaseBrowserClient()
   const [analytics, setAnalytics] = useState({ users: 0, posts: 0, whispers: 0, reports: 0 })
   const [reports, setReports] = useState<any[]>([])
-  const [activeTab, setActiveTab] = useState<'pending' | 'actioned'>('pending')
+  const [auditLogs, setAuditLogs] = useState<any[]>([])
+  const [activeTab, setActiveTab] = useState<'pending' | 'actioned' | 'audit'>('pending')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function loadAdminData() {
       setLoading(true)
-      const [{ count: userCount }, { count: postCount }, { count: whisperCount }, { data: reportRows }] =
+      const [{ count: userCount }, { count: postCount }, { count: whisperCount }, { data: reportRows }, { data: logs }] =
         await Promise.all([
           supabase.from('profiles').select('*', { count: 'exact', head: true }),
           supabase.from('posts').select('*', { count: 'exact', head: true }),
@@ -22,8 +23,13 @@ export default function AdminDashboardPage(): React.JSX.Element {
           supabase
             .from('content_reports')
             .select('*, reporter:profiles!content_reports_reporter_id_fkey(id, username, display_name)')
-            .eq('status', activeTab)
+            .eq('status', activeTab === 'audit' ? 'pending' : activeTab)
             .order('created_at', { ascending: false }),
+          supabase
+            .from('audit_logs')
+            .select('*, actor:profiles!audit_logs_actor_id_fkey(id, username, display_name)')
+            .order('created_at', { ascending: false })
+            .limit(30),
         ])
 
       setAnalytics({
@@ -34,6 +40,7 @@ export default function AdminDashboardPage(): React.JSX.Element {
       })
 
       setReports(reportRows ?? [])
+      setAuditLogs(logs ?? [])
       setLoading(false)
     }
 
@@ -71,9 +78,9 @@ export default function AdminDashboardPage(): React.JSX.Element {
         <div>
           <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
             <Shield className="text-brand-600" size={24} />
-            Platform Moderation & Analytics Dashboard
+            Platform Safety & Audit Dashboard
           </h1>
-          <p className="text-xs text-gray-500">Monitor abuse reports, system metrics, and content safety</p>
+          <p className="text-xs text-gray-500">Monitor abuse reports, system metrics, and audit logs</p>
         </div>
       </div>
 
@@ -112,32 +119,67 @@ export default function AdminDashboardPage(): React.JSX.Element {
         </div>
       </div>
 
-      {/* Report Queue Section */}
-      <div className="space-y-4">
-        <div className="flex border-b border-gray-200 bg-white rounded-xl p-1 gap-1 max-w-xs">
-          <button
-            onClick={() => setActiveTab('pending')}
-            className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
-              activeTab === 'pending' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'
-            }`}
-          >
-            Pending Queue
-          </button>
-          <button
-            onClick={() => setActiveTab('actioned')}
-            className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
-              activeTab === 'actioned' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'
-            }`}
-          >
-            Resolved
-          </button>
-        </div>
+      {/* Tab Filter */}
+      <div className="flex border-b border-gray-200 bg-white rounded-xl p-1 gap-1 max-w-md">
+        <button
+          onClick={() => setActiveTab('pending')}
+          className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+            activeTab === 'pending' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'
+          }`}
+        >
+          Pending Queue
+        </button>
+        <button
+          onClick={() => setActiveTab('actioned')}
+          className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+            activeTab === 'actioned' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'
+          }`}
+        >
+          Resolved
+        </button>
+        <button
+          onClick={() => setActiveTab('audit')}
+          className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1 ${
+            activeTab === 'audit' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'
+          }`}
+        >
+          <FileText size={13} />
+          <span>Audit Logs</span>
+        </button>
+      </div>
 
-        {loading ? (
-          <div className="card p-12 text-center text-gray-400">
-            <p className="text-sm">Loading moderation queue...</p>
-          </div>
-        ) : reports.length === 0 ? (
+      {/* Section Content */}
+      {loading ? (
+        <div className="card p-12 text-center text-gray-400">
+          <p className="text-sm">Loading moderation queue...</p>
+        </div>
+      ) : activeTab === 'audit' ? (
+        /* Audit Logs List */
+        <div className="card divide-y divide-gray-100">
+          {auditLogs.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-8">No audit logs recorded yet.</p>
+          ) : (
+            auditLogs.map((log) => (
+              <div key={log.id} className="p-4 flex items-center justify-between text-xs">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-gray-900">@{log.actor?.username ?? 'System'}</span>
+                    <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-mono text-[10px]">
+                      {log.action}
+                    </span>
+                  </div>
+                  <p className="text-gray-500">Target: {log.target_type ?? 'N/A'}</p>
+                </div>
+                <span className="text-gray-400">
+                  {new Date(log.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      ) : (
+        /* Reports List */
+        reports.length === 0 ? (
           <div className="card p-12 text-center space-y-2">
             <CheckCircle className="mx-auto text-emerald-500" size={40} />
             <h3 className="font-bold text-gray-900">All Clean!</h3>
@@ -189,8 +231,8 @@ export default function AdminDashboardPage(): React.JSX.Element {
               </div>
             ))}
           </div>
-        )}
-      </div>
+        )
+      )}
     </div>
   )
 }
