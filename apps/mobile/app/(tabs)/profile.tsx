@@ -14,6 +14,8 @@ import { useRouter } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { colors } from '../../constants/colors'
 import { EditProfileModal } from '../../components/EditProfileModal'
+import { MobilePostCard } from '../../components/MobilePostCard'
+import type { Post } from '@private-voices/shared'
 import type { User } from '@supabase/supabase-js'
 
 export default function ProfileScreen() {
@@ -27,6 +29,7 @@ export default function ProfileScreen() {
     is_private: boolean
   } | null>(null)
   const [stats, setStats] = useState({ followerCount: 0, followingCount: 0, postCount: 0 })
+  const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [editModalVisible, setEditModalVisible] = useState(false)
 
@@ -56,6 +59,47 @@ export default function ProfileScreen() {
       followingCount: followingCount ?? 0,
       postCount: postCount ?? 0,
     })
+
+    const { data: myPosts } = await supabase
+      .from('posts')
+      .select('*, author:profiles(id, username, display_name, avatar_url)')
+      .eq('author_id', userId)
+      .order('created_at', { ascending: false })
+
+    if (myPosts) {
+      const formatted: Post[] = await Promise.all(
+        myPosts.map(async (p) => {
+          const [{ count: likeCount }, { count: commentCount }] = await Promise.all([
+            supabase.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
+            supabase.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
+          ])
+
+          return {
+            id: p.id,
+            authorId: p.author_id,
+            author: {
+              id: p.author?.id || p.author_id,
+              username: p.author?.username || 'user',
+              displayName: p.author?.display_name || 'User',
+              avatarUrl: p.author?.avatar_url || null,
+            },
+            content: p.content,
+            imageUrls: p.image_urls ?? [],
+            hashtags: [],
+            likeCount: likeCount ?? 0,
+            commentCount: commentCount ?? 0,
+            repostCount: 0,
+            isLikedByMe: false,
+            isSavedByMe: false,
+            isRepostedByMe: false,
+            createdAt: p.created_at,
+            updatedAt: p.updated_at,
+          }
+        })
+      )
+      setPosts(formatted)
+    }
+
     setLoading(false)
   }
 
@@ -170,6 +214,28 @@ export default function ProfileScreen() {
               <Text style={styles.shareBtnText}>Share Link</Text>
             </TouchableOpacity>
           </View>
+        </View>
+      )}
+
+      {/* Posts Section */}
+      <View style={styles.postsSectionHeader}>
+        <Text style={styles.postsSectionTitle}>My Posts ({posts.length})</Text>
+      </View>
+
+      {posts.length === 0 ? (
+        <View style={styles.emptyCard}>
+          <Text style={styles.emptyText}>You haven't posted anything yet.</Text>
+        </View>
+      ) : (
+        <View style={styles.postsList}>
+          {posts.map((item) => (
+            <MobilePostCard
+              key={item.id}
+              post={item}
+              currentUserId={user?.id}
+              onDelete={(id) => setPosts((prev) => prev.filter((p) => p.id !== id))}
+            />
+          ))}
         </View>
       )}
 
@@ -293,4 +359,18 @@ const styles = StyleSheet.create({
   whisperUrlText: { flex: 1, fontSize: 12, color: '#ffffff', fontFamily: 'monospace', marginRight: 8 },
   shareBtn: { backgroundColor: '#ffffff', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 12 },
   shareBtnText: { fontSize: 12, fontWeight: '700', color: colors.brand },
+  postsSectionHeader: { width: '100%', marginTop: 24, marginBottom: 12 },
+  postsSectionTitle: { fontSize: 16, fontWeight: '700', color: colors.gray900 },
+  postsList: { width: '100%', gap: 12 },
+  emptyCard: {
+    width: '100%',
+    padding: 32,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: { fontSize: 14, color: colors.gray500 },
 })
