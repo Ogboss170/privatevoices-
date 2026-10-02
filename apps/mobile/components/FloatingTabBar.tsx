@@ -2,32 +2,36 @@ import React from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native'
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Home, Search, Plus, MessageSquare, User } from 'lucide-react-native'
+import { Home, Compass, Plus, MessageSquare, User } from 'lucide-react-native'
 import { BlurView } from 'expo-blur'
 
 export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets()
 
   // Completely hide bottom tab navigation when inside full-screen Create Composer
-  if (state.routes[state.index]?.name === 'create') {
+  const activeRouteName = state.routes[state.index]?.name
+  if (activeRouteName === 'create') {
     return null
   }
 
+  // Ordered tab routes: Home, Explore, Chat, Profile (Create + is rendered in center)
+  const mainTabKeys = ['index', 'explore', 'inbox', 'profile']
+
   const getTabIcon = (routeName: string, isFocused: boolean) => {
-    const iconColor = isFocused ? '#3b82f6' : '#9ca3af'
-    const iconSize = 22
+    const iconColor = isFocused ? '#3b82f6' : 'rgba(255, 255, 255, 0.65)'
+    const iconSize = 20
 
     switch (routeName) {
       case 'index':
-        return <Home color={iconColor} size={iconSize} />
+        return <Home color={iconColor} size={iconSize} strokeWidth={isFocused ? 2.3 : 1.8} />
       case 'explore':
-        return <Search color={iconColor} size={iconSize} />
+        return <Compass color={iconColor} size={iconSize} strokeWidth={isFocused ? 2.3 : 1.8} />
       case 'inbox':
-        return <MessageSquare color={iconColor} size={iconSize} />
+        return <MessageSquare color={iconColor} size={iconSize} strokeWidth={isFocused ? 2.3 : 1.8} />
       case 'profile':
-        return <User color={iconColor} size={iconSize} />
+        return <User color={iconColor} size={iconSize} strokeWidth={isFocused ? 2.3 : 1.8} />
       default:
-        return <Home color={iconColor} size={iconSize} />
+        return <Home color={iconColor} size={iconSize} strokeWidth={1.8} />
     }
   }
 
@@ -46,11 +50,11 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
     }
   }
 
-  const routes = state.routes.filter((r: { name: string }) => r.name !== 'create' && r.name !== 'communities')
-  const createRoute = state.routes.find((r: { name: string }) => r.name === 'create')
+  // Find target routes in order
+  const getRouteByName = (name: string) => state.routes.find((r) => r.name === name)
 
-  const leftRoutes = routes.slice(0, 2)
-  const rightRoutes = routes.slice(2, 4)
+  const leftRoutes = ['index', 'explore'].map(getRouteByName).filter(Boolean) as typeof state.routes
+  const rightRoutes = ['inbox', 'profile'].map(getRouteByName).filter(Boolean) as typeof state.routes
 
   const renderTabItem = (route: (typeof state.routes)[0]) => {
     const isFocused = state.routes[state.index].key === route.key
@@ -71,17 +75,12 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
       <TouchableOpacity
         key={route.key}
         onPress={onPress}
-        activeOpacity={0.8}
-        style={[
-          styles.tabItem,
-          isFocused && styles.activePill,
-        ]}
+        activeOpacity={0.7}
+        style={[styles.tabItem, isFocused && styles.activePill]}
       >
         <View style={styles.iconWrapper}>
           {getTabIcon(route.name, isFocused)}
-          {route.name === 'inbox' && (
-            <View style={styles.badge} />
-          )}
+          {route.name === 'inbox' && <View style={styles.badge} />}
         </View>
         <Text style={[styles.tabLabel, isFocused && styles.activeLabel]}>
           {getTabLabel(route.name)}
@@ -91,35 +90,38 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
   }
 
   const handleCreatePress = () => {
+    const createRoute = state.routes.find((r) => r.name === 'create')
     if (createRoute) {
       navigation.navigate(createRoute.name)
+    } else {
+      navigation.navigate('create')
     }
   }
 
   return (
-    <View style={[styles.outerContainer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+    <View style={[styles.outerContainer, { paddingBottom: Math.max(insets.bottom + 6, 16) }]}>
       {/* Floating Glassmorphism Container */}
       <View style={styles.floatingBarWrapper}>
-        <BlurView intensity={Platform.OS === 'ios' ? 80 : 100} tint="dark" style={styles.blurContainer}>
+        <BlurView
+          intensity={Platform.OS === 'ios' ? 75 : 95}
+          tint="dark"
+          style={styles.blurContainer}
+        >
           <View style={styles.tabsRow}>
-            {/* Left Tabs: Home, Explore */}
-            <View style={styles.tabGroup}>
-              {leftRoutes.map(renderTabItem)}
-            </View>
+            {/* Left Tabs: Home | Explore */}
+            <View style={styles.tabGroup}>{leftRoutes.map(renderTabItem)}</View>
 
-            {/* Elevated Circular Center (+) Button */}
+            {/* Central Prominent (+) Create Button */}
             <TouchableOpacity
               onPress={handleCreatePress}
               activeOpacity={0.85}
               style={styles.createButton}
             >
-              <Plus color="#ffffff" size={26} strokeWidth={2.5} />
+              <Plus color="#ffffff" size={24} strokeWidth={2.5} />
             </TouchableOpacity>
 
-            {/* Right Tabs: Chat, Profile */}
-            <View style={styles.tabGroup}>
-              {rightRoutes.map(renderTabItem)}
-            </View>
+            {/* Right Tabs: Chat | Profile */}
+            <View style={styles.tabGroup}>{rightRoutes.map(renderTabItem)}</View>
           </View>
         </BlurView>
       </View>
@@ -137,22 +139,24 @@ const styles = StyleSheet.create({
     pointerEvents: 'box-none',
   },
   floatingBarWrapper: {
-    width: '92%',
-    maxWidth: 420,
-    borderRadius: 32,
+    width: '90%',
+    maxWidth: 400,
+    borderRadius: 28,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.4,
     shadowRadius: 16,
-    elevation: 12,
+    elevation: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.16)',
   },
   blurContainer: {
-    backgroundColor: Platform.OS === 'android' ? 'rgba(15, 23, 42, 0.92)' : 'rgba(15, 23, 42, 0.75)',
-    paddingVertical: 8,
+    backgroundColor: Platform.OS === 'android' ? 'rgba(15, 23, 42, 0.94)' : 'rgba(15, 23, 42, 0.72)',
+    paddingVertical: 6,
     paddingHorizontal: 10,
+    height: 68,
+    justifyContent: 'center',
   },
   tabsRow: {
     flexDirection: 'row',
@@ -168,15 +172,15 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
+    paddingVertical: 5,
     paddingHorizontal: 12,
     borderRadius: 20,
-    minWidth: 58,
+    minWidth: 56,
   },
   activePill: {
-    backgroundColor: 'rgba(30, 41, 59, 0.95)',
+    backgroundColor: 'rgba(59, 130, 246, 0.18)',
     borderWidth: 1,
-    borderColor: 'rgba(59, 130, 246, 0.3)',
+    borderColor: 'rgba(59, 130, 246, 0.4)',
   },
   iconWrapper: {
     position: 'relative',
@@ -184,7 +188,7 @@ const styles = StyleSheet.create({
   tabLabel: {
     fontSize: 10,
     fontWeight: '500',
-    color: '#9ca3af',
+    color: 'rgba(255, 255, 255, 0.65)',
     marginTop: 2,
   },
   activeLabel: {
@@ -193,17 +197,17 @@ const styles = StyleSheet.create({
   },
   badge: {
     position: 'absolute',
-    top: -2,
-    right: -4,
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
+    top: -1,
+    right: -3,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: '#ef4444',
   },
   createButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#3b82f6',
     alignItems: 'center',
     justifyContent: 'center',
@@ -211,7 +215,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.5,
     shadowRadius: 8,
-    elevation: 8,
-    transform: [{ translateY: -2 }],
+    elevation: 6,
   },
 })
+
