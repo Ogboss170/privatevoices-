@@ -34,6 +34,8 @@ import {
   AlertTriangle,
   X,
   UserPlus,
+  Bug,
+  Send,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
@@ -47,6 +49,13 @@ export default function SettingsPage(): React.JSX.Element {
   const [userId, setUserId] = useState<string | null>(null)
   const [profile, setProfile] = useState<any>(null)
   const [privacy, setPrivacy] = useState<any>(null)
+
+  // Report Bug Modal states
+  const [showReportBugModal, setShowReportBugModal] = useState(false)
+  const [bugCategory, setBugCategory] = useState('ui_glitch')
+  const [bugDescription, setBugDescription] = useState('')
+  const [submittingBug, setSubmittingBug] = useState(false)
+  const [bugSubmitted, setBugSubmitted] = useState(false)
 
   // Switch / option states
   const [theme, setTheme] = useState<'system' | 'light' | 'dark'>('system')
@@ -145,6 +154,32 @@ export default function SettingsPage(): React.JSX.Element {
     setLoggingOutAll(false)
     setShowLogoutAllConfirm(false)
     router.push('/login')
+  }
+
+  async function handleReportBugSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!bugDescription.trim() || !userId) return
+
+    setSubmittingBug(true)
+    const { error } = await supabase.from('content_reports').insert({
+      reporter_id: userId,
+      target_type: 'bug_report',
+      target_id: userId,
+      reason: `Bug Report: ${bugCategory}`,
+      details: bugDescription.trim(),
+    })
+
+    setSubmittingBug(false)
+    if (!error) {
+      setBugSubmitted(true)
+      setTimeout(() => {
+        setBugSubmitted(false)
+        setShowReportBugModal(false)
+        setBugDescription('')
+      }, 2000)
+    } else {
+      alert(`Failed to submit report: ${error.message}`)
+    }
   }
 
   async function handleDeleteAccount() {
@@ -625,6 +660,20 @@ export default function SettingsPage(): React.JSX.Element {
             <ChevronRight size={16} className="text-gray-400" />
           </div>
 
+          <div
+            onClick={() => setShowReportBugModal(true)}
+            className="flex items-center justify-between p-2 hover:bg-red-50/50 rounded-lg cursor-pointer transition-colors text-red-700 font-semibold"
+          >
+            <div className="flex items-center space-x-3">
+              <Bug size={18} className="text-red-500" />
+              <div>
+                <span className="block text-gray-900">Report a Bug</span>
+                <span className="text-xs text-gray-400 font-normal">Send feedback, glitch, or issue report</span>
+              </div>
+            </div>
+            <ChevronRight size={16} className="text-gray-400" />
+          </div>
+
           <div className="flex items-center justify-between p-2 pt-3 border-t border-gray-100 text-xs text-gray-400">
             <span>App Version</span>
             <span className="font-mono">v1.0.4 (Production)</span>
@@ -788,6 +837,86 @@ export default function SettingsPage(): React.JSX.Element {
                   </button>
                 </div>
               </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── REPORT BUGS MODAL ── */}
+      {showReportBugModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-gray-100">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center space-x-2 text-red-600 font-bold text-lg">
+                <Bug size={22} />
+                <span>Report a Bug</span>
+              </div>
+              <button
+                onClick={() => setShowReportBugModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-full transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {bugSubmitted ? (
+              <div className="py-8 text-center space-y-3">
+                <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-2xl">
+                  <Check size={32} />
+                </div>
+                <h3 className="font-bold text-lg text-gray-900">Report Submitted!</h3>
+                <p className="text-xs text-gray-500">
+                  Thank you for helping us improve Private Voices. Our team has received your report.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleReportBugSubmit} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-gray-700">Issue Category</label>
+                  <select
+                    value={bugCategory}
+                    onChange={(e) => setBugCategory(e.target.value)}
+                    className="input-field text-xs py-2 w-full"
+                  >
+                    <option value="ui_glitch">Visual / UI Glitch</option>
+                    <option value="feed_loading">Feed or Post Issue</option>
+                    <option value="whisper_sharing">Anonymous Whisper Problem</option>
+                    <option value="chat_messaging">Direct Messaging Issue</option>
+                    <option value="notifications">Notification Glitch</option>
+                    <option value="other">Other Technical Problem</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-gray-700">Description of Issue</label>
+                  <textarea
+                    rows={4}
+                    required
+                    value={bugDescription}
+                    onChange={(e) => setBugDescription(e.target.value)}
+                    placeholder="Describe what happened and how to reproduce it..."
+                    className="input-field text-xs py-2.5 w-full resize-none"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end space-x-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowReportBugModal(false)}
+                    className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingBug || !bugDescription.trim()}
+                    className="btn-primary text-xs py-2 px-4 flex items-center space-x-1.5"
+                  >
+                    <Send size={14} />
+                    <span>{submittingBug ? 'Sending...' : 'Send Bug Report'}</span>
+                  </button>
+                </div>
+              </form>
             )}
           </div>
         </div>

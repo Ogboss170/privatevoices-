@@ -40,6 +40,7 @@ import {
   ChevronRight,
   AlertTriangle,
   UserPlus,
+  Bug,
 } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import { supabase } from '../lib/supabase'
@@ -51,6 +52,12 @@ export default function SettingsScreen() {
   const [profile, setProfile] = useState<any>(null)
   const [privacy, setPrivacy] = useState<any>(null)
   const [userId, setUserId] = useState<string | null>(null)
+
+  // Report Bug Modal state
+  const [showBugModal, setShowBugModal] = useState(false)
+  const [bugCategory, setBugCategory] = useState('ui_glitch')
+  const [bugDesc, setBugDesc] = useState('')
+  const [submittingBug, setSubmittingBug] = useState(false)
 
   // Preference states
   const [theme, setTheme] = useState<'system' | 'light' | 'dark'>('system')
@@ -135,6 +142,28 @@ export default function SettingsScreen() {
         },
       ]
     )
+  }
+
+  async function handleSendBugReport() {
+    if (!bugDesc.trim() || !userId) return
+    setSubmittingBug(true)
+
+    const { error } = await supabase.from('content_reports').insert({
+      reporter_id: userId,
+      target_type: 'bug_report',
+      target_id: userId,
+      reason: `Bug Report: ${bugCategory}`,
+      details: bugDesc.trim(),
+    })
+
+    setSubmittingBug(false)
+    if (!error) {
+      Alert.alert('Report Submitted', 'Thank you for helping us improve Private Voices! Our team has received your report.')
+      setShowBugModal(false)
+      setBugDesc('')
+    } else {
+      Alert.alert('Submission Error', error.message)
+    }
   }
 
   async function handlePermanentDelete() {
@@ -519,6 +548,18 @@ export default function SettingsScreen() {
           <ChevronRight size={18} color={colors.gray400} />
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={styles.rowItem}
+          onPress={() => setShowBugModal(true)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.rowLeft}>
+            <Bug size={18} color="#ef4444" />
+            <Text style={[styles.rowLabel, { color: '#dc2626', fontWeight: '700' }]}>Report a Bug</Text>
+          </View>
+          <ChevronRight size={18} color={colors.gray400} />
+        </TouchableOpacity>
+
         <View style={styles.versionRow}>
           <Text style={styles.versionLabel}>App Version</Text>
           <Text style={styles.versionVal}>v1.0.4 (Production)</Text>
@@ -600,6 +641,67 @@ export default function SettingsScreen() {
                 <Text style={styles.modalDangerText}>
                   {deleting ? 'Deleting...' : 'Delete Permanently'}
                 </Text>
+              </TouchableOpacity>
+      {/* Report Bug Modal */}
+      <Modal visible={showBugModal} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeaderRow}>
+              <Bug size={22} color="#ef4444" />
+              <Text style={styles.modalTitleRed}>Report a Bug</Text>
+            </View>
+
+            <Text style={styles.modalBodyText}>
+              Category:
+            </Text>
+            <View style={styles.categoryRow}>
+              <TouchableOpacity
+                style={[styles.categoryChip, bugCategory === 'ui_glitch' && styles.categoryChipActive]}
+                onPress={() => setBugCategory('ui_glitch')}
+              >
+                <Text style={[styles.categoryChipText, bugCategory === 'ui_glitch' && styles.categoryChipTextActive]}>UI Glitch</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.categoryChip, bugCategory === 'feed_loading' && styles.categoryChipActive]}
+                onPress={() => setBugCategory('feed_loading')}
+              >
+                <Text style={[styles.categoryChipText, bugCategory === 'feed_loading' && styles.categoryChipTextActive]}>Feed/Posts</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.categoryChip, bugCategory === 'whisper' && styles.categoryChipActive]}
+                onPress={() => setBugCategory('whisper')}
+              >
+                <Text style={[styles.categoryChipText, bugCategory === 'whisper' && styles.categoryChipTextActive]}>Whispers</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              style={styles.bugTextArea}
+              multiline
+              numberOfLines={4}
+              placeholder="Describe what happened and how to reproduce it..."
+              placeholderTextColor={colors.gray400}
+              value={bugDesc}
+              onChangeText={setBugDesc}
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => {
+                  setShowBugModal(false)
+                  setBugDesc('')
+                }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.bugSubmitBtn, (!bugDesc.trim() || submittingBug) && styles.disabledBtn]}
+                disabled={!bugDesc.trim() || submittingBug}
+                onPress={handleSendBugReport}
+              >
+                <Text style={styles.bugSubmitText}>{submittingBug ? 'Sending...' : 'Send Report'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -798,5 +900,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#ffffff',
   },
+  categoryRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  categoryChip: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20, backgroundColor: colors.gray100, borderWidth: 1, borderColor: colors.gray200 },
+  categoryChipActive: { backgroundColor: colors.brandLight, borderColor: colors.brand },
+  categoryChipText: { fontSize: 12, color: colors.gray700, fontWeight: '500' },
+  categoryChipTextActive: { color: colors.brand, fontWeight: '700' },
+  bugTextArea: { borderWidth: 1, borderColor: colors.gray300, borderRadius: 12, padding: 12, fontSize: 13, minHeight: 90, textAlignVertical: 'top' },
+  bugSubmitBtn: { backgroundColor: colors.brand, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 10 },
+  bugSubmitText: { fontSize: 13, fontWeight: '700', color: '#ffffff' },
 })
 
