@@ -7,6 +7,7 @@ import { PostsModule } from './posts/posts.module';
 import { WhispersModule } from './whispers/whispers.module';
 import { MessagesModule } from './messages/messages.module';
 import { CommunitiesModule } from './communities/communities.module';
+import { StoriesModule } from './stories/stories.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { CommunitiesModule } from './communities/communities.module';
     WhispersModule,
     MessagesModule,
     CommunitiesModule,
+    StoriesModule,
   ],
 })
 export class AppModule {}

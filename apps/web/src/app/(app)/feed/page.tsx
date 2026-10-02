@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import CreatePostComposer from '@/components/feed/CreatePostComposer'
 import PostCard from '@/components/feed/PostCard'
+import StoriesTray from '@/components/stories/StoriesTray'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import type { Post } from '@private-voices/shared'
 
@@ -41,7 +42,7 @@ export default function FeedPage() {
 
       const followingIds = (follows ?? []).map((f) => f.following_id)
       followingIds.push(currentUserId)
-      query = query.in('author_id', followingIds)
+      query = query.in('author_id',followingIds)
     }
 
     const { data, error } = await query
@@ -109,6 +110,9 @@ export default function FeedPage() {
 
   return (
     <div className="space-y-4 max-w-2xl mx-auto">
+      {/* 24-Hour Temporary Stories Tray */}
+      <StoriesTray />
+
       {/* Post Composer */}
       <CreatePostComposer onPostCreated={fetchPosts} />
 

@@ -11,6 +11,7 @@ import {
 import { supabase } from '../../lib/supabase'
 import { colors } from '../../constants/colors'
 import { MobilePostCard } from '../../components/MobilePostCard'
+import { StoriesTray } from '../../components/StoriesTray'
 import type { Post } from '@private-voices/shared'
 
 const TABS = [
@@ -115,6 +116,9 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
+      {/* 24-Hour Stories Tray */}
+      <StoriesTray />
+
       {/* Tab filter bar */}
       <View style={styles.tabRow}>
         {TABS.map((tab) => (
