@@ -17,7 +17,9 @@ import type { Post } from '@private-voices/shared'
 const TABS = [
   { id: 'for-you', label: 'For You' },
   { id: 'following', label: 'Following' },
+  { id: 'trending', label: 'Trending' },
   { id: 'latest', label: 'Latest' },
+  { id: 'community', label: 'Community' },
 ]
 
 export default function HomeScreen() {

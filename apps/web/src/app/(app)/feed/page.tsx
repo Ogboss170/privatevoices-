@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import CreatePostComposer from '@/components/feed/CreatePostComposer'
 import PostCard from '@/components/feed/PostCard'
 import StoriesTray from '@/components/stories/StoriesTray'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
@@ -12,6 +11,7 @@ const TABS = [
   { id: 'following', label: 'Following' },
   { id: 'trending', label: 'Trending' },
   { id: 'latest', label: 'Latest' },
+  { id: 'community', label: 'Community' },
 ]
 
 export default function FeedPage() {
@@ -42,7 +42,7 @@ export default function FeedPage() {
 
       const followingIds = (follows ?? []).map((f) => f.following_id)
       followingIds.push(currentUserId)
-      query = query.in('author_id',followingIds)
+      query = query.in('author_id', followingIds)
     }
 
     const { data, error } = await query
@@ -113,16 +113,13 @@ export default function FeedPage() {
       {/* 24-Hour Temporary Stories Tray */}
       <StoriesTray />
 
-      {/* Post Composer */}
-      <CreatePostComposer onPostCreated={fetchPosts} />
-
       {/* Feed Filter Tabs */}
-      <div className="flex gap-1 border-b border-gray-200 bg-white px-2 rounded-lg">
+      <div className="flex gap-1 border-b border-gray-200 bg-white px-2 rounded-lg overflow-x-auto">
         {TABS.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
               activeTab === tab.id
                 ? 'text-brand-600 border-brand-600'
                 : 'text-gray-500 border-transparent hover:text-gray-900 hover:border-gray-300'
@@ -161,3 +158,4 @@ export default function FeedPage() {
     </div>
   )
 }
+
