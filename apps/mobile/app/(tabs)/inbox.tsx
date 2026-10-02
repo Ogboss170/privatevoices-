@@ -5,12 +5,12 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  TextInput,
   Alert,
   ActivityIndicator,
   RefreshControl,
+  Share,
 } from 'react-native'
-import { Trash2, Send, CornerDownRight, Share2 } from 'lucide-react-native'
+import { Trash2, Share2, ShieldCheck } from 'lucide-react-native'
 import { supabase } from '../../lib/supabase'
 import { colors } from '../../constants/colors'
 
@@ -20,7 +20,6 @@ export default function InboxScreen() {
   const [conversations, setConversations] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [replyText, setReplyText] = useState<{ [key: string]: string }>({})
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -67,28 +66,6 @@ export default function InboxScreen() {
     fetchInboxData()
   }
 
-  async function handleReply(whisperId: string) {
-    const text = replyText[whisperId]
-    if (!text || !text.trim()) return
-
-    const { error } = await supabase
-      .from('whispers')
-      .update({
-        reply_content: text.trim(),
-        replied_at: new Date().toISOString(),
-      })
-      .eq('id', whisperId)
-
-    if (!error) {
-      setWhispers((prev) =>
-        prev.map((w) =>
-          w.id === whisperId ? { ...w, reply_content: text.trim() } : w
-        )
-      )
-      setReplyText((prev) => ({ ...prev, [whisperId]: '' }))
-    }
-  }
-
   function handleDelete(whisperId: string) {
     Alert.alert('Delete Whisper', 'Are you sure you want to delete this whisper?', [
       { text: 'Cancel', style: 'cancel' },
@@ -105,15 +82,15 @@ export default function InboxScreen() {
     ])
   }
 
-  async function handleShareAsPost(whisper: any) {
-    const postContent = `Anonymous Whisper:\n"${whisper.content}"\n\nReply: ${whisper.reply_content || ''}`
-    const { error } = await supabase.from('posts').insert({
-      author_id: currentUserId,
-      content: postContent,
-    })
-
-    if (!error) {
-      Alert.alert('Success', 'Whisper shared to your public feed!')
+  async function handleShareWhisper(whisper: any) {
+    const textToShare = `Anonymous Whisper:\n"${whisper.content}"\n\n— via Private Voices`
+    try {
+      await Share.share({
+        title: 'Anonymous Whisper',
+        message: textToShare,
+      })
+    } catch {
+      Alert.alert('Share Failed', 'Unable to open share menu.')
     }
   }
 
@@ -173,35 +150,20 @@ export default function InboxScreen() {
 
                 <Text style={styles.whisperContent}>"{item.content}"</Text>
 
-                {item.reply_content && (
-                  <View style={styles.replyBox}>
-                    <CornerDownRight size={14} color={colors.brand} />
-                    <Text style={styles.replyText}>{item.reply_content}</Text>
+                <View style={styles.whisperFooter}>
+                  <View style={styles.anonymousTag}>
+                    <ShieldCheck size={14} color="#059669" />
+                    <Text style={styles.anonymousTagText}>Sender Hidden</Text>
                   </View>
-                )}
 
-                {!item.reply_content ? (
-                  <View style={styles.replyForm}>
-                    <TextInput
-                      style={styles.replyInput}
-                      placeholder="Write a reply..."
-                      placeholderTextColor={colors.gray400}
-                      value={replyText[item.id] || ''}
-                      onChangeText={(t) => setReplyText({ ...replyText, [item.id]: t })}
-                    />
-                    <TouchableOpacity style={styles.replySubmitBtn} onPress={() => handleReply(item.id)}>
-                      <Send size={14} color="#fff" />
-                    </TouchableOpacity>
-                  </View>
-                ) : (
                   <TouchableOpacity
                     style={styles.shareBtn}
-                    onPress={() => handleShareAsPost(item)}
+                    onPress={() => handleShareWhisper(item)}
                   >
                     <Share2 size={14} color={colors.gray700} />
-                    <Text style={styles.shareText}>Share as Post</Text>
+                    <Text style={styles.shareText}>Share</Text>
                   </TouchableOpacity>
-                )}
+                </View>
               </View>
             )}
           />
@@ -273,12 +235,10 @@ const styles = StyleSheet.create({
   whisperHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   whisperBadge: { fontSize: 12, fontWeight: '700', color: colors.brand },
   whisperContent: { fontSize: 15, fontStyle: 'italic', color: colors.gray900, backgroundColor: colors.gray50, padding: 12, borderRadius: 10 },
-  replyBox: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.brandLight, padding: 10, borderRadius: 10 },
-  replyText: { fontSize: 13, color: colors.brandDark, fontWeight: '600' },
-  replyForm: { flexDirection: 'row', gap: 8, marginTop: 4 },
-  replyInput: { flex: 1, borderWidth: 1, borderColor: colors.gray300, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, fontSize: 13 },
-  replySubmitBtn: { backgroundColor: colors.brand, paddingHorizontal: 14, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  shareBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, backgroundColor: colors.gray100, borderRadius: 8, alignSelf: 'flex-end' },
+  whisperFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
+  anonymousTag: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  anonymousTagText: { fontSize: 11, color: '#059669', fontWeight: '600' },
+  shareBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, backgroundColor: colors.gray100, borderRadius: 8 },
   shareText: { fontSize: 12, fontWeight: '600', color: colors.gray700 },
   convCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#fff', padding: 14, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: colors.gray200 },
   avatarCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.brandLight, alignItems: 'center', justifyContent: 'center' },

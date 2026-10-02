@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Trash2, Send, CornerDownRight, Share2 } from 'lucide-react'
+import { Trash2, Share2, Shield, Flag, Check, Copy } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import ChatDrawer from '@/components/messages/ChatDrawer'
 
@@ -11,10 +11,9 @@ export default function InboxPage(): React.JSX.Element {
   const [whispers, setWhispers] = useState<any[]>([])
   const [conversations, setConversations] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [replyText, setReplyText] = useState<{ [key: string]: string }>({})
-  const [replyingId, setReplyingId] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [activeConversation, setActiveConversation] = useState<any | null>(null)
+  const [shareStatus, setShareStatus] = useState<{ [id: string]: 'copied' | 'shared' | 'error' | null }>({})
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -56,30 +55,6 @@ export default function InboxPage(): React.JSX.Element {
     fetchInboxData()
   }, [fetchInboxData])
 
-  async function handleReplyWhisper(whisperId: string) {
-    const text = replyText[whisperId]
-    if (!text || !text.trim()) return
-
-    setReplyingId(whisperId)
-    const { error } = await supabase
-      .from('whispers')
-      .update({
-        reply_content: text.trim(),
-        replied_at: new Date().toISOString(),
-      })
-      .eq('id', whisperId)
-
-    if (!error) {
-      setWhispers((prev) =>
-        prev.map((w) =>
-          w.id === whisperId ? { ...w, reply_content: text.trim(), replied_at: new Date().toISOString() } : w
-        )
-      )
-      setReplyText((prev) => ({ ...prev, [whisperId]: '' }))
-    }
-    setReplyingId(null)
-  }
-
   async function handleDeleteWhisper(whisperId: string) {
     if (!confirm('Delete this anonymous whisper?')) return
     const { error } = await supabase.from('whispers').delete().eq('id', whisperId)
@@ -88,16 +63,32 @@ export default function InboxPage(): React.JSX.Element {
     }
   }
 
-  async function handleShareWhisperAsPost(whisper: any) {
-    const postContent = `Anonymous Whisper:\n"${whisper.content}"\n\nReply: ${whisper.reply_content || ''}`
-    const { error } = await supabase.from('posts').insert({
-      author_id: currentUserId,
-      content: postContent,
-    })
+  async function handleShareWhisper(whisper: any) {
+    const textToShare = `Anonymous Whisper:\n"${whisper.content}"\n\n— via Private Voices`
 
-    if (!error) {
-      alert('Whisper shared to your public feed!')
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: 'Anonymous Whisper',
+          text: textToShare,
+        })
+        setShareStatus((prev) => ({ ...prev, [whisper.id]: 'shared' }))
+      } else {
+        await navigator.clipboard.writeText(textToShare)
+        setShareStatus((prev) => ({ ...prev, [whisper.id]: 'copied' }))
+      }
+    } catch {
+      try {
+        await navigator.clipboard.writeText(textToShare)
+        setShareStatus((prev) => ({ ...prev, [whisper.id]: 'copied' }))
+      } catch {
+        setShareStatus((prev) => ({ ...prev, [whisper.id]: 'error' }))
+      }
     }
+
+    setTimeout(() => {
+      setShareStatus((prev) => ({ ...prev, [whisper.id]: null }))
+    }, 3000)
   }
 
   return (
@@ -106,7 +97,7 @@ export default function InboxPage(): React.JSX.Element {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Inbox</h1>
-          <p className="text-xs text-gray-500">Manage your private messages and anonymous Whispers</p>
+          <p className="text-xs text-gray-500">One-way anonymous Whispers & identity DMs</p>
         </div>
       </div>
 
@@ -177,7 +168,7 @@ export default function InboxPage(): React.JSX.Element {
                       className="text-gray-400 hover:text-amber-600 p-1 transition-colors"
                       title="Report whisper"
                     >
-                      🚩
+                      <Flag size={15} />
                     </button>
                     <button
                       onClick={() => handleDeleteWhisper(whisper.id)}
@@ -193,54 +184,36 @@ export default function InboxPage(): React.JSX.Element {
                   "{whisper.content}"
                 </p>
 
-                {/* Existing Reply */}
-                {whisper.reply_content && (
-                  <div className="flex gap-2 text-xs bg-brand-50 p-3 rounded-xl border border-brand-100">
-                    <CornerDownRight size={16} className="text-brand-600 flex-shrink-0 mt-0.5" />
-                    <div className="space-y-1">
-                      <span className="font-semibold text-brand-900">Your Reply:</span>
-                      <p className="text-brand-800">{whisper.reply_content}</p>
-                    </div>
+                {/* One-Way Share Action & Inline Feedback */}
+                <div className="pt-2 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
+                    <Shield size={13} className="text-emerald-600" />
+                    <span>Sender details completely hidden</span>
                   </div>
-                )}
 
-                {/* Reply Form & Share Actions */}
-                <div className="pt-2 flex items-center justify-between gap-2">
-                  {!whisper.reply_content ? (
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault()
-                        handleReplyWhisper(whisper.id)
-                      }}
-                      className="flex-1 flex gap-2"
-                    >
-                      <input
-                        type="text"
-                        placeholder="Write a reply..."
-                        value={replyText[whisper.id] || ''}
-                        onChange={(e) => setReplyText({ ...replyText, [whisper.id]: e.target.value })}
-                        className="input-field text-xs py-2 flex-1"
-                      />
-                      <button
-                        type="submit"
-                        disabled={replyingId === whisper.id || !replyText[whisper.id]?.trim()}
-                        className="btn-primary text-xs py-2 px-3 flex items-center gap-1"
-                      >
-                        <Send size={12} />
-                        <span>Reply</span>
-                      </button>
-                    </form>
-                  ) : (
-                    <div className="flex items-center gap-2 ml-auto">
-                      <button
-                        onClick={() => handleShareWhisperAsPost(whisper)}
-                        className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5"
-                      >
+                  <button
+                    onClick={() => handleShareWhisper(whisper)}
+                    className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 hover:bg-brand-50 hover:text-brand-700 hover:border-brand-200 transition-all"
+                  >
+                    {shareStatus[whisper.id] === 'copied' ? (
+                      <>
+                        <Copy size={13} className="text-emerald-600" />
+                        <span className="text-emerald-700 font-bold">Link Copied!</span>
+                      </>
+                    ) : shareStatus[whisper.id] === 'shared' ? (
+                      <>
+                        <Check size={13} className="text-emerald-600" />
+                        <span className="text-emerald-700 font-bold">Shared!</span>
+                      </>
+                    ) : shareStatus[whisper.id] === 'error' ? (
+                      <span className="text-red-600 font-bold">Share Failed</span>
+                    ) : (
+                      <>
                         <Share2 size={13} />
-                        <span>Share to Feed</span>
-                      </button>
-                    </div>
-                  )}
+                        <span>Share</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
             ))}
