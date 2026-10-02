@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import Image from 'next/image'
-import { Edit3, Lock, Shield, ExternalLink, LogOut } from 'lucide-react'
+import Link from 'next/link'
+import { Edit3, Lock, Shield, ExternalLink, LogOut, Settings } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import EditProfileModal from '@/components/profile/EditProfileModal'
 import PostCard from '@/components/feed/PostCard'
@@ -122,6 +123,18 @@ export default function ProfileDashboardPage(): React.JSX.Element {
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
+      {/* Top Header with Settings Gear Icon */}
+      <div className="flex items-center justify-between px-1">
+        <h1 className="text-xl font-bold text-gray-900">Profile</h1>
+        <Link
+          href="/settings"
+          className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-200/60 rounded-full transition-colors group relative"
+          title="Settings"
+          aria-label="Settings"
+        >
+          <Settings size={22} className="group-hover:rotate-45 transition-transform duration-200" />
+        </Link>
+      </div>
       {/* Profile Summary Card */}
       <div className="card p-6 space-y-4">
         <div className="flex items-start gap-4">

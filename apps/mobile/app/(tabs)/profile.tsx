@@ -9,13 +9,15 @@ import {
   ScrollView,
   Share,
 } from 'react-native'
-import { Edit3, Lock, LogOut } from 'lucide-react-native'
+import { Edit3, Lock, LogOut, Settings } from 'lucide-react-native'
+import { useRouter } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { colors } from '../../constants/colors'
 import { EditProfileModal } from '../../components/EditProfileModal'
 import type { User } from '@supabase/supabase-js'
 
 export default function ProfileScreen() {
+  const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<{
     display_name: string
@@ -78,6 +80,18 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+      {/* Top Header Bar with Settings Gear Icon */}
+      <View style={styles.topHeaderBar}>
+        <Text style={styles.headerTitle}>Profile</Text>
+        <TouchableOpacity
+          style={styles.settingsBtn}
+          onPress={() => router.push('/settings')}
+          accessibilityLabel="Settings"
+          accessibilityRole="button"
+        >
+          <Settings size={22} color={colors.gray800} />
+        </TouchableOpacity>
+      </View>
       {/* Avatar */}
       <View style={styles.avatarCircle}>
         <Text style={styles.avatarLetter}>
@@ -178,8 +192,22 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.gray50 },
-  scrollContent: { alignItems: 'center', paddingTop: 32, paddingHorizontal: 24, paddingBottom: 100 },
+  scrollContent: { alignItems: 'center', paddingTop: 16, paddingHorizontal: 24, paddingBottom: 100 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  topHeaderBar: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    paddingHorizontal: 4,
+  },
+  headerTitle: { fontSize: 20, fontWeight: '700', color: colors.gray900 },
+  settingsBtn: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.04)',
+  },
   avatarCircle: {
     width: 88,
     height: 88,
