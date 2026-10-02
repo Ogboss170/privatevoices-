@@ -8,6 +8,7 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native'
+import { useFocusEffect } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { colors } from '../../constants/colors'
 import { MobilePostCard } from '../../components/MobilePostCard'
@@ -104,6 +105,13 @@ export default function HomeScreen() {
     setLoading(false)
     setRefreshing(false)
   }, [activeTab, currentUserId])
+
+  // Refetch posts when tab screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      fetchPosts()
+    }, [fetchPosts])
+  )
 
   useEffect(() => {
     fetchPosts()
