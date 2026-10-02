@@ -44,7 +44,6 @@ async function getProfileData(username: string, currentUserId?: string) {
     isFollowing = !!follow
   }
 
-  // Fetch posts if not private or following/self
   let posts: Post[] = []
   const canViewPosts = !profile.is_private || isFollowing || currentUserId === profile.id
 
@@ -195,9 +194,24 @@ export default async function ProfilePage({ params }: Props) {
             )}
 
             {!isSelf && (
-              <button className="btn-secondary flex-1">
-                💬 Send Whisper
-              </button>
+              <>
+                <button className="btn-secondary flex-1">
+                  🤫 Send Whisper
+                </button>
+
+                {user && (
+                  <form action={async () => {
+                    'use server'
+                    const supabaseClient = await createSupabaseServerClient()
+                    const [userA, userB] = user.id < profile.id ? [user.id, profile.id] : [profile.id, user.id]
+                    await supabaseClient.from('conversations').upsert({ user_a_id: userA, user_b_id: userB }, { onConflict: 'user_a_id,user_b_id' })
+                  }}>
+                    <button type="submit" className="btn-secondary flex-1">
+                      💬 Direct Message
+                    </button>
+                  </form>
+                )}
+              </>
             )}
           </div>
         </div>

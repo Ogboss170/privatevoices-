@@ -1,8 +1,9 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { MessageSquare, Lock, Trash2, Send, CornerDownRight, Share2 } from 'lucide-react'
+import { Trash2, Send, CornerDownRight, Share2 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import ChatDrawer from '@/components/messages/ChatDrawer'
 
 export default function InboxPage(): React.JSX.Element {
   const supabase = createSupabaseBrowserClient()
@@ -13,6 +14,7 @@ export default function InboxPage(): React.JSX.Element {
   const [replyText, setReplyText] = useState<{ [key: string]: string }>({})
   const [replyingId, setReplyingId] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [activeConversation, setActiveConversation] = useState<any | null>(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -239,14 +241,28 @@ export default function InboxPage(): React.JSX.Element {
             {conversations.map((conv) => {
               const partner = conv.user_a.id === currentUserId ? conv.user_b : conv.user_a
               return (
-                <div key={conv.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors cursor-pointer">
+                <div
+                  key={conv.id}
+                  onClick={() =>
+                    setActiveConversation({
+                      id: conv.id,
+                      partner: {
+                        id: partner.id,
+                        username: partner.username,
+                        displayName: partner.display_name,
+                        avatarUrl: partner.avatar_url,
+                      },
+                    })
+                  }
+                  className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors cursor-pointer"
+                >
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center font-bold text-brand-600">
                       {partner.display_name.charAt(0).toUpperCase()}
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-gray-900">{partner.display_name}</h4>
-                      <p className="text-xs text-gray-500 truncate max-w-xs">{conv.last_message || 'Start chatting'}</p>
+                      <p className="text-xs text-gray-500 truncate max-w-xs">{conv.last_message || 'Tap to chat'}</p>
                     </div>
                   </div>
                   <span className="text-[11px] text-gray-400">
@@ -257,6 +273,16 @@ export default function InboxPage(): React.JSX.Element {
             })}
           </div>
         )
+      )}
+
+      {/* Active Chat Drawer */}
+      {activeConversation && currentUserId && (
+        <ChatDrawer
+          conversationId={activeConversation.id}
+          partner={activeConversation.partner}
+          currentUserId={currentUserId}
+          onClose={() => setActiveConversation(null)}
+        />
       )}
     </div>
   )
