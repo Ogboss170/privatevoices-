@@ -2,7 +2,8 @@ import { notFound } from 'next/navigation'
 import Image from 'next/image'
 import type { Metadata } from 'next'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import type { PublicProfile } from '@private-voices/shared'
+import PostCard from '@/components/feed/PostCard'
+import type { PublicProfile, Post } from '@private-voices/shared'
 
 interface Props {
   params: Promise<{ username: string }>
@@ -16,70 +17,133 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
-async function getProfile(username: string): Promise<PublicProfile | null> {
+async function getProfileData(username: string, currentUserId?: string) {
   const supabase = await createSupabaseServerClient()
 
-  const { data, error } = await supabase
+  const { data: profile, error } = await supabase
     .from('profiles')
-    .select(`
-      id,
-      username,
-      display_name,
-      bio,
-      avatar_url,
-      is_private
-    `)
+    .select('id, username, display_name, bio, avatar_url, is_private')
     .ilike('username', username)
     .single()
 
-  if (error || !data) return null
+  if (error || !profile) return null
 
-  // Get follower and following counts
-  const [{ count: followerCount }, { count: followingCount }] = await Promise.all([
-    supabase
-      .from('follows')
-      .select('*', { count: 'exact', head: true })
-      .eq('following_id', data.id),
-    supabase
-      .from('follows')
-      .select('*', { count: 'exact', head: true })
-      .eq('follower_id', data.id),
+  const [{ count: followerCount }, { count: followingCount }, { count: postCount }] = await Promise.all([
+    supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', profile.id),
+    supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', profile.id),
+    supabase.from('posts').select('*', { count: 'exact', head: true }).eq('author_id', profile.id),
   ])
 
+  let isFollowing = false
+  if (currentUserId && currentUserId !== profile.id) {
+    const { data: follow } = await supabase
+      .from('follows')
+      .select('follower_id')
+      .match({ follower_id: currentUserId, following_id: profile.id })
+      .maybeSingle()
+    isFollowing = !!follow
+  }
+
+  // Fetch posts if not private or following/self
+  let posts: Post[] = []
+  const canViewPosts = !profile.is_private || isFollowing || currentUserId === profile.id
+
+  if (canViewPosts) {
+    const { data: postRows } = await supabase
+      .from('posts')
+      .select('*, author:profiles(id, username, display_name, avatar_url)')
+      .eq('author_id', profile.id)
+      .order('created_at', { ascending: false })
+
+    if (postRows) {
+      posts = await Promise.all(
+        postRows.map(async (p) => {
+          const [{ count: likeCount }, { count: commentCount }] = await Promise.all([
+            supabase.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
+            supabase.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
+          ])
+
+          let isLikedByMe = false
+          let isSavedByMe = false
+          if (currentUserId) {
+            const [{ data: like }, { data: save }] = await Promise.all([
+              supabase.from('likes').select('user_id').match({ user_id: currentUserId, post_id: p.id }).maybeSingle(),
+              supabase.from('saved_posts').select('user_id').match({ user_id: currentUserId, post_id: p.id }).maybeSingle(),
+            ])
+            isLikedByMe = !!like
+            isSavedByMe = !!save
+          }
+
+          return {
+            id: p.id,
+            authorId: p.author_id,
+            author: {
+              id: p.author.id,
+              username: p.author.username,
+              displayName: p.author.display_name,
+              avatarUrl: p.author.avatar_url,
+            },
+            content: p.content,
+            imageUrls: p.image_urls ?? [],
+            hashtags: [],
+            likeCount: likeCount ?? 0,
+            commentCount: commentCount ?? 0,
+            repostCount: 0,
+            isLikedByMe,
+            isSavedByMe,
+            isRepostedByMe: false,
+            createdAt: p.created_at,
+            updatedAt: p.updated_at,
+          }
+        })
+      )
+    }
+  }
+
   return {
-    id: data.id,
-    username: data.username,
-    displayName: data.display_name,
-    bio: data.bio,
-    avatarUrl: data.avatar_url,
-    isPrivate: data.is_private,
-    followerCount: followerCount ?? 0,
-    followingCount: followingCount ?? 0,
-    postCount: 0, // Phase 2
+    profile: {
+      id: profile.id,
+      username: profile.username,
+      displayName: profile.display_name,
+      bio: profile.bio,
+      avatarUrl: profile.avatar_url,
+      isPrivate: profile.is_private,
+      followerCount: followerCount ?? 0,
+      followingCount: followingCount ?? 0,
+      postCount: postCount ?? 0,
+    } as PublicProfile,
+    isFollowing,
+    canViewPosts,
+    posts,
   }
 }
 
 export default async function ProfilePage({ params }: Props) {
   const { username } = await params
-  const profile = await getProfile(username)
+  const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  const data = await getProfileData(username, user?.id)
 
-  if (!profile) notFound()
+  if (!data) notFound()
+
+  const { profile, isFollowing, canViewPosts, posts } = data
+  const isSelf = user?.id === profile.id
 
   return (
-    <main className="min-h-screen bg-gray-50">
-      {/* Header */}
+    <main className="min-h-screen bg-gray-50 pb-12">
+      {/* Header Bar */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto px-4 h-14 flex items-center">
-          <span className="font-semibold text-gray-900">@{profile.username}</span>
+        <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
+          <span className="font-bold text-gray-900">@{profile.username}</span>
+          <span className="text-xs text-gray-500">{profile.postCount} Posts</span>
         </div>
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
-        {/* Profile card */}
-        <div className="card p-6">
+        {/* Profile Card */}
+        <div className="card p-6 space-y-4">
           <div className="flex items-start gap-4">
-            {/* Avatar */}
-            <div className="flex-shrink-0">
+            <div className="w-20 h-20 rounded-full bg-brand-100 flex items-center justify-center text-2xl font-bold text-brand-600 flex-shrink-0">
               {profile.avatarUrl ? (
                 <Image
                   src={profile.avatarUrl}
@@ -89,24 +153,16 @@ export default async function ProfilePage({ params }: Props) {
                   className="rounded-full object-cover"
                 />
               ) : (
-                <div className="w-20 h-20 rounded-full bg-brand-100 flex items-center justify-center">
-                  <span className="text-2xl font-bold text-brand-600">
-                    {profile.displayName.charAt(0).toUpperCase()}
-                  </span>
-                </div>
+                profile.displayName.charAt(0).toUpperCase()
               )}
             </div>
 
-            {/* Info */}
             <div className="flex-1 min-w-0">
               <h1 className="text-xl font-bold text-gray-900">{profile.displayName}</h1>
               <p className="text-sm text-gray-500">@{profile.username}</p>
 
-              {profile.bio && (
-                <p className="mt-2 text-sm text-gray-700">{profile.bio}</p>
-              )}
+              {profile.bio && <p className="mt-2 text-sm text-gray-700">{profile.bio}</p>}
 
-              {/* Stats */}
               <div className="mt-3 flex gap-4 text-sm">
                 <div>
                   <span className="font-semibold text-gray-900">{profile.followerCount}</span>{' '}
@@ -120,30 +176,50 @@ export default async function ProfilePage({ params }: Props) {
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="mt-4 flex gap-3">
-            <button className="btn-primary flex-1">Follow</button>
-            <button className="btn-secondary flex-1">
-              💬 Send Whisper
-            </button>
+          {/* Action buttons */}
+          <div className="flex gap-3 pt-2 border-t border-gray-100">
+            {!isSelf && user && (
+              <form action={async () => {
+                'use server'
+                const supabaseClient = await createSupabaseServerClient()
+                if (isFollowing) {
+                  await supabaseClient.from('follows').delete().match({ follower_id: user.id, following_id: profile.id })
+                } else {
+                  await supabaseClient.from('follows').insert({ follower_id: user.id, following_id: profile.id })
+                }
+              }}>
+                <button type="submit" className={`btn-primary flex-1 ${isFollowing ? 'bg-gray-800 hover:bg-gray-900' : ''}`}>
+                  {isFollowing ? 'Following' : 'Follow'}
+                </button>
+              </form>
+            )}
+
+            {!isSelf && (
+              <button className="btn-secondary flex-1">
+                💬 Send Whisper
+              </button>
+            )}
           </div>
         </div>
 
         {/* Private profile notice */}
-        {profile.isPrivate && (
-          <div className="card p-6 text-center">
-            <div className="text-4xl mb-2">🔒</div>
+        {!canViewPosts ? (
+          <div className="card p-8 text-center space-y-2">
+            <div className="text-4xl">🔒</div>
             <h2 className="font-semibold text-gray-900">This account is private</h2>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-gray-500">
               Follow @{profile.username} to see their posts.
             </p>
           </div>
-        )}
-
-        {/* Posts placeholder (Phase 2) */}
-        {!profile.isPrivate && (
-          <div className="card p-6 text-center text-gray-400">
-            <p className="text-sm">No posts yet.</p>
+        ) : posts.length === 0 ? (
+          <div className="card p-8 text-center text-gray-400">
+            <p className="text-sm">No posts published yet.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {posts.map((post: Post) => (
+              <PostCard key={post.id} post={post} currentUserId={user?.id} />
+            ))}
           </div>
         )}
       </div>
