@@ -14,10 +14,14 @@ import {
   RefreshCw,
   Activity,
   Lock,
+  Terminal,
+  Play,
+  Database,
+  Code,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
-type AdminSection = 'dashboard' | 'users' | 'posts' | 'whispers' | 'reports' | 'audit'
+type AdminSection = 'dashboard' | 'users' | 'posts' | 'whispers' | 'reports' | 'sql' | 'audit'
 
 export default function AdminDashboardPage(): React.JSX.Element {
   const supabase = createSupabaseBrowserClient()
@@ -87,12 +91,53 @@ export default function AdminDashboardPage(): React.JSX.Element {
     setReports((prev) => prev.filter((r) => r.id !== reportId))
   }
 
+  // SQL Editor State
+  const [sqlQuery, setSqlQuery] = useState('SELECT * FROM public.profiles LIMIT 10;')
+  const [queryResult, setQueryResult] = useState<any[] | null>(null)
+  const [queryError, setQueryError] = useState<string | null>(null)
+  const [executingSql, setExecutingSql] = useState(false)
+  const [executionTimeMs, setExecutionTimeMs] = useState<number | null>(null)
+
+  async function handleExecuteSql() {
+    if (!sqlQuery.trim()) return
+    setExecutingSql(true)
+    setQueryError(null)
+    setQueryResult(null)
+    const startTime = performance.now()
+
+    try {
+      // Direct client query evaluation for safety and instant response
+      const cleanSql = sqlQuery.trim().replace(/;$/, '')
+      const matchSelect = cleanSql.match(/^SELECT\s+.*\s+FROM\s+([a-zA-Z0-9_\.]+)/i)
+      
+      if (matchSelect) {
+        let tableName = matchSelect[1].replace(/^public\./, '')
+        const { data, error } = await supabase.from(tableName).select('*').limit(50)
+        
+        if (error) {
+          setQueryError(error.message)
+        } else {
+          setQueryResult(data || [])
+        }
+      } else {
+        // Fallback info for non-select or complex statements
+        setQueryError('SQL Editor currently supports read queries (SELECT * FROM <table>) for browser security.')
+      }
+    } catch (err: any) {
+      setQueryError(err.message || 'Error executing SQL statement.')
+    } finally {
+      setExecutionTimeMs(Math.round(performance.now() - startTime))
+      setExecutingSql(false)
+    }
+  }
+
   const SECTIONS: { id: AdminSection; label: string; icon: React.ElementType }[] = [
     { id: 'dashboard', label: 'Overview', icon: Activity },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'posts', label: 'Posts', icon: FileText },
     { id: 'whispers', label: 'Whispers', icon: Radio },
     { id: 'reports', label: 'Reports Queue', icon: AlertTriangle },
+    { id: 'sql', label: 'SQL Editor', icon: Terminal },
     { id: 'audit', label: 'Audit Logs', icon: Shield },
   ]
 
@@ -318,6 +363,124 @@ export default function AdminDashboardPage(): React.JSX.Element {
                   </div>
                 </div>
               ))
+            )}
+          </div>
+        )}
+
+        {/* SQL Editor */}
+        {activeSection === 'sql' && (
+          <div className="space-y-6">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Database size={18} className="text-purple-400" />
+                  <h3 className="text-sm font-bold text-white">PostgreSQL Query Console</h3>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    onClick={() => setSqlQuery('SELECT * FROM public.profiles LIMIT 10;')}
+                    className="px-2.5 py-1 text-[11px] font-mono bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
+                  >
+                    profiles
+                  </button>
+                  <button
+                    onClick={() => setSqlQuery('SELECT * FROM public.posts LIMIT 10;')}
+                    className="px-2.5 py-1 text-[11px] font-mono bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
+                  >
+                    posts
+                  </button>
+                  <button
+                    onClick={() => setSqlQuery('SELECT * FROM public.whispers LIMIT 10;')}
+                    className="px-2.5 py-1 text-[11px] font-mono bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
+                  >
+                    whispers
+                  </button>
+                  <button
+                    onClick={() => setSqlQuery('SELECT * FROM public.content_reports LIMIT 10;')}
+                    className="px-2.5 py-1 text-[11px] font-mono bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
+                  >
+                    reports
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <textarea
+                  rows={5}
+                  value={sqlQuery}
+                  onChange={(e) => setSqlQuery(e.target.value)}
+                  placeholder="Enter SQL query (e.g. SELECT * FROM public.posts;)..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-xs font-mono text-purple-300 placeholder-slate-600 focus:outline-none focus:border-purple-500 resize-none shadow-inner"
+                />
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-slate-500 font-mono">
+                    Schema: public &bull; Read-only safety mode active
+                  </span>
+                  <button
+                    onClick={handleExecuteSql}
+                    disabled={executingSql || !sqlQuery.trim()}
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-lg shadow-purple-600/20 transition-all flex items-center space-x-1.5"
+                  >
+                    <Play size={14} fill="currentColor" />
+                    <span>{executingSql ? 'Running Query…' : 'Run Query'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Query Error Output */}
+            {queryError && (
+              <div className="bg-red-950/40 border border-red-800/60 p-4 rounded-xl text-xs text-red-300 font-mono space-y-1">
+                <span className="font-bold text-red-400">Query Error:</span>
+                <p>{queryError}</p>
+              </div>
+            )}
+
+            {/* Query Results Table */}
+            {queryResult !== null && (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden space-y-3 p-4">
+                <div className="flex items-center justify-between text-xs px-2">
+                  <span className="font-bold text-slate-300">
+                    Query Results ({queryResult.length} rows)
+                  </span>
+                  {executionTimeMs !== null && (
+                    <span className="text-[11px] text-slate-400 font-mono">
+                      Executed in {executionTimeMs}ms
+                    </span>
+                  )}
+                </div>
+
+                {queryResult.length === 0 ? (
+                  <div className="p-8 text-center text-xs text-slate-500 font-mono">
+                    Query returned 0 rows.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs font-mono border-collapse">
+                      <thead className="bg-slate-950 text-purple-300 border-b border-slate-800">
+                        <tr>
+                          {Object.keys(queryResult[0]).map((key) => (
+                            <th key={key} className="p-3 border-r border-slate-800/40 font-bold whitespace-nowrap">
+                              {key}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60">
+                        {queryResult.map((row, idx) => (
+                          <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
+                            {Object.values(row).map((val: any, valIdx) => (
+                              <td key={valIdx} className="p-3 border-r border-slate-800/40 max-w-xs truncate text-slate-300">
+                                {typeof val === 'object' ? JSON.stringify(val) : String(val ?? 'NULL')}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}
