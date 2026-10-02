@@ -9,7 +9,6 @@ import {
   AtSign,
   Mail,
   KeyRound,
-  UserX,
   Trash2,
   Lock,
   MessageSquare,
@@ -34,6 +33,7 @@ import {
   Check,
   AlertTriangle,
   X,
+  UserPlus,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
@@ -63,6 +63,10 @@ export default function SettingsPage(): React.JSX.Element {
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0)
   const [deleteInputText, setDeleteInputText] = useState('')
   const [deleting, setDeleting] = useState(false)
+
+  // Logout All Confirmation Modal state
+  const [showLogoutAllConfirm, setShowLogoutAllConfirm] = useState(false)
+  const [loggingOutAll, setLoggingOutAll] = useState(false)
 
   const fetchSettings = useCallback(async () => {
     setLoading(true)
@@ -135,15 +139,17 @@ export default function SettingsPage(): React.JSX.Element {
     setTimeout(() => setSaved(false), 2000)
   }
 
-  async function handleSignOut() {
-    await supabase.auth.signOut()
+  async function handleLogoutAllDevices() {
+    setLoggingOutAll(true)
+    await supabase.auth.signOut({ scope: 'global' })
+    setLoggingOutAll(false)
+    setShowLogoutAllConfirm(false)
     router.push('/login')
   }
 
   async function handleDeleteAccount() {
     if (!userId) return
     setDeleting(true)
-    // Delete user profile & data, then sign out
     await supabase.from('profiles').delete().eq('id', userId)
     await supabase.auth.signOut()
     setDeleting(false)
@@ -229,32 +235,6 @@ export default function SettingsPage(): React.JSX.Element {
               </div>
             </div>
             <ChevronRight size={16} className="text-gray-400" />
-          </div>
-
-          <div className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors">
-            <div className="flex items-center space-x-3">
-              <UserX size={18} className="text-gray-500" />
-              <div>
-                <span className="font-semibold text-gray-800 block">Deactivate Account</span>
-                <span className="text-xs text-gray-400">Temporarily disable your profile</span>
-              </div>
-            </div>
-            <ChevronRight size={16} className="text-gray-400" />
-          </div>
-
-          {/* Delete Account (Destructive Action) */}
-          <div
-            onClick={() => setDeleteStep(1)}
-            className="flex items-center justify-between p-2 hover:bg-red-50 rounded-lg cursor-pointer transition-colors text-red-600 mt-2 border-t border-gray-100 pt-3"
-          >
-            <div className="flex items-center space-x-3">
-              <Trash2 size={18} className="text-red-500" />
-              <div>
-                <span className="font-bold block">Delete Account</span>
-                <span className="text-xs text-red-400">Permanently delete account and all data</span>
-              </div>
-            </div>
-            <ChevronRight size={16} className="text-red-400" />
           </div>
         </div>
       </section>
@@ -430,17 +410,6 @@ export default function SettingsPage(): React.JSX.Element {
             </div>
             <ChevronRight size={16} className="text-gray-400" />
           </div>
-
-          <div className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors" onClick={handleSignOut}>
-            <div className="flex items-center space-x-3 text-red-600">
-              <LogOut size={18} />
-              <div>
-                <span className="font-semibold block">Log out of all devices</span>
-                <span className="text-xs text-red-400">Terminate all active sessions</span>
-              </div>
-            </div>
-            <ChevronRight size={16} className="text-red-400" />
-          </div>
         </div>
       </section>
 
@@ -590,7 +559,27 @@ export default function SettingsPage(): React.JSX.Element {
         </div>
       </section>
 
-      {/* ── 8. ABOUT ── */}
+      {/* ── 8. INVITE FRIENDS ── */}
+      <section className="card p-6 space-y-4">
+        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 pb-2">
+          Invite Friends
+        </h2>
+        <Link
+          href="/invite"
+          className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg transition-colors text-sm"
+        >
+          <div className="flex items-center space-x-3">
+            <UserPlus size={18} className="text-brand-600" />
+            <div>
+              <span className="font-semibold text-gray-800 block">Invite Friends</span>
+              <span className="text-xs text-gray-400">Bring your friends to Private Voices</span>
+            </div>
+          </div>
+          <ChevronRight size={16} className="text-gray-400" />
+        </Link>
+      </section>
+
+      {/* ── 9. ABOUT ── */}
       <section className="card p-6 space-y-4">
         <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 pb-2">
           About
@@ -642,6 +631,76 @@ export default function SettingsPage(): React.JSX.Element {
           </div>
         </div>
       </section>
+
+      {/* ── 10. BOTTOM ACTIONS (SEPARATED AT ABSOLUTE BOTTOM) ── */}
+      <section className="pt-6 border-t border-gray-200 space-y-3">
+        {/* Log out of all devices (Immediately above Delete Account) */}
+        <div
+          onClick={() => setShowLogoutAllConfirm(true)}
+          className="card p-4 flex items-center justify-between cursor-pointer hover:bg-amber-50 border-amber-200 transition-colors text-amber-800"
+        >
+          <div className="flex items-center space-x-3">
+            <LogOut size={18} className="text-amber-600" />
+            <div>
+              <span className="font-bold text-sm block">Log out of all devices</span>
+              <span className="text-xs text-amber-600">Invalidate all active sessions across all devices</span>
+            </div>
+          </div>
+          <ChevronRight size={16} className="text-amber-500" />
+        </div>
+
+        {/* Delete Account (Absolute Last Item) */}
+        <div
+          onClick={() => setDeleteStep(1)}
+          className="card p-4 flex items-center justify-between cursor-pointer hover:bg-red-50 border-red-200 transition-colors text-red-600"
+        >
+          <div className="flex items-center space-x-3">
+            <Trash2 size={18} className="text-red-600" />
+            <div>
+              <span className="font-bold text-sm block">Delete Account</span>
+              <span className="text-xs text-red-400">Permanently delete account and all data</span>
+            </div>
+          </div>
+          <ChevronRight size={16} className="text-red-400" />
+        </div>
+      </section>
+
+      {/* ── LOGOUT ALL DEVICES CONFIRMATION MODAL ── */}
+      {showLogoutAllConfirm && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-amber-100">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center space-x-2 text-amber-600 font-bold text-lg">
+                <LogOut size={22} />
+                <span>Log out of all devices?</span>
+              </div>
+              <button onClick={() => setShowLogoutAllConfirm(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+
+            <p className="text-sm text-gray-600">
+              This will invalidate all active login sessions on all your devices. You will need to log in again on every device.
+            </p>
+
+            <div className="flex items-center justify-end space-x-3 pt-2">
+              <button
+                onClick={() => setShowLogoutAllConfirm(false)}
+                className="px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={loggingOutAll}
+                onClick={handleLogoutAllDevices}
+                className="px-4 py-2 text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl transition-colors disabled:opacity-50"
+              >
+                {loggingOutAll ? 'Logging out...' : 'Confirm Log Out All'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── DELETE ACCOUNT MODAL DIALOGS ── */}
       {deleteStep > 0 && (
@@ -736,4 +795,5 @@ export default function SettingsPage(): React.JSX.Element {
     </div>
   )
 }
+
 

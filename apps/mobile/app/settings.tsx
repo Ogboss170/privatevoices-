@@ -17,7 +17,6 @@ import {
   AtSign,
   Mail,
   KeyRound,
-  UserX,
   Trash2,
   Lock,
   MessageSquare,
@@ -40,6 +39,7 @@ import {
   Info,
   ChevronRight,
   AlertTriangle,
+  UserPlus,
 } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import { supabase } from '../lib/supabase'
@@ -119,15 +119,22 @@ export default function SettingsScreen() {
     }
   }
 
-  function handleSignOut() {
-    Alert.alert('Sign out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign out',
-        style: 'destructive',
-        onPress: () => supabase.auth.signOut(),
-      },
-    ])
+  function handleLogoutAllDevices() {
+    Alert.alert(
+      'Log out of all devices?',
+      'This will invalidate all active login sessions on all your devices. You will need to log in again on every device.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm Log Out All',
+          style: 'destructive',
+          onPress: async () => {
+            await supabase.auth.signOut({ scope: 'global' })
+            router.push('/login')
+          },
+        },
+      ]
+    )
   }
 
   async function handlePermanentDelete() {
@@ -137,6 +144,7 @@ export default function SettingsScreen() {
     await supabase.auth.signOut()
     setDeleting(false)
     setDeleteStep(0)
+    router.push('/login')
   }
 
   if (loading) {
@@ -191,26 +199,6 @@ export default function SettingsScreen() {
             <Text style={styles.rowLabel}>Change Password</Text>
           </View>
           <ChevronRight size={18} color={colors.gray400} />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.rowItem} activeOpacity={0.7}>
-          <View style={styles.rowLeft}>
-            <UserX size={18} color={colors.gray600} />
-            <Text style={styles.rowLabel}>Deactivate Account</Text>
-          </View>
-          <ChevronRight size={18} color={colors.gray400} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.rowItem, styles.destructiveRow]}
-          onPress={() => setDeleteStep(1)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.rowLeft}>
-            <Trash2 size={18} color="#ef4444" />
-            <Text style={styles.destructiveLabel}>Delete Account</Text>
-          </View>
-          <ChevronRight size={18} color="#ef4444" />
         </TouchableOpacity>
       </View>
 
@@ -343,14 +331,6 @@ export default function SettingsScreen() {
           </View>
           <ChevronRight size={18} color={colors.gray400} />
         </TouchableOpacity>
-
-        <TouchableOpacity style={styles.rowItem} onPress={handleSignOut} activeOpacity={0.7}>
-          <View style={styles.rowLeft}>
-            <LogOut size={18} color="#ef4444" />
-            <Text style={styles.destructiveLabel}>Log out of all devices</Text>
-          </View>
-          <ChevronRight size={18} color="#ef4444" />
-        </TouchableOpacity>
       </View>
 
       {/* ── 5. NOTIFICATIONS ── */}
@@ -478,7 +458,24 @@ export default function SettingsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* ── 8. ABOUT ── */}
+      {/* ── 8. INVITE FRIENDS ── */}
+      <View style={styles.sectionCard}>
+        <Text style={styles.sectionCategoryTitle}>INVITE FRIENDS</Text>
+
+        <TouchableOpacity
+          style={styles.rowItem}
+          onPress={() => router.push('/invite')}
+          activeOpacity={0.7}
+        >
+          <View style={styles.rowLeft}>
+            <UserPlus size={18} color={colors.brand} />
+            <Text style={styles.rowLabel}>Invite Friends</Text>
+          </View>
+          <ChevronRight size={18} color={colors.gray400} />
+        </TouchableOpacity>
+      </View>
+
+      {/* ── 9. ABOUT ── */}
       <View style={styles.sectionCard}>
         <Text style={styles.sectionCategoryTitle}>ABOUT</Text>
 
@@ -528,11 +525,20 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {/* Sign Out Button */}
-      <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
-        <LogOut size={18} color="#ef4444" />
-        <Text style={styles.signOutText}>Sign Out</Text>
-      </TouchableOpacity>
+      {/* ── 10. BOTTOM ACTIONS (SEPARATED AT ABSOLUTE BOTTOM) ── */}
+      <View style={styles.bottomActionsContainer}>
+        {/* Log out of all devices (Immediately above Delete Account) */}
+        <TouchableOpacity style={styles.logoutAllBtn} onPress={handleLogoutAllDevices}>
+          <LogOut size={18} color="#d97706" />
+          <Text style={styles.logoutAllText}>Log out of all devices</Text>
+        </TouchableOpacity>
+
+        {/* Delete Account (Absolute Last Item) */}
+        <TouchableOpacity style={styles.deleteAccountBtn} onPress={() => setDeleteStep(1)}>
+          <Trash2 size={18} color="#ef4444" />
+          <Text style={styles.deleteAccountText}>Delete Account</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Delete Account Step 1 Modal */}
       <Modal visible={deleteStep === 1} transparent animationType="fade">
@@ -633,12 +639,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 8,
   },
-  destructiveRow: {
-    borderTopWidth: 1,
-    borderTopColor: colors.gray100,
-    paddingTop: 10,
-    marginTop: 4,
-  },
   rowItemNoClick: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -665,11 +665,6 @@ const styles = StyleSheet.create({
   rowSubLabel: {
     fontSize: 13,
     color: colors.gray600,
-  },
-  destructiveLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#ef4444',
   },
   valueText: {
     fontSize: 13,
@@ -698,7 +693,26 @@ const styles = StyleSheet.create({
   },
   versionLabel: { fontSize: 12, color: colors.gray400 },
   versionVal: { fontSize: 12, color: colors.gray500, fontFamily: 'monospace' },
-  signOutBtn: {
+  bottomActionsContainer: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: colors.gray200,
+    gap: 12,
+  },
+  logoutAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#fffbe6',
+    borderWidth: 1,
+    borderColor: '#fef08a',
+    borderRadius: 14,
+    paddingVertical: 14,
+  },
+  logoutAllText: { fontSize: 14, fontWeight: '700', color: '#d97706' },
+  deleteAccountBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -708,9 +722,8 @@ const styles = StyleSheet.create({
     borderColor: '#fca5a5',
     borderRadius: 14,
     paddingVertical: 14,
-    marginTop: 12,
   },
-  signOutText: { fontSize: 14, fontWeight: '700', color: '#ef4444' },
+  deleteAccountText: { fontSize: 14, fontWeight: '700', color: '#ef4444' },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
