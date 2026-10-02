@@ -1,0 +1,112 @@
+// ─── User / Profile ────────────────────────────────────────────────────────────
+
+export interface User {
+  id: string;
+  email: string;
+  username: string;
+  displayName: string;
+  bio: string | null;
+  avatarUrl: string | null;
+  isPrivate: boolean;
+  createdAt: string;
+}
+
+export interface PublicProfile {
+  id: string;
+  username: string;
+  displayName: string;
+  bio: string | null;
+  avatarUrl: string | null;
+  isPrivate: boolean;
+  followerCount: number;
+  followingCount: number;
+  postCount: number;
+}
+
+// ─── Privacy Settings ───────────────────────────────────────────────────────────
+
+export type FollowVisibility = 'anyone' | 'nobody';
+export type MessageVisibility = 'anyone' | 'followers' | 'nobody';
+export type WhisperVisibility = 'anyone' | 'followers' | 'nobody';
+export type StoryVisibility = 'everyone' | 'followers' | 'close_friends' | 'custom';
+export type CommentVisibility = 'anyone' | 'followers' | 'nobody';
+export type MentionVisibility = 'anyone' | 'followers' | 'nobody';
+
+export interface PrivacySettings {
+  id: string;
+  userId: string;
+  whoCanFollow: FollowVisibility;
+  whoCanMessage: MessageVisibility;
+  whisperVisibility: WhisperVisibility;
+  storyVisibility: StoryVisibility;
+  whoCanComment: CommentVisibility;
+  whoCanMention: MentionVisibility;
+  showInRecommendations: boolean;
+  allowProfileIndexing: boolean;
+}
+
+// ─── Auth ───────────────────────────────────────────────────────────────────────
+
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+}
+
+export interface SignUpDto {
+  email: string;
+  password: string;
+  username: string;
+  displayName: string;
+}
+
+export interface SignInDto {
+  email: string;
+  password: string;
+}
+
+export interface AuthResponse {
+  user: User;
+  tokens: AuthTokens;
+}
+
+// ─── API Responses ──────────────────────────────────────────────────────────────
+
+export interface ApiResponse<T> {
+  data: T;
+  message?: string;
+}
+
+export interface ApiError {
+  statusCode: number;
+  message: string;
+  error?: string;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}
+
+// ─── Navigation ─────────────────────────────────────────────────────────────────
+
+export type RootStackParamList = {
+  '(auth)': undefined;
+  '(tabs)': undefined;
+};
+
+export type AuthStackParamList = {
+  login: undefined;
+  register: undefined;
+};
+
+export type TabParamList = {
+  index: undefined;      // Home / Feed
+  explore: undefined;    // Explore / Discovery
+  create: undefined;     // Create Post / Story
+  inbox: undefined;      // Messages + Whispers
+  communities: undefined;
+  profile: undefined;
+};

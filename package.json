@@ -1,0 +1,21 @@
+{
+  "name": "private-voices",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev:web": "pnpm --filter @private-voices/web dev",
+    "dev:mobile": "pnpm --filter @private-voices/mobile start",
+    "dev:api": "pnpm --filter @private-voices/api start:dev",
+    "build:web": "pnpm --filter @private-voices/web build",
+    "build:api": "pnpm --filter @private-voices/api build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}
