@@ -12,7 +12,6 @@ const NAV_ITEMS = [
   { href: '/inbox',       label: 'Inbox',       Icon: Inbox },
   { href: '/communities', label: 'Communities', Icon: Users },
   { href: '/profile',     label: 'Profile',     Icon: User },
-  { href: '/admin',       label: 'Admin',       Icon: Shield },
 ]
 
 export default function AppShell({ children }: { children: React.ReactNode }): React.JSX.Element {

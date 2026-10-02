@@ -4,10 +4,12 @@
   "private": true,
   "scripts": {
     "dev:web": "pnpm --filter @private-voices/web dev",
+    "dev:admin": "pnpm --filter @private-voices/admin dev",
     "dev:mobile": "pnpm --filter @private-voices/mobile start",
     "dev:api": "pnpm --filter @private-voices/api start:dev",
     "build": "pnpm build:web",
     "build:web": "pnpm --filter @private-voices/web build",
+    "build:admin": "pnpm --filter @private-voices/admin build",
     "build:api": "pnpm --filter @private-voices/api build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck"
