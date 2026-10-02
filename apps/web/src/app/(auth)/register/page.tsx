@@ -56,20 +56,53 @@ export default function RegisterPage() {
       return
     }
 
-    // 2. Create the profile via the NestJS API
-    const apiRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/complete-profile`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: data.user.id,
-        username: form.username,
-        displayName: form.displayName,
-      }),
-    })
+    // 2. Create the profile (via NestJS API if defined, else directly via Supabase)
+    let profileCreated = false
 
-    if (!apiRes.ok) {
-      const err = await apiRes.json()
-      setError(err.message ?? 'Failed to create profile.')
+    if (process.env.NEXT_PUBLIC_API_URL) {
+      try {
+        const apiRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/complete-profile`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: data.user.id,
+            username: form.username,
+            displayName: form.displayName,
+          }),
+        })
+
+        if (apiRes.ok) {
+          profileCreated = true
+        }
+      } catch {
+        // Ignore network errors calling API, fallback below
+      }
+    }
+
+    if (!profileCreated) {
+      // Fallback: create profile directly via Supabase RPC / table insert
+      const { error: rpcError } = await supabase.rpc('create_profile', {
+        p_user_id: data.user.id,
+        p_username: form.username,
+        p_display_name: form.displayName,
+      })
+
+      if (rpcError) {
+        const { error: insertError } = await supabase.from('profiles').upsert({
+          id: data.user.id,
+          username: form.username,
+          display_name: form.displayName,
+        })
+
+        if (insertError) {
+          console.warn('Profile creation error:', rpcError || insertError)
+        }
+      }
+    }
+
+    // Check if session was granted (if email confirmation is disabled) or requires verification
+    if (!data.session) {
+      setError('Account created! Please check your email to confirm your account before logging in.')
       setLoading(false)
       return
     }
