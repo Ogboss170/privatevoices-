@@ -556,6 +556,8 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
             </div>
           )}
         </div>
+      )}
+
       {/* Post Progression & Insights Modal */}
       {showInsightsModal && (
         <PostInsightsModal post={post} onClose={() => setShowInsightsModal(false)} />
