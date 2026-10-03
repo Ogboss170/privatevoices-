@@ -95,7 +95,7 @@ export default function FeedPage() {
         limit: 20,
       })
 
-      data = engineResult.items
+      const data = engineResult.items
 
       if (data && data.length > 0) {
         // Collect all distinct author IDs to fetch profiles in ONE single query

@@ -187,7 +187,7 @@ export default function CreatePostPage(): React.JSX.Element {
       return
     }
 
-    const { data: newPost, error } = await supabase
+    let { data: newPost, error } = await supabase
       .from('posts')
       .insert({
         author_id: userRes.user.id,
@@ -198,6 +198,21 @@ export default function CreatePostPage(): React.JSX.Element {
       })
       .select('id')
       .single()
+
+    // Fallback: moderation columns may not exist yet (migration 016 not applied)
+    if (error && /moderation_status|is_sensitive/i.test(error.message)) {
+      const retry = await supabase
+        .from('posts')
+        .insert({
+          author_id: userRes.user.id,
+          content: finalContent || 'Voice attachment',
+          image_urls: uploadedUrls,
+        })
+        .select('id')
+        .single()
+      newPost = retry.data
+      error = retry.error
+    }
 
     if (!error && newPost && showPollCreator && pollQuestion.trim()) {
       const validOptions = pollOptions.filter((o) => o.trim() !== '')
