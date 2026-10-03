@@ -102,10 +102,22 @@ export default function StoryViewerModal({
         </div>
 
         {/* Story Content */}
-        <div className="my-auto text-center px-4 space-y-4">
-          <p className="text-lg font-semibold leading-relaxed tracking-wide">
-            "{currentStory.content}"
-          </p>
+        <div className="my-auto text-center px-4 space-y-4 flex flex-col items-center justify-center overflow-hidden">
+          {currentStory.media_url && (
+            <div className="relative w-full h-64 rounded-2xl overflow-hidden my-2 border border-white/10 shadow-lg">
+              <Image
+                src={currentStory.media_url}
+                alt="Story image"
+                fill
+                className="object-cover"
+              />
+            </div>
+          )}
+          {currentStory.content && (
+            <p className="text-base font-semibold leading-relaxed tracking-wide bg-black/40 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10">
+              "{currentStory.content}"
+            </p>
+          )}
         </div>
 
         {/* Navigation Controls */}

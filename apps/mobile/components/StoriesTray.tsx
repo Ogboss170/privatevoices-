@@ -8,6 +8,7 @@ import {
   Modal,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native'
 import { Plus, X, Eye } from 'lucide-react-native'
 import { supabase } from '../lib/supabase'
@@ -51,10 +52,10 @@ export function StoriesTray() {
         if (!authorMap.has(authorId)) {
           authorMap.set(authorId, {
             author: {
-              id: story.author.id,
-              username: story.author.username,
-              displayName: story.author.display_name,
-              avatarUrl: story.author.avatar_url,
+              id: story.author?.id || story.author_id,
+              username: story.author?.username || 'user',
+              displayName: story.author?.display_name || 'User',
+              avatarUrl: story.author?.avatar_url || null,
             },
             stories: [],
           })
@@ -69,6 +70,8 @@ export function StoriesTray() {
     setActiveStoryGroup(group)
     setCurrentIndex(0)
   }
+
+  const currentStory = activeStoryGroup?.stories[currentIndex]
 
   return (
     <View style={styles.container}>
@@ -95,7 +98,7 @@ export function StoriesTray() {
       </ScrollView>
 
       {/* Full-Screen Story Viewer */}
-      {activeStoryGroup && (
+      {activeStoryGroup && currentStory && (
         <Modal visible animationType="fade" transparent>
           <View style={styles.viewerOverlay}>
             <View style={styles.viewerBox}>
@@ -116,9 +119,18 @@ export function StoriesTray() {
               </View>
 
               <View style={styles.storyBody}>
-                <Text style={styles.storyText}>
-                  "{activeStoryGroup.stories[currentIndex]?.content}"
-                </Text>
+                {currentStory.media_url && (
+                  <Image
+                    source={{ uri: currentStory.media_url }}
+                    style={styles.storyImage}
+                    resizeMode="cover"
+                  />
+                )}
+                {currentStory.content && (
+                  <Text style={styles.storyText}>
+                    "{currentStory.content}"
+                  </Text>
+                )}
               </View>
             </View>
           </View>
@@ -137,12 +149,13 @@ const styles = StyleSheet.create({
   avatarText: { fontSize: 18, fontWeight: '700', color: colors.brand },
   authorName: { fontSize: 11, color: colors.gray700, marginTop: 4, textAlign: 'center' },
   viewerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center', padding: 16 },
-  viewerBox: { width: '100%', height: 500, backgroundColor: '#0f172a', borderRadius: 24, padding: 20, justifyContent: 'space-between' },
+  viewerBox: { width: '100%', height: 520, backgroundColor: '#0f172a', borderRadius: 24, padding: 20, justifyContent: 'space-between' },
   progressRow: { flexDirection: 'row', gap: 4 },
   progressBar: { flex: 1, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.3)' },
   progressActive: { backgroundColor: '#ffffff' },
-  viewerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
+  viewerHeader: { flexDirection: 'row', justify: 'space-between', alignItems: 'center', marginTop: 12 },
   viewerAuthor: { color: '#ffffff', fontWeight: '700', fontSize: 14 },
-  storyBody: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16 },
-  storyText: { color: '#ffffff', fontSize: 18, fontWeight: '600', textAlign: 'center', lineHeight: 26 },
+  storyBody: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16, marginVertical: 12 },
+  storyImage: { width: '100%', height: 260, borderRadius: 16, marginBottom: 12 },
+  storyText: { color: '#ffffff', fontSize: 16, fontWeight: '600', textAlign: 'center', lineHeight: 24, backgroundColor: 'rgba(0,0,0,0.5)', padding: 10, borderRadius: 12 },
 })
