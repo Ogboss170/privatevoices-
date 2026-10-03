@@ -167,36 +167,6 @@ export default function ProfileDashboardPage(): React.JSX.Element {
             </div>
           </div>
         </div>
-
-        {/* Action Buttons */}
-        <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
-          <button
-            onClick={() => setShowEditModal(true)}
-            className="btn-secondary text-xs py-2 flex-1 flex items-center justify-center gap-1.5"
-          >
-            <Edit3 size={14} />
-            <span>Edit Profile</span>
-          </button>
-
-          <a
-            href={`/w/@${profile.username}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-secondary text-xs py-2 px-3 flex items-center gap-1.5"
-            title="Preview Whisper Link"
-          >
-            <ExternalLink size={14} />
-            <span>Whisper Link</span>
-          </a>
-
-          <button
-            onClick={handleSignOut}
-            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
-            title="Sign Out"
-          >
-            <LogOut size={16} />
-          </button>
-        </div>
       </div>
 
       {/* Your Anonymous Whisper Link Card */}

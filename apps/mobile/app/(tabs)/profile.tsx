@@ -171,21 +171,6 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Action Buttons */}
-      <View style={styles.actionRow}>
-        <TouchableOpacity
-          style={styles.editBtn}
-          onPress={() => setEditModalVisible(true)}
-        >
-          <Edit3 size={16} color={colors.gray800} />
-          <Text style={styles.editBtnText}>Edit Profile</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
-          <LogOut size={16} color="#ef4444" />
-        </TouchableOpacity>
-      </View>
-
       {/* Anonymous Whisper Link Card */}
       {profile && (
         <View style={styles.whisperLinkCard}>
