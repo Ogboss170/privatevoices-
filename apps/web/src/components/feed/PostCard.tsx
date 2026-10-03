@@ -487,6 +487,15 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
         </button>
 
         <button
+          onClick={() => setShowInsightsModal(true)}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-purple-50 text-purple-600 font-medium transition-colors"
+          title="View Post Insights & Progression"
+        >
+          <TrendingUp size={18} />
+          <span>Insights</span>
+        </button>
+
+        <button
           onClick={handleToggleSave}
           className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 transition-colors ${
             isSaved ? 'text-brand-600' : ''
