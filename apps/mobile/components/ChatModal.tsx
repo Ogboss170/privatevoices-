@@ -13,8 +13,9 @@ import {
   Alert,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { X, Send, Check, CheckCheck } from 'lucide-react-native'
+import { X, Send, Check, CheckCheck, Image as ImageIcon, Camera } from 'lucide-react-native'
 import { Image } from 'expo-image'
+import * as ImagePicker from 'expo-image-picker'
 import { supabase } from '../lib/supabase'
 import { colors } from '../constants/colors'
 
@@ -46,6 +47,8 @@ export function ChatModal({
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [fullscreenImageUrl, setFullscreenImageUrl] = useState<string | null>(null)
   const flatListRef = useRef<FlatList>(null)
 
   const partnerName = partner?.displayName || partner?.display_name || partner?.username || 'User'
@@ -125,11 +128,55 @@ export function ChatModal({
     }
   }, [visible, conversationId, currentUserId])
 
-  async function handleSend() {
-    if (!text.trim() || sending || !conversationId) return
+  async function handlePickImage() {
+    Alert.alert('Send Photo', 'Choose an option to attach a photo', [
+      {
+        text: 'Camera',
+        onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync()
+          if (status !== 'granted') {
+            Alert.alert('Permission Denied', 'Camera permission is required.')
+            return
+          }
+          const result = await ImagePicker.launchCameraAsync({
+            quality: 0.8,
+            allowsEditing: true,
+          })
+          if (!result.canceled && result.assets[0]?.uri) {
+            setSelectedImage(result.assets[0].uri)
+          }
+        },
+      },
+      {
+        text: 'Photo Library',
+        onPress: async () => {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
+          if (status !== 'granted') {
+            Alert.alert('Permission Denied', 'Photo library permission is required.')
+            return
+          }
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            quality: 0.8,
+            allowsEditing: true,
+          })
+          if (!result.canceled && result.assets[0]?.uri) {
+            setSelectedImage(result.assets[0].uri)
+          }
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ])
+  }
 
-    const messageContent = text.trim()
+  async function handleSend() {
+    if ((!text.trim() && !selectedImage) || sending || !conversationId) return
+
+    const messageContent = text.trim() || '📷 Photo'
+    const imageUriToSend = selectedImage
+
     setText('')
+    setSelectedImage(null)
     setSending(true)
 
     // Optimistic message
@@ -139,6 +186,7 @@ export function ChatModal({
       conversation_id: conversationId,
       sender_id: currentUserId,
       content: messageContent,
+      image_url: imageUriToSend,
       is_read: false,
       created_at: new Date().toISOString(),
     }
@@ -149,12 +197,53 @@ export function ChatModal({
     }, 50)
 
     try {
+      let uploadedUrl: string | null = null
+
+      if (imageUriToSend) {
+        try {
+          const fileExt = imageUriToSend.split('.').pop()?.split('?')[0] || 'jpg'
+          const fileName = `${currentUserId}/${Date.now()}.${fileExt}`
+
+          const response = await fetch(imageUriToSend)
+          const blob = await response.blob()
+          const arrayBuffer = await new Response(blob).arrayBuffer()
+
+          let uploadRes = await supabase.storage
+            .from('chat-media')
+            .upload(fileName, arrayBuffer, {
+              contentType: `image/${fileExt === 'png' ? 'png' : 'jpeg'}`,
+              upsert: true,
+            })
+
+          if (uploadRes.error) {
+            uploadRes = await supabase.storage
+              .from('stories')
+              .upload(`chat/${fileName}`, arrayBuffer, {
+                contentType: `image/${fileExt === 'png' ? 'png' : 'jpeg'}`,
+                upsert: true,
+              })
+          }
+
+          if (uploadRes.data) {
+            const bucket = uploadRes.data.path.startsWith('chat/') ? 'stories' : 'chat-media'
+            const { data: publicUrlData } = supabase.storage
+              .from(bucket)
+              .getPublicUrl(uploadRes.data.path)
+
+            uploadedUrl = publicUrlData.publicUrl
+          }
+        } catch (uploadErr) {
+          console.error('Error uploading chat image:', uploadErr)
+        }
+      }
+
       const { data: newMsg, error } = await supabase
         .from('messages')
         .insert({
           conversation_id: conversationId,
           sender_id: currentUserId,
           content: messageContent,
+          image_url: uploadedUrl,
         })
         .select('*')
         .single()
@@ -245,7 +334,7 @@ export function ChatModal({
                 <Text style={styles.emptyEmoji}>👋</Text>
                 <Text style={styles.emptyTitle}>Say hello to {partnerName}!</Text>
                 <Text style={styles.emptyDesc}>
-                  Start your conversation. Direct messages are private and identity-verified.
+                  Start your conversation. Direct messages and photos are private and identity-verified.
                 </Text>
               </View>
             ) : (
@@ -258,6 +347,8 @@ export function ChatModal({
                 renderItem={({ item }) => {
                   const isMe = item.sender_id === currentUserId
                   const isTemp = String(item.id).startsWith('temp-')
+                  const hasImage = !!item.image_url
+                  const showText = item.content && item.content !== '📷 Photo'
 
                   return (
                     <View
@@ -271,11 +362,35 @@ export function ChatModal({
                           styles.bubble,
                           isMe ? styles.bubbleMe : styles.bubbleThem,
                           isTemp && styles.bubblePending,
+                          hasImage && styles.bubbleWithImage,
                         ]}
                       >
-                        <Text style={[styles.messageText, isMe ? styles.messageTextMe : styles.messageTextThem]}>
-                          {item.content}
-                        </Text>
+                        {/* Media image */}
+                        {hasImage && (
+                          <TouchableOpacity
+                            onPress={() => setFullscreenImageUrl(item.image_url)}
+                            activeOpacity={0.9}
+                          >
+                            <Image
+                              source={{ uri: item.image_url }}
+                              style={styles.chatImage}
+                              contentFit="cover"
+                            />
+                          </TouchableOpacity>
+                        )}
+
+                        {/* Text Caption */}
+                        {showText && (
+                          <Text
+                            style={[
+                              styles.messageText,
+                              isMe ? styles.messageTextMe : styles.messageTextThem,
+                              hasImage && styles.captionText,
+                            ]}
+                          >
+                            {item.content}
+                          </Text>
+                        )}
                       </View>
 
                       <View
@@ -302,11 +417,35 @@ export function ChatModal({
             )}
           </View>
 
+          {/* Image Selected Preview Bar */}
+          {selectedImage && (
+            <View style={styles.previewBar}>
+              <View style={styles.previewThumbContainer}>
+                <Image source={{ uri: selectedImage }} style={styles.previewThumb} />
+                <TouchableOpacity
+                  style={styles.removeImageBtn}
+                  onPress={() => setSelectedImage(null)}
+                >
+                  <X size={14} color="#ffffff" />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.previewText}>Photo attached</Text>
+            </View>
+          )}
+
           {/* Input Bar */}
           <View style={styles.inputBar}>
+            <TouchableOpacity
+              style={styles.attachBtn}
+              onPress={handlePickImage}
+              activeOpacity={0.7}
+            >
+              <ImageIcon size={22} color={colors.brand} />
+            </TouchableOpacity>
+
             <TextInput
               style={styles.textInput}
-              placeholder={`Message @${partnerUsername}...`}
+              placeholder={selectedImage ? "Add a caption..." : `Message @${partnerUsername}...`}
               placeholderTextColor={colors.gray400}
               value={text}
               onChangeText={setText}
@@ -317,10 +456,10 @@ export function ChatModal({
             <TouchableOpacity
               style={[
                 styles.sendBtn,
-                (!text.trim() || sending) && styles.sendBtnDisabled,
+                (!text.trim() && !selectedImage || sending) && styles.sendBtnDisabled,
               ]}
               onPress={handleSend}
-              disabled={!text.trim() || sending}
+              disabled={(!text.trim() && !selectedImage) || sending}
             >
               {sending ? (
                 <ActivityIndicator size="small" color="#ffffff" />
@@ -330,6 +469,25 @@ export function ChatModal({
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
+
+        {/* Fullscreen Photo Lightbox Modal */}
+        {fullscreenImageUrl && (
+          <Modal visible={!!fullscreenImageUrl} transparent animationType="fade">
+            <View style={styles.lightboxOverlay}>
+              <TouchableOpacity
+                style={styles.lightboxCloseBtn}
+                onPress={() => setFullscreenImageUrl(null)}
+              >
+                <X size={26} color="#ffffff" />
+              </TouchableOpacity>
+              <Image
+                source={{ uri: fullscreenImageUrl }}
+                style={styles.lightboxImage}
+                contentFit="contain"
+              />
+            </View>
+          </Modal>
+        )}
       </SafeAreaView>
     </Modal>
   )
@@ -450,6 +608,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
+  bubbleWithImage: {
+    paddingHorizontal: 4,
+    paddingTop: 4,
+    paddingBottom: 8,
+    overflow: 'hidden',
+  },
   bubbleMe: {
     backgroundColor: colors.brand,
     borderBottomRightRadius: 4,
@@ -462,6 +626,15 @@ const styles = StyleSheet.create({
   },
   bubblePending: {
     opacity: 0.75,
+  },
+  chatImage: {
+    width: 220,
+    height: 180,
+    borderRadius: 14,
+  },
+  captionText: {
+    marginTop: 6,
+    marginHorizontal: 8,
   },
   messageText: {
     fontSize: 14,
@@ -493,6 +666,42 @@ const styles = StyleSheet.create({
   receiptContainer: {
     marginLeft: 2,
   },
+  previewBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: colors.gray200,
+    gap: 12,
+  },
+  previewThumbContainer: {
+    position: 'relative',
+    width: 48,
+    height: 48,
+  },
+  previewThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+  },
+  removeImageBtn: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewText: {
+    fontSize: 12,
+    color: colors.gray600,
+    fontWeight: '500',
+  },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -502,6 +711,14 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.gray200,
     gap: 8,
+  },
+  attachBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.brandLight,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   textInput: {
     flex: 1,
@@ -526,5 +743,24 @@ const styles = StyleSheet.create({
   },
   sendBtnDisabled: {
     backgroundColor: colors.gray300,
+  },
+  lightboxOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lightboxCloseBtn: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  lightboxImage: {
+    width: '100%',
+    height: '80%',
   },
 })

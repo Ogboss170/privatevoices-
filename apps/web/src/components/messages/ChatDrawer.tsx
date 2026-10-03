@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
-import { X, Send, Loader2 } from 'lucide-react'
+import { X, Send, Loader2, Image as ImageIcon, ExternalLink } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 interface ChatDrawerProps {
@@ -28,7 +28,12 @@ export default function ChatDrawer({
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [previewModalUrl, setPreviewModalUrl] = useState<string | null>(null)
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     async function loadMessages() {
@@ -94,12 +99,46 @@ export default function ChatDrawer({
     }, 80)
   }
 
+  function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file.')
+      return
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Image size exceeds 10MB limit.')
+      return
+    }
+
+    setImageFile(file)
+    const reader = new FileReader()
+    reader.onload = () => {
+      setImagePreview(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  function handleRemoveImage() {
+    setImageFile(null)
+    setImagePreview(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
   async function handleSend(e: React.FormEvent) {
     e.preventDefault()
-    if (!text.trim() || sending) return
+    if ((!text.trim() && !imageFile) || sending) return
 
-    const messageContent = text.trim()
+    const messageContent = text.trim() || '📷 Photo'
+    const currentImgFile = imageFile
+    const currentImgPreview = imagePreview
+
     setText('')
+    handleRemoveImage()
     setSending(true)
 
     // Optimistic message
@@ -109,6 +148,7 @@ export default function ChatDrawer({
       conversation_id: conversationId,
       sender_id: currentUserId,
       content: messageContent,
+      image_url: currentImgPreview,
       is_read: false,
       created_at: new Date().toISOString(),
     }
@@ -117,23 +157,49 @@ export default function ChatDrawer({
     scrollToBottom()
 
     try {
+      let uploadedUrl: string | null = null
+
+      if (currentImgFile) {
+        const fileExt = currentImgFile.name.split('.').pop() || 'jpg'
+        const fileName = `${currentUserId}/${Date.now()}.${fileExt}`
+
+        // Try 'chat-media' bucket first, fallback to 'stories' if bucket doesn't exist yet
+        let uploadRes = await supabase.storage
+          .from('chat-media')
+          .upload(fileName, currentImgFile, { upsert: true })
+
+        if (uploadRes.error) {
+          uploadRes = await supabase.storage
+            .from('stories')
+            .upload(`chat/${fileName}`, currentImgFile, { upsert: true })
+        }
+
+        if (uploadRes.data) {
+          const bucket = uploadRes.data.path.startsWith('chat/') ? 'stories' : 'chat-media'
+          const { data: publicUrlData } = supabase.storage
+            .from(bucket)
+            .getPublicUrl(uploadRes.data.path)
+
+          uploadedUrl = publicUrlData.publicUrl
+        }
+      }
+
       const { data: newMsg, error } = await supabase
         .from('messages')
         .insert({
           conversation_id: conversationId,
           sender_id: currentUserId,
           content: messageContent,
+          image_url: uploadedUrl,
         })
         .select('*')
         .single()
 
       if (error) {
         console.error('Failed to send message:', error)
-        // Remove optimistic message on error
         setMessages((prev) => prev.filter((m) => m.id !== tempId))
         alert(`Failed to send message: ${error.message}`)
       } else if (newMsg) {
-        // Replace temp message with confirmed message
         setMessages((prev) => prev.map((m) => (m.id === tempId ? newMsg : m)))
 
         // Update conversation last_message
@@ -205,13 +271,15 @@ export default function ChatDrawer({
               <div className="text-4xl mb-1">👋</div>
               <h4 className="font-bold text-sm text-gray-800">Say hello!</h4>
               <p className="text-xs text-gray-500 max-w-xs">
-                Start your conversation with @{partner.username}. Messages are private and identity-verified.
+                Start your conversation with @{partner.username}. Messages and media are private and identity-verified.
               </p>
             </div>
           ) : (
             messages.map((msg) => {
               const isMe = msg.sender_id === currentUserId
               const isTemp = msg.id.startsWith?.('temp-')
+              const hasImage = !!msg.image_url
+              const showText = msg.content && msg.content !== '📷 Photo'
 
               return (
                 <div
@@ -219,14 +287,37 @@ export default function ChatDrawer({
                   className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
                 >
                   <div
-                    className={`max-w-[80%] p-3 rounded-2xl text-xs leading-relaxed ${
+                    className={`max-w-[82%] rounded-2xl text-xs leading-relaxed overflow-hidden ${
                       isMe
                         ? 'bg-brand-600 text-white rounded-br-xs shadow-xs'
                         : 'bg-white text-gray-900 border border-gray-200/80 rounded-bl-xs shadow-xs'
                     } ${isTemp ? 'opacity-70' : ''}`}
                   >
-                    {msg.content}
+                    {/* Media Image */}
+                    {hasImage && (
+                      <div
+                        className="cursor-pointer group relative overflow-hidden max-w-sm"
+                        onClick={() => setPreviewModalUrl(msg.image_url)}
+                      >
+                        <img
+                          src={msg.image_url}
+                          alt="Shared media"
+                          className="w-full max-h-64 object-cover hover:scale-102 transition-transform duration-200"
+                        />
+                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                          <ExternalLink size={18} className="text-white drop-shadow-md" />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Text Content */}
+                    {showText && (
+                      <div className="p-3">
+                        {msg.content}
+                      </div>
+                    )}
                   </div>
+
                   <span className="text-[10px] text-gray-400 mt-1 px-1 flex items-center gap-1">
                     {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     {isMe && !isTemp && (
@@ -242,26 +333,85 @@ export default function ChatDrawer({
           <div ref={messagesEndRef} />
         </div>
 
+        {/* Selected Image Preview Bar */}
+        {imagePreview && (
+          <div className="px-4 py-2 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-12 h-12 rounded-lg overflow-hidden border border-gray-200 relative">
+                <img src={imagePreview} alt="Selected preview" className="w-full h-full object-cover" />
+              </div>
+              <span className="text-xs text-gray-600 font-medium truncate max-w-[200px]">
+                {imageFile?.name || 'Image selected'}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleRemoveImage}
+              className="p-1 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
+
         {/* Input Bar */}
         <form onSubmit={handleSend} className="p-3 border-t border-gray-100 bg-white flex gap-2 items-center">
           <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleImageSelect}
+            accept="image/*"
+            className="hidden"
+          />
+
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="p-2.5 rounded-xl text-gray-500 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+            title="Attach Image"
+          >
+            <ImageIcon size={19} />
+          </button>
+
+          <input
             type="text"
-            placeholder="Type a message..."
+            placeholder={imageFile ? "Add a caption..." : "Type a message..."}
             value={text}
             onChange={(e) => setText(e.target.value)}
             disabled={sending}
             className="input-field text-xs py-2.5 px-3.5 flex-1 rounded-xl focus:border-brand-500"
             autoFocus
           />
+
           <button
             type="submit"
-            disabled={sending || !text.trim()}
+            disabled={sending || (!text.trim() && !imageFile)}
             className="btn-primary text-xs py-2.5 px-4 rounded-xl flex items-center justify-center transition-all disabled:opacity-50"
           >
             {sending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
           </button>
         </form>
       </div>
+
+      {/* Fullscreen Image Preview Lightbox */}
+      {previewModalUrl && (
+        <div
+          className="fixed inset-0 z-60 bg-black/90 backdrop-blur-md flex items-center justify-center p-4"
+          onClick={() => setPreviewModalUrl(null)}
+        >
+          <button
+            onClick={() => setPreviewModalUrl(null)}
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/20 hover:bg-white/30 text-white transition-colors"
+          >
+            <X size={24} />
+          </button>
+          <img
+            src={previewModalUrl}
+            alt="Full size media"
+            className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+          />
+        </div>
+      )}
     </>
   )
 }
