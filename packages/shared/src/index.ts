@@ -264,3 +264,83 @@ export function extractPostMediaAndCleanContent(
   };
 }
 
+
+
+// ─── Moderation & Safety Types ──────────────────────────────────────────────────
+
+export type ModerationAction =
+  | 'ALLOW'
+  | 'ALLOW_AND_FLAG'
+  | 'BLUR_RESTRICT'
+  | 'HOLD_FOR_REVIEW'
+  | 'REMOVE'
+  | 'RESTRICT_ACCOUNT'
+  | 'SUSPEND_TEMPORARY'
+  | 'BAN_PERMANENT';
+
+export type ModerationRiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+export type ModerationCaseStatus = 'PENDING' | 'UNDER_REVIEW' | 'RESOLVED' | 'DISMISSED' | 'APPEALED';
+
+export type AppealStatus = 'PENDING' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED';
+
+export interface CategoryScores {
+  harassment?: number;
+  hate?: number;
+  threats?: number;
+  violence?: number;
+  sexual?: number;
+  selfHarm?: number;
+  spam?: number;
+  fraud?: number;
+  doxxing?: number;
+  maliciousLinks?: number;
+}
+
+export interface ModerationEvaluation {
+  action: ModerationAction;
+  riskLevel: ModerationRiskLevel;
+  categories: CategoryScores;
+  reason: string;
+  isSensitive?: boolean;
+}
+
+export interface ModerationCase {
+  id: string;
+  targetType: 'post' | 'comment' | 'reply' | 'whisper' | 'message' | 'story' | 'profile' | 'community';
+  targetId: string;
+  authorId?: string | null;
+  reportedBy?: string | null;
+  reason: string;
+  details?: string | null;
+  riskLevel: ModerationRiskLevel;
+  status: ModerationCaseStatus;
+  actionTaken: ModerationAction;
+  categoryScores?: CategoryScores;
+  assignedTo?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ModerationAppeal {
+  id: string;
+  caseId: string;
+  userId: string;
+  explanation: string;
+  status: AppealStatus;
+  reviewerNotes?: string | null;
+  reviewedBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UserSafetyScore {
+  userId: string;
+  safetyScore: number;
+  strikeCount: number;
+  reportsReceivedCount: number;
+  spamViolationsCount: number;
+  rateLimitHitsCount: number;
+  isRestricted: boolean;
+  restrictedUntil?: string | null;
+}

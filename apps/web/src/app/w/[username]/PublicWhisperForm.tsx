@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { ModerationService } from '@/lib/moderation/moderation.service'
 
 interface RecipientProfile {
   id: string
@@ -37,6 +38,20 @@ export default function PublicWhisperForm({
     setLoading(true)
     setError(null)
 
+    // Run Server-side Moderation Engine Pipeline for Anonymous Whisper
+    const evalResult = await ModerationService.checkAndProcessContent({
+      targetType: 'whisper',
+      targetId: recipient.id,
+      content: content.trim(),
+      isAnonymousWhisper: true,
+    })
+
+    if (evalResult.action === 'BLOCK') {
+      setError(evalResult.reason || 'This whisper contains prohibited or harmful content and cannot be delivered.')
+      setLoading(false)
+      return
+    }
+
     let delivered = false
 
     // 1. Try sending via NestJS API if NEXT_PUBLIC_API_URL is available
@@ -66,6 +81,7 @@ export default function PublicWhisperForm({
       const { error: insertError } = await supabase.from('whispers').insert({
         recipient_id: recipient.id,
         content: content.trim(),
+        moderation_status: evalResult.action,
       })
 
       if (insertError) {

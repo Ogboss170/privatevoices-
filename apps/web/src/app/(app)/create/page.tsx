@@ -18,6 +18,7 @@ import {
   Check,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { ModerationService } from '@/lib/moderation/moderation.service'
 
 const SAMPLE_GIFS = [
   'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM2Q1Y2E0MmE5OWIyZTZjNmEzZTVjMjIxM2ZhMWRlYTUwNmNlZjJjZCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0HlHJGHe3yAMhdQY/giphy.gif',
@@ -171,12 +172,29 @@ export default function CreatePostPage(): React.JSX.Element {
       uploadedUrls.push(selectedGif)
     }
 
+    // Run Server-Side Content Moderation Engine
+    const evalResult = await ModerationService.checkAndProcessContent({
+      targetType: 'post',
+      targetId: 'pending',
+      content: finalContent || 'Voice attachment',
+      authorId: userRes.user.id,
+      imageUrls: uploadedUrls,
+    })
+
+    if (evalResult.action === 'BLOCK') {
+      alert(`Publish Blocked: ${evalResult.reason}`)
+      setLoading(false)
+      return
+    }
+
     const { data: newPost, error } = await supabase
       .from('posts')
       .insert({
         author_id: userRes.user.id,
         content: finalContent || 'Voice attachment',
         image_urls: uploadedUrls,
+        moderation_status: evalResult.action,
+        is_sensitive: evalResult.isSensitive || false,
       })
       .select('id')
       .single()
