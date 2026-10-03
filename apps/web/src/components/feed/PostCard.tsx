@@ -175,6 +175,8 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
     setShowComments(!showComments)
   }
 
+  const [replyToComment, setReplyToComment] = useState<{ id: string; username: string } | null>(null)
+
   async function handleAddComment(e: React.FormEvent) {
     e.preventDefault()
     if (!commentText.trim()) return
@@ -193,6 +195,7 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
         post_id: post.id,
         author_id: userRes.user.id,
         content: commentText.trim(),
+        parent_id: replyToComment?.id || null,
       })
       .select('*, author:profiles!comments_author_id_fkey(id, username, display_name, avatar_url)')
       .maybeSingle()
@@ -202,6 +205,7 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
     } else if (newComment) {
       setComments((prev) => [...prev, newComment])
       setCommentText('')
+      setReplyToComment(null)
       post.commentCount = (post.commentCount || 0) + 1
     }
     setSubmittingComment(false)
@@ -518,6 +522,19 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
       {/* Comments section */}
       {showComments && (
         <div className="pt-3 border-t border-gray-100 space-y-3">
+          {replyToComment && (
+            <div className="flex items-center justify-between bg-purple-50 text-purple-700 text-xs px-3 py-1.5 rounded-lg border border-purple-100">
+              <span>Replying to <strong>@{replyToComment.username}</strong></span>
+              <button
+                type="button"
+                onClick={() => setReplyToComment(null)}
+                className="text-purple-500 hover:text-purple-800 font-bold ml-2"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           <div className="relative">
             <MentionAutocomplete
               query={mentionQuery ?? ''}
@@ -527,17 +544,18 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
             <form onSubmit={handleAddComment} className="flex gap-2">
               <input
                 type="text"
-                placeholder="Write a comment… (use @ to mention)"
+                placeholder={replyToComment ? `Replying to @${replyToComment.username}…` : "Write a comment… (use @ to mention)"}
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
                 className="input-field text-xs py-2 flex-1"
+                autoFocus={!!replyToComment}
               />
               <button
                 type="submit"
                 disabled={submittingComment || !commentText.trim()}
                 className="btn-primary text-xs py-2 px-3"
               >
-                Post
+                {replyToComment ? 'Reply' : 'Post'}
               </button>
             </form>
           </div>
@@ -547,21 +565,72 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
           ) : comments.length === 0 ? (
             <p className="text-xs text-gray-400 text-center py-2">No comments yet. Be the first!</p>
           ) : (
-            <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
-              {comments.map((comment) => (
-                <div key={comment.id} className="flex gap-2 text-xs bg-gray-50 p-2.5 rounded-lg">
-                  <Link
-                    href={`/@${comment.author?.username || 'user'}`}
-                    className="font-semibold text-gray-900 hover:text-brand-600 transition-colors flex-shrink-0"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    @{comment.author?.username || 'user'}:
-                  </Link>
-                  <div className="text-gray-700 flex-1 whitespace-pre-line">
-                    <FormattedText text={comment.content} />
-                  </div>
-                </div>
-              ))}
+            <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+              {/* Separate top-level comments and nested replies */}
+              {comments
+                .filter((c) => !c.parent_id)
+                .map((comment) => {
+                  const replies = comments.filter((r) => r.parent_id === comment.id)
+                  return (
+                    <div key={comment.id} className="space-y-1.5">
+                      {/* Top level comment */}
+                      <div className="bg-gray-50 p-2.5 rounded-lg space-y-1">
+                        <div className="flex items-start justify-between">
+                          <div className="flex gap-2 text-xs flex-1">
+                            <Link
+                              href={`/@${comment.author?.username || 'user'}`}
+                              className="font-semibold text-gray-900 hover:text-brand-600 transition-colors flex-shrink-0"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              @{comment.author?.username || 'user'}
+                            </Link>
+                            <div className="text-gray-700 flex-1 whitespace-pre-line">
+                              <FormattedText text={comment.content} />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 pt-0.5 text-[11px] text-gray-400">
+                          <span>{new Date(comment.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReplyToComment({ id: comment.id, username: comment.author?.username || 'user' })
+                              setCommentText(`@${comment.author?.username || 'user'} `)
+                            }}
+                            className="font-semibold text-brand-600 hover:underline"
+                          >
+                            Reply
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Nested Replies */}
+                      {replies.length > 0 && (
+                        <div className="pl-5 border-l-2 border-purple-200 space-y-1.5 ml-2">
+                          {replies.map((reply) => (
+                            <div key={reply.id} className="bg-purple-50/50 p-2 rounded-lg space-y-1">
+                              <div className="flex gap-2 text-xs">
+                                <Link
+                                  href={`/@${reply.author?.username || 'user'}`}
+                                  className="font-semibold text-purple-900 hover:text-brand-600 transition-colors flex-shrink-0"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  @{reply.author?.username || 'user'}
+                                </Link>
+                                <div className="text-gray-700 flex-1 whitespace-pre-line">
+                                  <FormattedText text={reply.content} />
+                                </div>
+                              </div>
+                              <div className="text-[10px] text-gray-400">
+                                {new Date(reply.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
             </div>
           )}
         </div>

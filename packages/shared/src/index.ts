@@ -103,12 +103,15 @@ export interface Comment {
   authorId: string;
   author: PostAuthor;
   content: string;
+  parentId?: string | null;
+  replies?: Comment[];
   createdAt: string;
 }
 
 export interface CreateCommentDto {
   postId: string;
   content: string;
+  parentId?: string | null;
 }
 
 export interface ReportContentDto {
