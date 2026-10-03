@@ -11,20 +11,22 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { username } = await params
+  const cleanUsername = decodeURIComponent(username).replace(/^@/, '')
   return {
-    title: `@${username}`,
-    description: `View @${username}'s profile on Private Voices`,
+    title: `@${cleanUsername}`,
+    description: `View @${cleanUsername}'s profile on Private Voices`,
   }
 }
 
-async function getProfileData(username: string, currentUserId?: string) {
+async function getProfileData(rawUsername: string, currentUserId?: string) {
   const supabase = await createSupabaseServerClient()
+  const cleanUsername = decodeURIComponent(rawUsername).replace(/^@/, '')
 
   const { data: profile, error } = await supabase
     .from('profiles')
     .select('id, username, display_name, bio, avatar_url, is_private')
-    .ilike('username', username)
-    .single()
+    .ilike('username', cleanUsername)
+    .maybeSingle()
 
   if (error || !profile) return null
 
@@ -73,14 +75,15 @@ async function getProfileData(username: string, currentUserId?: string) {
             isSavedByMe = !!save
           }
 
+          const authorObj = p.author || profile
           return {
             id: p.id,
             authorId: p.author_id,
             author: {
-              id: p.author.id,
-              username: p.author.username,
-              displayName: p.author.display_name,
-              avatarUrl: p.author.avatar_url,
+              id: authorObj.id,
+              username: authorObj.username,
+              displayName: authorObj.display_name,
+              avatarUrl: authorObj.avatar_url,
             },
             content: p.content,
             imageUrls: p.image_urls ?? [],
