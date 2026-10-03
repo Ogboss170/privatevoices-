@@ -30,13 +30,15 @@ export default function StoryViewerModal({
   const [viewers, setViewers] = useState<any[]>([])
   const [showViewers, setShowViewers] = useState(false)
 
-  const currentStory = storyGroup.stories[currentIndex]
-  const isOwner = currentUserId === storyGroup.author.id
+  const stories = storyGroup?.stories ?? []
+  const currentStory = stories[currentIndex]
+  const author = storyGroup?.author ?? { id: '', username: 'user', displayName: 'User', avatarUrl: null }
+  const isOwner = currentUserId === author.id
 
   useEffect(() => {
-    if (!currentStory || !currentUserId) return
+    if (!currentStory?.id || !currentUserId) return
 
-    // Record story view
+    // Record story view safely
     supabase.from('story_views').insert({
       story_id: currentStory.id,
       viewer_id: currentUserId,
@@ -49,10 +51,23 @@ export default function StoryViewerModal({
         .eq('story_id', currentStory.id)
         .then(({ data }) => setViewers(data ?? []))
     }
-  }, [supabase, currentStory, currentUserId, isOwner])
+  }, [supabase, currentStory?.id, currentUserId, isOwner])
+
+  if (!currentStory) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4">
+        <div className="bg-gray-900 text-white p-6 rounded-2xl text-center space-y-4">
+          <p>No story available.</p>
+          <button onClick={onClose} className="px-4 py-2 bg-brand-600 rounded-xl font-bold text-xs">
+            Close
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   function handleNext() {
-    if (currentIndex < storyGroup.stories.length - 1) {
+    if (currentIndex < stories.length - 1) {
       setCurrentIndex(currentIndex + 1)
     } else {
       onClose()
@@ -65,6 +80,8 @@ export default function StoryViewerModal({
     }
   }
 
+  const initialLetter = author.displayName ? author.displayName.charAt(0).toUpperCase() : 'U'
+
   return (
     <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
       {/* Viewer Box */}
@@ -72,9 +89,9 @@ export default function StoryViewerModal({
         {/* Progress Bars Header */}
         <div className="space-y-3 z-10">
           <div className="flex gap-1">
-            {storyGroup.stories.map((s, idx) => (
+            {stories.map((s, idx) => (
               <div
-                key={s.id}
+                key={s.id || idx}
                 className={`h-1 flex-1 rounded-full transition-all ${
                   idx <= currentIndex ? 'bg-white' : 'bg-white/30'
                 }`}
@@ -84,13 +101,23 @@ export default function StoryViewerModal({
 
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center font-bold text-xs border border-white/20">
-                {storyGroup.author.displayName.charAt(0).toUpperCase()}
-              </div>
+              {author.avatarUrl ? (
+                <img
+                  src={author.avatarUrl}
+                  alt={author.displayName}
+                  className="w-8 h-8 rounded-full object-cover border border-white/20"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center font-bold text-xs border border-white/20">
+                  {initialLetter}
+                </div>
+              )}
               <div>
-                <h4 className="font-bold text-xs text-white">{storyGroup.author.displayName}</h4>
+                <h4 className="font-bold text-xs text-white">{author.displayName}</h4>
                 <p className="text-[10px] text-white/70">
-                  {new Date(currentStory.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {currentStory.created_at
+                    ? new Date(currentStory.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    : ''}
                 </p>
               </div>
             </div>
@@ -102,19 +129,18 @@ export default function StoryViewerModal({
         </div>
 
         {/* Story Content */}
-        <div className="my-auto text-center px-4 space-y-4 flex flex-col items-center justify-center overflow-hidden">
+        <div className="my-auto text-center px-2 space-y-4 flex flex-col items-center justify-center overflow-hidden w-full">
           {currentStory.media_url && (
-            <div className="relative w-full h-64 rounded-2xl overflow-hidden my-2 border border-white/10 shadow-lg">
-              <Image
+            <div className="relative w-full h-64 rounded-2xl overflow-hidden my-2 border border-white/10 shadow-lg flex items-center justify-center bg-black/40">
+              <img
                 src={currentStory.media_url}
-                alt="Story image"
-                fill
-                className="object-cover"
+                alt="Story content"
+                className="w-full h-full object-cover"
               />
             </div>
           )}
           {currentStory.content && (
-            <p className="text-base font-semibold leading-relaxed tracking-wide bg-black/40 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10">
+            <p className="text-base font-semibold leading-relaxed tracking-wide bg-black/50 backdrop-blur-md px-4 py-2.5 rounded-xl border border-white/10 max-w-full break-words">
               "{currentStory.content}"
             </p>
           )}
@@ -164,12 +190,12 @@ export default function StoryViewerModal({
             {viewers.length === 0 ? (
               <p className="text-xs text-gray-400 text-center py-4">No views yet.</p>
             ) : (
-              viewers.map((v) => (
-                <div key={v.id} className="flex items-center gap-2.5 text-xs">
+              viewers.map((v, idx) => (
+                <div key={v.id || idx} className="flex items-center gap-2.5 text-xs">
                   <div className="w-7 h-7 rounded-full bg-brand-100 font-bold text-brand-700 flex items-center justify-center">
-                    {v.viewer?.display_name?.charAt(0).toUpperCase()}
+                    {(v.viewer?.display_name || v.viewer?.username || 'U').charAt(0).toUpperCase()}
                   </div>
-                  <span className="font-semibold text-gray-900">{v.viewer?.display_name}</span>
+                  <span className="font-semibold text-gray-900">{v.viewer?.display_name || v.viewer?.username || 'User'}</span>
                 </div>
               ))
             )}
