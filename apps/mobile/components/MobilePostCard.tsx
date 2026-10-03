@@ -49,6 +49,7 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
   const router = useRouter()
   const [isLiked, setIsLiked] = useState(post.isLikedByMe)
   const [likeCount, setLikeCount] = useState(post.likeCount)
+  const [likeBusy, setLikeBusy] = useState(false)
   const [isSaved, setIsSaved] = useState(post.isSavedByMe)
   const [commentCount, setCommentCount] = useState(post.commentCount)
   const [showComments, setShowComments] = useState(false)
@@ -77,20 +78,41 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
   const isOwner = currentUserId === post.authorId
 
   async function handleToggleLike() {
+    if (likeBusy) return
+    if (!currentUserId) {
+      Alert.alert('Login Required', 'Please log in to like posts.')
+      return
+    }
+
+    setLikeBusy(true)
     const prevLiked = isLiked
     const prevCount = likeCount
     setIsLiked(!prevLiked)
-    setLikeCount(prevLiked ? prevCount - 1 : prevCount + 1)
+    setLikeCount(prevLiked ? Math.max(0, prevCount - 1) : prevCount + 1)
 
     try {
       if (prevLiked) {
-        await supabase.from('likes').delete().match({ user_id: currentUserId, post_id: post.id })
+        const { error } = await supabase
+          .from('likes')
+          .delete()
+          .match({ user_id: currentUserId, post_id: post.id })
+        if (error) throw error
       } else {
-        await supabase.from('likes').insert({ user_id: currentUserId, post_id: post.id })
+        const { error } = await supabase
+          .from('likes')
+          .insert({ user_id: currentUserId, post_id: post.id })
+        // 23505 = already liked (primary key user_id+post_id): keep liked state, fix count
+        if (error && error.code !== '23505') throw error
+        if (error && error.code === '23505') {
+          setIsLiked(true)
+          setLikeCount(prevCount)
+        }
       }
     } catch {
       setIsLiked(prevLiked)
       setLikeCount(prevCount)
+    } finally {
+      setLikeBusy(false)
     }
   }
 
