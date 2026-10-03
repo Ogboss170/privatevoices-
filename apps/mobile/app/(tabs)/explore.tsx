@@ -132,7 +132,12 @@ export default function ExploreScreen() {
 
         <View style={styles.grid}>
           {communities.map((comm) => (
-            <View key={comm.id} style={styles.commCard}>
+            <TouchableOpacity
+              key={comm.id}
+              style={styles.commCard}
+              onPress={() => router.push(`/community/${comm.slug}` as any)}
+              activeOpacity={0.7}
+            >
               <View style={styles.commIconBox}>
                 <Hash size={18} color={colors.brand} />
               </View>
@@ -142,7 +147,7 @@ export default function ExploreScreen() {
                   {comm.description || 'Community'}
                 </Text>
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
       </View>

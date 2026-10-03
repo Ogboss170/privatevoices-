@@ -5,26 +5,24 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   ActivityIndicator,
-  FlatList,
   Alert,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
   ArrowLeft,
   Users,
   Lock,
   Globe,
-  Share2,
   Check,
   Plus,
-  BookOpen,
-  Settings,
 } from 'lucide-react-native'
+import { Image } from 'expo-image'
 import { supabase } from '../../lib/supabase'
 import { colors } from '../../constants/colors'
 import { MobilePostCard } from '../../components/MobilePostCard'
+import { PublicProfileModal } from '../../components/PublicProfileModal'
 import type { Post } from '@private-voices/shared'
 
 export default function CommunityDetailScreen() {
@@ -41,25 +39,32 @@ export default function CommunityDetailScreen() {
   const [userRole, setUserRole] = useState<'owner' | 'moderator' | 'member' | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
+  // Public Profile Modal State
+  const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(null)
+  const [profileModalVisible, setProfileModalVisible] = useState(false)
+
   const fetchCommunityData = useCallback(async () => {
     setLoading(true)
     const { data: userRes } = await supabase.auth.getUser()
     const uId = userRes?.user?.id || null
     setCurrentUserId(uId)
 
-    const { data: comm } = await supabase
+    // 1. Fetch Community
+    const { data: comm, error: commErr } = await supabase
       .from('communities')
       .select('*')
       .eq('slug', slug)
       .single()
 
-    if (!comm) {
+    if (commErr || !comm) {
+      console.error('Error fetching community:', commErr)
       setLoading(false)
       return
     }
 
     setCommunity(comm)
 
+    // 2. Fetch User Membership
     if (uId) {
       const { data: member } = await supabase
         .from('community_members')
@@ -70,45 +75,107 @@ export default function CommunityDetailScreen() {
       if (member) {
         setMembershipStatus(member.status === 'pending' ? 'pending' : 'member')
         setUserRole(member.role)
+      } else {
+        setMembershipStatus('none')
+        setUserRole(null)
       }
     }
 
-    const { data: mems } = await supabase
+    // 3. Fetch Members
+    let { data: mems, error: memErr } = await supabase
       .from('community_members')
       .select('*, user:profiles!community_members_user_id_fkey(id, username, display_name, avatar_url)')
       .eq('community_id', comm.id)
 
-    setMembers(mems || [])
+    if (memErr || !mems) {
+      const fallbackMems = await supabase
+        .from('community_members')
+        .select('*')
+        .eq('community_id', comm.id)
 
-    const { data: rawPosts } = await supabase
+      if (fallbackMems.data && fallbackMems.data.length > 0) {
+        const uIds = fallbackMems.data.map((m) => m.user_id)
+        const { data: profs } = await supabase
+          .from('profiles')
+          .select('id, username, display_name, avatar_url')
+          .in('id', uIds)
+
+        const pMap = new Map((profs ?? []).map((p) => [p.id, p]))
+        setMembers(fallbackMems.data.map((m) => ({ ...m, user: pMap.get(m.user_id) })))
+      } else {
+        setMembers([])
+      }
+    } else {
+      setMembers(mems)
+    }
+
+    // 4. Fetch Community Posts
+    let { data: rawPosts, error: postErr } = await supabase
       .from('posts')
       .select('*, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url)')
       .eq('community_id', comm.id)
       .order('created_at', { ascending: false })
 
-    if (rawPosts) {
-      const formatted: Post[] = rawPosts.map((p: any) => ({
-        id: p.id,
-        authorId: p.author_id,
-        author: {
-          id: p.author.id,
-          username: p.author.username,
-          displayName: p.author.display_name,
-          avatarUrl: p.author.avatar_url,
-        },
-        content: p.content,
-        imageUrls: p.image_urls ?? [],
-        hashtags: [],
-        likeCount: 0,
-        commentCount: 0,
-        repostCount: 0,
-        isLikedByMe: false,
-        isSavedByMe: false,
-        isRepostedByMe: false,
-        createdAt: p.created_at,
-        updatedAt: p.updated_at,
-      }))
+    if (postErr || !rawPosts) {
+      const fallbackRes = await supabase
+        .from('posts')
+        .select('*')
+        .eq('community_id', comm.id)
+        .order('created_at', { ascending: false })
+      rawPosts = fallbackRes.data
+    }
+
+    if (rawPosts && rawPosts.length > 0) {
+      const authorIds = Array.from(new Set(rawPosts.map((p) => p.author_id)))
+      const { data: profList } = await supabase
+        .from('profiles')
+        .select('id, username, display_name, avatar_url')
+        .in('id', authorIds)
+
+      const profileMap = new Map((profList ?? []).map((prof) => [prof.id, prof]))
+
+      const formatted: Post[] = await Promise.all(
+        rawPosts.map(async (p: any) => {
+          let likeCount = 0
+          let commentCount = 0
+          try {
+            const [{ count: lCount }, { count: cCount }] = await Promise.all([
+              supabase.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
+              supabase.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
+            ])
+            likeCount = lCount ?? 0
+            commentCount = cCount ?? 0
+          } catch {
+            // ignore
+          }
+
+          const authorData = p.author || profileMap.get(p.author_id)
+          return {
+            id: p.id,
+            authorId: p.author_id,
+            author: {
+              id: authorData?.id || p.author_id,
+              username: authorData?.username || 'user',
+              displayName: authorData?.display_name || 'User',
+              avatarUrl: authorData?.avatar_url || null,
+            },
+            content: p.content,
+            imageUrls: p.image_urls ?? [],
+            hashtags: [],
+            likeCount,
+            commentCount,
+            repostCount: 0,
+            isLikedByMe: false,
+            isSavedByMe: false,
+            isRepostedByMe: false,
+            createdAt: p.created_at,
+            updatedAt: p.updated_at,
+          }
+        })
+      )
       setPosts(formatted)
+    } else {
+      setPosts([])
     }
 
     setLoading(false)
@@ -119,7 +186,11 @@ export default function CommunityDetailScreen() {
   }, [fetchCommunityData])
 
   async function handleJoinLeave() {
-    if (!currentUserId || !community) return
+    if (!currentUserId) {
+      Alert.alert('Login Required', 'Please log in to join communities.')
+      return
+    }
+    if (!community) return
 
     if (membershipStatus === 'member' || membershipStatus === 'pending') {
       await supabase
@@ -129,6 +200,7 @@ export default function CommunityDetailScreen() {
 
       setMembershipStatus('none')
       setUserRole(null)
+      fetchCommunityData()
     } else {
       const status = community.privacy === 'private' ? 'pending' : 'member'
       await supabase
@@ -137,7 +209,13 @@ export default function CommunityDetailScreen() {
 
       setMembershipStatus(status === 'pending' ? 'pending' : 'member')
       if (status === 'member') setUserRole('member')
+      fetchCommunityData()
     }
+  }
+
+  function handleOpenAuthorProfile(authorId: string) {
+    setSelectedAuthorId(authorId)
+    setProfileModalVisible(true)
   }
 
   if (loading) {
@@ -150,166 +228,440 @@ export default function CommunityDetailScreen() {
 
   if (!community) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.emptyTitle}>Community Not Found</Text>
-        <TouchableOpacity style={styles.backBtnAction} onPress={() => router.back()}>
-          <Text style={styles.backBtnText}>Go Back</Text>
-        </TouchableOpacity>
-      </View>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.centered}>
+          <Text style={styles.emptyTitle}>Community Not Found</Text>
+          <TouchableOpacity style={styles.backBtnAction} onPress={() => router.back()}>
+            <Text style={styles.backBtnText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     )
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Header Bar */}
-      <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
-          <ArrowLeft size={22} color={colors.gray800} />
-        </TouchableOpacity>
-        <Text style={styles.topBarTitle}>{community.name}</Text>
-      </View>
-
-      {/* Community Banner */}
-      <View style={styles.banner}>
-        <View style={styles.avatarCircle}>
-          <Text style={styles.avatarText}>{community.name.charAt(0).toUpperCase()}</Text>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        {/* Top Header Bar */}
+        <View style={styles.topBar}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
+            <ArrowLeft size={22} color={colors.gray800} />
+          </TouchableOpacity>
+          <Text style={styles.topBarTitle} numberOfLines={1}>{community.name}</Text>
         </View>
 
-        <View style={styles.infoGroup}>
-          <View style={styles.row}>
-            <Text style={styles.name}>{community.name}</Text>
-            {community.privacy === 'private' ? (
-              <Lock size={16} color="#d97706" />
+        {/* Community Info Banner */}
+        <View style={styles.banner}>
+          <View style={styles.avatarCircle}>
+            {community.avatar_url ? (
+              <Image source={{ uri: community.avatar_url }} style={styles.avatarImg} />
             ) : (
-              <Globe size={16} color="#059669" />
+              <Text style={styles.avatarText}>{community.name.charAt(0).toUpperCase()}</Text>
             )}
           </View>
-          <Text style={styles.slug}>@{community.slug}</Text>
-          {community.description && <Text style={styles.desc}>{community.description}</Text>}
 
-          <View style={styles.metaRow}>
-            <Text style={styles.metaText}>{members.length} Members</Text>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={[styles.joinBtn, membershipStatus === 'member' && styles.joinedBtn]}
-          onPress={handleJoinLeave}
-        >
-          <Text style={[styles.joinBtnText, membershipStatus === 'member' && styles.joinedBtnText]}>
-            {membershipStatus === 'member' ? 'Joined' : 'Join Community'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Tabs */}
-      <View style={styles.tabRow}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'posts' && styles.tabActive]}
-          onPress={() => setActiveTab('posts')}
-        >
-          <Text style={[styles.tabText, activeTab === 'posts' && styles.tabTextActive]}>Posts</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'about' && styles.tabActive]}
-          onPress={() => setActiveTab('about')}
-        >
-          <Text style={[styles.tabText, activeTab === 'about' && styles.tabTextActive]}>About</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'members' && styles.tabActive]}
-          onPress={() => setActiveTab('members')}
-        >
-          <Text style={[styles.tabText, activeTab === 'members' && styles.tabTextActive]}>Members</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Content */}
-      {activeTab === 'posts' && (
-        posts.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>No conversations yet.</Text>
-            <Text style={styles.emptyBody}>Be the first to post in this community.</Text>
-          </View>
-        ) : (
-          <View style={{ gap: 12 }}>
-            {posts.map((post) => (
-              <MobilePostCard key={post.id} post={post} currentUserId={currentUserId || undefined} />
-            ))}
-          </View>
-        )
-      )}
-
-      {activeTab === 'about' && (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Community Rules</Text>
-          <Text style={styles.ruleItem}>1. Be respectful to all members.</Text>
-          <Text style={styles.ruleItem}>2. No harassment or hate speech.</Text>
-          <Text style={styles.ruleItem}>3. Keep posts on topic.</Text>
-          <Text style={styles.ruleItem}>4. No spam or unauthorized promotion.</Text>
-        </View>
-      )}
-
-      {activeTab === 'members' && (
-        <View style={styles.card}>
-          {members.map((m) => (
-            <View key={m.id} style={styles.memberRow}>
-              <View style={styles.memberAvatar}>
-                <Text style={styles.memberAvatarText}>
-                  {m.user?.display_name?.charAt(0).toUpperCase() || 'U'}
-                </Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.memberName}>{m.user?.display_name}</Text>
-                <Text style={styles.memberHandle}>@{m.user?.username}</Text>
-              </View>
-              <Text style={styles.roleTag}>{m.role}</Text>
+          <View style={styles.infoGroup}>
+            <View style={styles.row}>
+              <Text style={styles.name}>{community.name}</Text>
+              {community.privacy === 'private' ? (
+                <Lock size={16} color="#d97706" />
+              ) : (
+                <Globe size={16} color="#059669" />
+              )}
             </View>
-          ))}
+            <Text style={styles.slug}>c/{community.slug}</Text>
+            {community.description && <Text style={styles.desc}>{community.description}</Text>}
+
+            <View style={styles.metaRow}>
+              <Users size={14} color={colors.gray500} />
+              <Text style={styles.metaText}>{members.length} Members</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.joinBtn, membershipStatus === 'member' && styles.joinedBtn]}
+            onPress={handleJoinLeave}
+          >
+            {membershipStatus === 'member' ? (
+              <View style={styles.btnRow}>
+                <Check size={16} color={colors.gray700} />
+                <Text style={styles.joinedBtnText}>Joined</Text>
+              </View>
+            ) : (
+              <View style={styles.btnRow}>
+                <Plus size={16} color="#ffffff" />
+                <Text style={styles.joinBtnText}>Join Community</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
+
+        {/* Tabs Row */}
+        <View style={styles.tabRow}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'posts' && styles.tabActive]}
+            onPress={() => setActiveTab('posts')}
+          >
+            <Text style={[styles.tabText, activeTab === 'posts' && styles.tabTextActive]}>Posts</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'about' && styles.tabActive]}
+            onPress={() => setActiveTab('about')}
+          >
+            <Text style={[styles.tabText, activeTab === 'about' && styles.tabTextActive]}>About</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'members' && styles.tabActive]}
+            onPress={() => setActiveTab('members')}
+          >
+            <Text style={[styles.tabText, activeTab === 'members' && styles.tabTextActive]}>
+              Members ({members.length})
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Tab 1: Posts */}
+        {activeTab === 'posts' && (
+          posts.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyTitle}>No community voices yet</Text>
+              <Text style={styles.emptyBody}>Be the first to share a post in this community.</Text>
+            </View>
+          ) : (
+            <View style={{ gap: 12 }}>
+              {posts.map((post) => (
+                <MobilePostCard
+                  key={post.id}
+                  post={post}
+                  currentUserId={currentUserId || undefined}
+                  onPressAuthor={handleOpenAuthorProfile}
+                />
+              ))}
+            </View>
+          )
+        )}
+
+        {/* Tab 2: About */}
+        {activeTab === 'about' && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>About {community.name}</Text>
+            <Text style={styles.descText}>
+              {community.description || 'Welcome to this community! Share posts, discuss ideas, and connect.'}
+            </Text>
+
+            <Text style={[styles.cardTitle, { marginTop: 14 }]}>Community Guidelines</Text>
+            <Text style={styles.ruleItem}>1. Be respectful to all fellow members.</Text>
+            <Text style={styles.ruleItem}>2. No harassment, hate speech, or abuse.</Text>
+            <Text style={styles.ruleItem}>3. Keep posts and discussions on topic.</Text>
+            <Text style={styles.ruleItem}>4. No spam, link farming, or unauthorized promos.</Text>
+          </View>
+        )}
+
+        {/* Tab 3: Members */}
+        {activeTab === 'members' && (
+          <View style={styles.card}>
+            {members.length === 0 ? (
+              <Text style={styles.emptyBody}>No members listed yet.</Text>
+            ) : (
+              members.map((m) => {
+                const u = m.user
+                const displayName = u?.display_name || u?.username || 'Member'
+                const username = u?.username || 'user'
+                const memberId = u?.id || m.user_id
+
+                return (
+                  <TouchableOpacity
+                    key={m.id || memberId}
+                    style={styles.memberRow}
+                    onPress={() => memberId && handleOpenAuthorProfile(memberId)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.memberAvatar}>
+                      {u?.avatar_url ? (
+                        <Image source={{ uri: u.avatar_url }} style={styles.memberAvatarImg} />
+                      ) : (
+                        <Text style={styles.memberAvatarText}>
+                          {displayName.charAt(0).toUpperCase()}
+                        </Text>
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.memberName}>{displayName}</Text>
+                      <Text style={styles.memberHandle}>@{username}</Text>
+                    </View>
+                    <Text style={styles.roleTag}>{m.role || 'Member'}</Text>
+                  </TouchableOpacity>
+                )
+              })
+            )}
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Public Profile Modal */}
+      {selectedAuthorId && (
+        <PublicProfileModal
+          visible={profileModalVisible}
+          userId={selectedAuthorId}
+          currentUserId={currentUserId}
+          onClose={() => {
+            setProfileModalVisible(false)
+            setSelectedAuthorId(null)
+          }}
+        />
       )}
-    </ScrollView>
+    </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.gray50 },
-  content: { padding: 16, paddingBottom: 100, gap: 16 },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  topBar: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  iconBtn: { padding: 4 },
-  topBarTitle: { fontSize: 18, fontWeight: '700', color: colors.gray900 },
-  banner: { backgroundColor: '#ffffff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.gray200, gap: 12 },
-  avatarCircle: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.brandLight, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 24, fontWeight: '700', color: colors.brand },
-  infoGroup: { gap: 4 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  name: { fontSize: 20, fontWeight: '700', color: colors.gray900 },
-  slug: { fontSize: 13, color: colors.gray500, fontFamily: 'monospace' },
-  desc: { fontSize: 13, color: colors.gray700, marginTop: 4 },
-  metaRow: { flexDirection: 'row', gap: 12, marginTop: 6 },
-  metaText: { fontSize: 12, fontWeight: '600', color: colors.gray600 },
-  joinBtn: { backgroundColor: colors.brand, paddingVertical: 10, borderRadius: 12, alignItems: 'center' },
-  joinedBtn: { backgroundColor: colors.gray100 },
-  joinBtnText: { color: '#ffffff', fontWeight: '700', fontSize: 14 },
-  joinedBtnText: { color: colors.gray700, fontWeight: '600' },
-  tabRow: { flexDirection: 'row', backgroundColor: '#ffffff', borderRadius: 12, padding: 4 },
-  tab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
-  tabActive: { backgroundColor: colors.brand },
-  tabText: { fontSize: 13, fontWeight: '600', color: colors.gray600 },
-  tabTextActive: { color: '#ffffff' },
-  emptyCard: { backgroundColor: '#ffffff', borderRadius: 16, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: colors.gray200, gap: 6 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: colors.gray900 },
-  emptyBody: { fontSize: 13, color: colors.gray500 },
-  card: { backgroundColor: '#ffffff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.gray200, gap: 12 },
-  cardTitle: { fontSize: 15, fontWeight: '700', color: colors.gray900, marginBottom: 4 },
-  ruleItem: { fontSize: 13, color: colors.gray700, paddingVertical: 4 },
-  memberRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
-  memberAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.brandLight, alignItems: 'center', justifyContent: 'center' },
-  memberAvatarText: { fontSize: 15, fontWeight: '700', color: colors.brand },
-  memberName: { fontSize: 14, fontWeight: '700', color: colors.gray900 },
-  memberHandle: { fontSize: 12, color: colors.gray500 },
-  roleTag: { fontSize: 11, fontWeight: '600', color: colors.gray500, backgroundColor: colors.gray100, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, textTransform: 'capitalize' },
-  backBtnAction: { marginTop: 12, backgroundColor: colors.brand, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
-  backBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 13 },
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+  container: {
+    flex: 1,
+    backgroundColor: colors.gray50,
+  },
+  content: {
+    padding: 16,
+    paddingBottom: 100,
+    gap: 16,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 4,
+  },
+  iconBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: colors.gray100,
+  },
+  topBarTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.gray900,
+    flex: 1,
+  },
+  banner: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    gap: 12,
+  },
+  avatarCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.brandLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImg: {
+    width: 60,
+    height: 60,
+  },
+  avatarText: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: colors.brand,
+  },
+  infoGroup: {
+    gap: 4,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  name: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.gray900,
+  },
+  slug: {
+    fontSize: 13,
+    color: colors.brand,
+    fontWeight: '600',
+  },
+  desc: {
+    fontSize: 13,
+    color: colors.gray700,
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+  },
+  metaText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.gray600,
+  },
+  joinBtn: {
+    backgroundColor: colors.brand,
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  joinedBtn: {
+    backgroundColor: colors.gray100,
+    borderWidth: 1,
+    borderColor: colors.gray300,
+  },
+  btnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  joinBtnText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  joinedBtnText: {
+    color: colors.gray700,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  tabRow: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  tabActive: {
+    backgroundColor: colors.brand,
+  },
+  tabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.gray600,
+  },
+  tabTextActive: {
+    color: '#ffffff',
+  },
+  emptyCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    gap: 6,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.gray900,
+  },
+  emptyBody: {
+    fontSize: 13,
+    color: colors.gray500,
+    textAlign: 'center',
+  },
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    gap: 8,
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.gray900,
+    marginBottom: 4,
+  },
+  descText: {
+    fontSize: 13,
+    color: colors.gray600,
+    lineHeight: 18,
+  },
+  ruleItem: {
+    fontSize: 13,
+    color: colors.gray700,
+    paddingVertical: 3,
+  },
+  memberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray100,
+  },
+  memberAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.brandLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  memberAvatarImg: {
+    width: 38,
+    height: 38,
+  },
+  memberAvatarText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.brand,
+  },
+  memberName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.gray900,
+  },
+  memberHandle: {
+    fontSize: 12,
+    color: colors.gray500,
+  },
+  roleTag: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.brand,
+    backgroundColor: colors.brandLight,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    textTransform: 'capitalize',
+  },
+  backBtnAction: {
+    marginTop: 12,
+    backgroundColor: colors.brand,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  backBtnText: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 13,
+  },
 })

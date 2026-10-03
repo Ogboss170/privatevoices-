@@ -12,10 +12,12 @@ import {
   RefreshControl,
 } from 'react-native'
 import { Users, Plus, Hash, Check, X } from 'lucide-react-native'
+import { useRouter } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { colors } from '../../constants/colors'
 
 export default function CommunitiesScreen() {
+  const router = useRouter()
   const [communities, setCommunities] = useState<any[]>([])
   const [joinedIds, setJoinedIds] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -158,7 +160,11 @@ export default function CommunitiesScreen() {
             const isJoined = joinedIds.includes(item.id)
             return (
               <View style={styles.card}>
-                <View style={styles.cardHeader}>
+                <TouchableOpacity
+                  style={styles.cardHeader}
+                  onPress={() => router.push(`/community/${item.slug}` as any)}
+                  activeOpacity={0.7}
+                >
                   <View style={styles.iconBox}>
                     <Hash size={20} color={colors.brand} />
                   </View>
@@ -168,7 +174,7 @@ export default function CommunitiesScreen() {
                       {item.description || 'Topic community'}
                     </Text>
                   </View>
-                </View>
+                </TouchableOpacity>
 
                 <TouchableOpacity
                   style={[styles.joinBtn, isJoined && styles.joinedBtn]}
