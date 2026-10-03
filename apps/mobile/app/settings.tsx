@@ -493,7 +493,7 @@ export default function SettingsScreen() {
 
         <TouchableOpacity
           style={styles.rowItem}
-          onPress={() => router.push('/invite')}
+          onPress={() => router.push('/invite' as any)}
           activeOpacity={0.7}
         >
           <View style={styles.rowLeft}>
@@ -642,6 +642,11 @@ export default function SettingsScreen() {
                   {deleting ? 'Deleting...' : 'Delete Permanently'}
                 </Text>
               </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Report Bug Modal */}
       <Modal visible={showBugModal} transparent animationType="slide">
         <View style={styles.modalBackdrop}>

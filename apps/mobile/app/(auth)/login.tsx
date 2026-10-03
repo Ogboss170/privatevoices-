@@ -80,7 +80,7 @@ export default function LoginScreen() {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>Don't have an account? </Text>
-          <Link href="/(auth)/register">
+          <Link href={'/(auth)/onboarding' as any}>
             <Text style={styles.link}>Create one</Text>
           </Link>
         </View>

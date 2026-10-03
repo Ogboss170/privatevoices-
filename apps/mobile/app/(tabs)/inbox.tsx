@@ -10,17 +10,27 @@ import {
   RefreshControl,
   Share,
 } from 'react-native'
-import { Trash2, Share2, ShieldCheck } from 'lucide-react-native'
+import { Trash2, Share2, ShieldCheck, MessageCircle } from 'lucide-react-native'
+import { Image } from 'expo-image'
 import { supabase } from '../../lib/supabase'
 import { colors } from '../../constants/colors'
+import { ChatModal } from '../../components/ChatModal'
 
 export default function InboxScreen() {
   const [activeTab, setActiveTab] = useState<'whispers' | 'messages'>('whispers')
   const [whispers, setWhispers] = useState<any[]>([])
   const [conversations, setConversations] = useState<any[]>([])
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+
+  // Active chat modal state
+  const [selectedConversation, setSelectedConversation] = useState<{
+    id: string
+    partner: any
+  } | null>(null)
+  const [chatModalVisible, setChatModalVisible] = useState(false)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -32,34 +42,86 @@ export default function InboxScreen() {
     if (!currentUserId) return
     setLoading(true)
 
-    if (activeTab === 'whispers') {
-      const { data } = await supabase
-        .from('whispers')
-        .select('*')
-        .eq('recipient_id', currentUserId)
-        .order('created_at', { ascending: false })
+    try {
+      if (activeTab === 'whispers') {
+        const { data } = await supabase
+          .from('whispers')
+          .select('*')
+          .eq('recipient_id', currentUserId)
+          .order('created_at', { ascending: false })
 
-      setWhispers(data ?? [])
-    } else {
-      const { data } = await supabase
-        .from('conversations')
-        .select(`
-          *,
-          user_a:profiles!conversations_user_a_id_fkey(id, username, display_name, avatar_url),
-          user_b:profiles!conversations_user_b_id_fkey(id, username, display_name, avatar_url)
-        `)
-        .or(`user_a_id.eq.${currentUserId},user_b_id.eq.${currentUserId}`)
-        .order('last_message_at', { ascending: false })
+        setWhispers(data ?? [])
+      } else {
+        const { data } = await supabase
+          .from('conversations')
+          .select(`
+            *,
+            user_a:profiles!conversations_user_a_id_fkey(id, username, display_name, avatar_url),
+            user_b:profiles!conversations_user_b_id_fkey(id, username, display_name, avatar_url)
+          `)
+          .or(`user_a_id.eq.${currentUserId},user_b_id.eq.${currentUserId}`)
+          .order('last_message_at', { ascending: false })
 
-      setConversations(data ?? [])
+        const convs = data ?? []
+        setConversations(convs)
+
+        // Count unread messages per conversation
+        if (convs.length > 0) {
+          const convIds = convs.map((c: any) => c.id)
+          const { data: unreadMsgs } = await supabase
+            .from('messages')
+            .select('conversation_id')
+            .in('conversation_id', convIds)
+            .eq('is_read', false)
+            .neq('sender_id', currentUserId)
+
+          const counts: Record<string, number> = {}
+          for (const m of unreadMsgs || []) {
+            counts[m.conversation_id] = (counts[m.conversation_id] || 0) + 1
+          }
+          setUnreadCounts(counts)
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching inbox data:', err)
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
     }
-    setLoading(false)
-    setRefreshing(false)
   }, [currentUserId, activeTab])
 
   useEffect(() => {
     fetchInboxData()
   }, [fetchInboxData])
+
+  // Real-time listener for incoming messages and whispers
+  useEffect(() => {
+    if (!currentUserId) return
+
+    const channel = supabase
+      .channel('mobile:inbox_updates')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        () => {
+          fetchInboxData()
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'whispers' },
+        (payload) => {
+          if (payload.new?.recipient_id === currentUserId) {
+            fetchInboxData()
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [currentUserId, fetchInboxData])
 
   function handleRefresh() {
     setRefreshing(true)
@@ -94,6 +156,49 @@ export default function InboxScreen() {
     }
   }
 
+  function openChat(conversation: any) {
+    const partner =
+      conversation.user_a?.id === currentUserId
+        ? conversation.user_b
+        : conversation.user_a
+
+    setSelectedConversation({
+      id: conversation.id,
+      partner,
+    })
+    setChatModalVisible(true)
+  }
+
+  function handleCloseChat() {
+    setChatModalVisible(false)
+    setSelectedConversation(null)
+    fetchInboxData()
+  }
+
+  function formatTime(isoString?: string) {
+    if (!isoString) return ''
+    try {
+      const date = new Date(isoString)
+      const now = new Date()
+      const diffMs = now.getTime() - date.getTime()
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+      if (diffDays === 0) {
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      } else if (diffDays === 1) {
+        return 'Yesterday'
+      } else if (diffDays < 7) {
+        return date.toLocaleDateString([], { weekday: 'short' })
+      } else {
+        return date.toLocaleDateString([], { month: 'short', day: 'numeric' })
+      }
+    } catch {
+      return ''
+    }
+  }
+
+  const totalUnreadDirect = Object.values(unreadCounts).reduce((a, b) => a + b, 0)
+
   return (
     <View style={styles.container}>
       {/* Tab Switcher */}
@@ -111,14 +216,21 @@ export default function InboxScreen() {
           style={[styles.tab, activeTab === 'messages' && styles.tabActive]}
           onPress={() => setActiveTab('messages')}
         >
-          <Text style={[styles.tabText, activeTab === 'messages' && styles.tabTextActive]}>
-            Direct Messages
-          </Text>
+          <View style={styles.tabBadgeRow}>
+            <Text style={[styles.tabText, activeTab === 'messages' && styles.tabTextActive]}>
+              Direct Messages
+            </Text>
+            {totalUnreadDirect > 0 && (
+              <View style={styles.tabPill}>
+                <Text style={styles.tabPillText}>{totalUnreadDirect}</Text>
+              </View>
+            )}
+          </View>
         </TouchableOpacity>
       </View>
 
       {/* Content */}
-      {loading ? (
+      {loading && !refreshing ? (
         <View style={styles.centered}>
           <ActivityIndicator color={colors.brand} size="large" />
         </View>
@@ -183,22 +295,70 @@ export default function InboxScreen() {
             data={conversations}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.brand} />
+            }
             renderItem={({ item }) => {
-              const partner = item.user_a.id === currentUserId ? item.user_b : item.user_a
+              const partner = item.user_a?.id === currentUserId ? item.user_b : item.user_a
+              const unread = unreadCounts[item.id] || 0
+              const partnerName = partner?.display_name || partner?.username || 'User'
+              const avatar = partner?.avatar_url
+
               return (
-                <TouchableOpacity style={styles.convCard}>
+                <TouchableOpacity
+                  style={[styles.convCard, unread > 0 && styles.convCardUnread]}
+                  onPress={() => openChat(item)}
+                  activeOpacity={0.7}
+                >
                   <View style={styles.avatarCircle}>
-                    <Text style={styles.avatarText}>{partner.display_name.charAt(0).toUpperCase()}</Text>
+                    {avatar ? (
+                      <Image source={{ uri: avatar }} style={styles.avatarImg} />
+                    ) : (
+                      <Text style={styles.avatarText}>{partnerName.charAt(0).toUpperCase()}</Text>
+                    )}
                   </View>
+
                   <View style={styles.convInfo}>
-                    <Text style={styles.convName}>{partner.display_name}</Text>
-                    <Text style={styles.convMsg}>{item.last_message || 'Tap to chat'}</Text>
+                    <View style={styles.convTopRow}>
+                      <Text style={[styles.convName, unread > 0 && styles.convNameUnread]} numberOfLines={1}>
+                        {partnerName}
+                      </Text>
+                      <Text style={styles.convTime}>
+                        {formatTime(item.last_message_at || item.created_at)}
+                      </Text>
+                    </View>
+
+                    <View style={styles.convBottomRow}>
+                      <Text
+                        style={[styles.convMsg, unread > 0 && styles.convMsgUnread]}
+                        numberOfLines={1}
+                      >
+                        {item.last_message || 'Tap to start chatting'}
+                      </Text>
+
+                      {unread > 0 && (
+                        <View style={styles.unreadBadge}>
+                          <Text style={styles.unreadBadgeText}>{unread}</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
                 </TouchableOpacity>
               )
             }}
           />
         )
+      )}
+
+      {/* 1-on-1 Chat Modal */}
+      {selectedConversation && (
+        <ChatModal
+          visible={chatModalVisible}
+          conversationId={selectedConversation.id}
+          partner={selectedConversation.partner}
+          currentUserId={currentUserId || ''}
+          onClose={handleCloseChat}
+        />
       )}
     </View>
   )
@@ -217,6 +377,18 @@ const styles = StyleSheet.create({
   tabActive: { borderBottomWidth: 2, borderBottomColor: colors.brand },
   tabText: { fontSize: 14, fontWeight: '500', color: colors.gray500 },
   tabTextActive: { color: colors.brand, fontWeight: '700' },
+  tabBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  tabPill: {
+    backgroundColor: colors.brand,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10,
+  },
+  tabPillText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   emptyEmoji: { fontSize: 48, marginBottom: 12 },
@@ -234,16 +406,85 @@ const styles = StyleSheet.create({
   },
   whisperHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   whisperBadge: { fontSize: 12, fontWeight: '700', color: colors.brand },
-  whisperContent: { fontSize: 15, fontStyle: 'italic', color: colors.gray900, backgroundColor: colors.gray50, padding: 12, borderRadius: 10 },
+  whisperContent: {
+    fontSize: 15,
+    fontStyle: 'italic',
+    color: colors.gray900,
+    backgroundColor: colors.gray50,
+    padding: 12,
+    borderRadius: 10,
+  },
   whisperFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
   anonymousTag: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   anonymousTagText: { fontSize: 11, color: '#059669', fontWeight: '600' },
-  shareBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, backgroundColor: colors.gray100, borderRadius: 8 },
+  shareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: colors.gray100,
+    borderRadius: 8,
+  },
   shareText: { fontSize: 12, fontWeight: '600', color: colors.gray700 },
-  convCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#fff', padding: 14, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: colors.gray200 },
-  avatarCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.brandLight, alignItems: 'center', justifyContent: 'center' },
+  convCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#fff',
+    padding: 14,
+    borderRadius: 14,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+  },
+  convCardUnread: {
+    borderColor: colors.brandLight,
+    backgroundColor: '#fdfcfe',
+  },
+  avatarCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: colors.brandLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImg: {
+    width: 46,
+    height: 46,
+  },
   avatarText: { fontSize: 18, fontWeight: '700', color: colors.brand },
   convInfo: { flex: 1 },
-  convName: { fontSize: 15, fontWeight: '700', color: colors.gray900 },
-  convMsg: { fontSize: 13, color: colors.gray500, marginTop: 2 },
+  convTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  convName: { fontSize: 15, fontWeight: '600', color: colors.gray900, flex: 1, marginRight: 8 },
+  convNameUnread: { fontWeight: '700', color: colors.gray900 },
+  convTime: { fontSize: 11, color: colors.gray400 },
+  convBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  convMsg: { fontSize: 13, color: colors.gray500, flex: 1, marginRight: 8 },
+  convMsgUnread: { color: colors.gray900, fontWeight: '600' },
+  unreadBadge: {
+    backgroundColor: colors.brand,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+  },
+  unreadBadgeText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
 })

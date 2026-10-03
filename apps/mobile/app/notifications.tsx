@@ -159,7 +159,7 @@ export default function NotificationsScreen() {
         router.push('/(tabs)/communities')
         break
       case 'security':
-        router.push('/settings')
+        router.push('/settings' as any)
         break
       default:
         router.push('/(tabs)')

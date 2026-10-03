@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
   progressRow: { flexDirection: 'row', gap: 4 },
   progressBar: { flex: 1, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.3)' },
   progressActive: { backgroundColor: '#ffffff' },
-  viewerHeader: { flexDirection: 'row', justify: 'space-between', alignItems: 'center', marginTop: 12 },
+  viewerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
   viewerAuthor: { color: '#ffffff', fontWeight: '700', fontSize: 14 },
   storyBody: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16, marginVertical: 12 },
   storyImage: { width: '100%', height: 260, borderRadius: 16, marginBottom: 12 },

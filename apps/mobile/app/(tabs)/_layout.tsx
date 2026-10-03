@@ -17,7 +17,7 @@ export default function TabLayout() {
         headerRight: () => (
           <TouchableOpacity
             style={styles.notificationHeaderBtn}
-            onPress={() => router.push('/notifications')}
+            onPress={() => router.push('/notifications' as any)}
             activeOpacity={0.7}
           >
             <Bell color="#111827" size={22} />
