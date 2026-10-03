@@ -13,7 +13,7 @@ import {
   Alert,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { X, Send, Check, CheckCheck, Image as ImageIcon, Camera } from 'lucide-react-native'
+import { X, Send, Check, CheckCheck, Image as ImageIcon } from 'lucide-react-native'
 import { Image } from 'expo-image'
 import * as ImagePicker from 'expo-image-picker'
 import { supabase } from '../lib/supabase'
@@ -49,8 +49,16 @@ export function ChatModal({
   const [sending, setSending] = useState(false)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [fullscreenImageUrl, setFullscreenImageUrl] = useState<string | null>(null)
-  const flatListRef = useRef<FlatList>(null)
 
+  // Presence & Typing State
+  const [isPartnerTyping, setIsPartnerTyping] = useState(false)
+  const [isPartnerOnline, setIsPartnerOnline] = useState(false)
+
+  const flatListRef = useRef<FlatList>(null)
+  const channelRef = useRef<any>(null)
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  const partnerId = partner?.id || ''
   const partnerName = partner?.displayName || partner?.display_name || partner?.username || 'User'
   const partnerUsername = partner?.username || 'user'
   const partnerAvatar = partner?.avatarUrl || partner?.avatar_url || null
@@ -91,9 +99,17 @@ export function ChatModal({
 
     loadMessages()
 
-    // Realtime subscription for incoming messages
-    const channel = supabase
-      .channel(`chat-mobile:${conversationId}`)
+    // Realtime channel with Broadcast & Presence
+    const channel = supabase.channel(`chat-mobile:${conversationId}`, {
+      config: {
+        broadcast: { self: false },
+        presence: { key: currentUserId },
+      },
+    })
+
+    channelRef.current = channel
+
+    channel
       .on(
         'postgres_changes',
         {
@@ -107,6 +123,7 @@ export function ChatModal({
             if (prev.some((m) => m.id === payload.new.id)) return prev
             return [...prev, payload.new]
           })
+          setIsPartnerTyping(false)
           setTimeout(() => {
             flatListRef.current?.scrollToEnd({ animated: true })
           }, 100)
@@ -121,12 +138,64 @@ export function ChatModal({
           }
         }
       )
-      .subscribe()
+      .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        if (payload?.userId !== currentUserId) {
+          setIsPartnerTyping(!!payload?.isTyping)
+          if (payload?.isTyping) {
+            setTimeout(() => {
+              flatListRef.current?.scrollToEnd({ animated: true })
+            }, 100)
+          }
+        }
+      })
+      .on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState()
+        const partnerActive = Object.values(state).some((presences: any) =>
+          presences.some((p: any) => p.user_id === partnerId)
+        )
+        setIsPartnerOnline(partnerActive)
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await channel.track({ user_id: currentUserId, online: true })
+        }
+      })
 
     return () => {
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'typing',
+          payload: { userId: currentUserId, isTyping: false },
+        })
+      }
       supabase.removeChannel(channel)
     }
-  }, [visible, conversationId, currentUserId])
+  }, [visible, conversationId, currentUserId, partnerId])
+
+  function handleTextChange(val: string) {
+    setText(val)
+
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'typing',
+        payload: { userId: currentUserId, isTyping: true },
+      })
+
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+
+      typingTimeoutRef.current = setTimeout(() => {
+        channelRef.current?.send({
+          type: 'broadcast',
+          event: 'typing',
+          payload: { userId: currentUserId, isTyping: false },
+        })
+      }, 2500)
+    }
+  }
 
   async function handlePickImage() {
     Alert.alert('Send Photo', 'Choose an option to attach a photo', [
@@ -171,6 +240,16 @@ export function ChatModal({
 
   async function handleSend() {
     if ((!text.trim() && !selectedImage) || sending || !conversationId) return
+
+    // Immediately cancel typing status
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current)
+    }
+    channelRef.current?.send({
+      type: 'broadcast',
+      event: 'typing',
+      payload: { userId: currentUserId, isTyping: false },
+    })
 
     const messageContent = text.trim() || '📷 Photo'
     const imageUriToSend = selectedImage
@@ -250,7 +329,6 @@ export function ChatModal({
 
       if (error) {
         console.error('Failed to send message:', error)
-        // Rollback optimistic message
         setMessages((prev) => prev.filter((m) => m.id !== tempId))
         Alert.alert('Send Failed', error.message || 'Unable to send message.')
       } else if (newMsg) {
@@ -294,21 +372,31 @@ export function ChatModal({
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
-              <View style={styles.avatarCircle}>
-                {partnerAvatar ? (
-                  <Image source={{ uri: partnerAvatar }} style={styles.avatarImg} />
-                ) : (
-                  <Text style={styles.avatarLetter}>
-                    {partnerName.charAt(0).toUpperCase()}
-                  </Text>
-                )}
+              <View style={styles.avatarWrapper}>
+                <View style={styles.avatarCircle}>
+                  {partnerAvatar ? (
+                    <Image source={{ uri: partnerAvatar }} style={styles.avatarImg} />
+                  ) : (
+                    <Text style={styles.avatarLetter}>
+                      {partnerName.charAt(0).toUpperCase()}
+                    </Text>
+                  )}
+                </View>
+                {isPartnerOnline && <View style={styles.onlineBadge} />}
               </View>
+
               <View style={styles.headerInfo}>
                 <Text style={styles.headerName} numberOfLines={1}>
                   {partnerName}
                 </Text>
                 <Text style={styles.headerUsername} numberOfLines={1}>
-                  @{partnerUsername}
+                  {isPartnerTyping ? (
+                    <Text style={styles.typingStatusText}>typing...</Text>
+                  ) : isPartnerOnline ? (
+                    <Text style={styles.onlineStatusText}>Online</Text>
+                  ) : (
+                    `@${partnerUsername}`
+                  )}
                 </Text>
               </View>
             </View>
@@ -413,6 +501,18 @@ export function ChatModal({
                     </View>
                   )
                 }}
+                ListFooterComponent={
+                  isPartnerTyping ? (
+                    <View style={styles.typingRow}>
+                      <View style={styles.typingBubble}>
+                        <View style={styles.typingDot} />
+                        <View style={[styles.typingDot, { opacity: 0.7 }]} />
+                        <View style={[styles.typingDot, { opacity: 0.4 }]} />
+                      </View>
+                      <Text style={styles.typingLabel}>{partnerName} is typing...</Text>
+                    </View>
+                  ) : null
+                }
               />
             )}
           </View>
@@ -448,7 +548,7 @@ export function ChatModal({
               placeholder={selectedImage ? "Add a caption..." : `Message @${partnerUsername}...`}
               placeholderTextColor={colors.gray400}
               value={text}
-              onChangeText={setText}
+              onChangeText={handleTextChange}
               multiline
               maxLength={1000}
             />
@@ -519,6 +619,9 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 12,
   },
+  avatarWrapper: {
+    position: 'relative',
+  },
   avatarCircle: {
     width: 40,
     height: 40,
@@ -537,6 +640,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.brand,
   },
+  onlineBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#10b981',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+  },
   headerInfo: {
     flex: 1,
   },
@@ -548,6 +662,16 @@ const styles = StyleSheet.create({
   headerUsername: {
     fontSize: 12,
     color: colors.gray500,
+  },
+  onlineStatusText: {
+    color: '#059669',
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  typingStatusText: {
+    color: colors.brand,
+    fontWeight: '600',
+    fontSize: 12,
   },
   closeBtn: {
     padding: 6,
@@ -665,6 +789,36 @@ const styles = StyleSheet.create({
   },
   receiptContainer: {
     marginLeft: 2,
+  },
+  typingRow: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    marginBottom: 8,
+    gap: 4,
+  },
+  typingBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
+    borderBottomLeftRadius: 4,
+  },
+  typingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.brand,
+  },
+  typingLabel: {
+    fontSize: 11,
+    color: colors.brand,
+    fontWeight: '600',
+    paddingHorizontal: 4,
   },
   previewBar: {
     flexDirection: 'row',

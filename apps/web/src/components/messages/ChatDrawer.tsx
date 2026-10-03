@@ -32,8 +32,14 @@ export default function ChatDrawer({
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [previewModalUrl, setPreviewModalUrl] = useState<string | null>(null)
 
+  // Presence & Typing State
+  const [isPartnerTyping, setIsPartnerTyping] = useState(false)
+  const [isPartnerOnline, setIsPartnerOnline] = useState(false)
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const channelRef = useRef<any>(null)
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     async function loadMessages() {
@@ -58,9 +64,17 @@ export default function ChatDrawer({
 
     loadMessages()
 
-    // Subscribe to realtime messages
-    const channel = supabase
-      .channel(`chat:${conversationId}`)
+    // Setup Realtime Channel with Broadcast & Presence
+    const channel = supabase.channel(`chat:${conversationId}`, {
+      config: {
+        broadcast: { self: false },
+        presence: { key: currentUserId },
+      },
+    })
+
+    channelRef.current = channel
+
+    channel
       .on(
         'postgres_changes',
         {
@@ -74,6 +88,7 @@ export default function ChatDrawer({
             if (prev.some((m) => m.id === payload.new.id)) return prev
             return [...prev, payload.new]
           })
+          setIsPartnerTyping(false)
           scrollToBottom()
 
           // Mark newly received message as read if drawer is open
@@ -86,17 +101,67 @@ export default function ChatDrawer({
           }
         }
       )
-      .subscribe()
+      .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        if (payload?.userId !== currentUserId) {
+          setIsPartnerTyping(!!payload?.isTyping)
+          if (payload?.isTyping) {
+            scrollToBottom()
+          }
+        }
+      })
+      .on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState()
+        const partnerActive = Object.values(state).some((presences: any) =>
+          presences.some((p: any) => p.user_id === partner.id)
+        )
+        setIsPartnerOnline(partnerActive)
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await channel.track({ user_id: currentUserId, online: true })
+        }
+      })
 
     return () => {
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'typing',
+          payload: { userId: currentUserId, isTyping: false },
+        })
+      }
       supabase.removeChannel(channel)
     }
-  }, [supabase, conversationId, currentUserId])
+  }, [supabase, conversationId, currentUserId, partner.id])
 
   function scrollToBottom() {
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }, 80)
+  }
+
+  function handleTextChange(val: string) {
+    setText(val)
+
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'typing',
+        payload: { userId: currentUserId, isTyping: true },
+      })
+
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+
+      typingTimeoutRef.current = setTimeout(() => {
+        channelRef.current?.send({
+          type: 'broadcast',
+          event: 'typing',
+          payload: { userId: currentUserId, isTyping: false },
+        })
+      }, 2500)
+    }
   }
 
   function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -133,6 +198,16 @@ export default function ChatDrawer({
     e.preventDefault()
     if ((!text.trim() && !imageFile) || sending) return
 
+    // Immediately stop typing indicator
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current)
+    }
+    channelRef.current?.send({
+      type: 'broadcast',
+      event: 'typing',
+      payload: { userId: currentUserId, isTyping: false },
+    })
+
     const messageContent = text.trim() || '📷 Photo'
     const currentImgFile = imageFile
     const currentImgPreview = imagePreview
@@ -163,7 +238,6 @@ export default function ChatDrawer({
         const fileExt = currentImgFile.name.split('.').pop() || 'jpg'
         const fileName = `${currentUserId}/${Date.now()}.${fileExt}`
 
-        // Try 'chat-media' bucket first, fallback to 'stories' if bucket doesn't exist yet
         let uploadRes = await supabase.storage
           .from('chat-media')
           .upload(fileName, currentImgFile, { upsert: true })
@@ -231,22 +305,41 @@ export default function ChatDrawer({
         {/* Header */}
         <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-white/90 backdrop-blur-sm">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center font-bold text-brand-600 overflow-hidden border border-gray-100">
-              {partner.avatarUrl ? (
-                <Image
-                  src={partner.avatarUrl}
-                  alt={partner.displayName}
-                  width={40}
-                  height={40}
-                  className="w-full h-full object-cover"
+            <div className="relative">
+              <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center font-bold text-brand-600 overflow-hidden border border-gray-100">
+                {partner.avatarUrl ? (
+                  <Image
+                    src={partner.avatarUrl}
+                    alt={partner.displayName}
+                    width={40}
+                    height={40}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  partner.displayName.charAt(0).toUpperCase()
+                )}
+              </div>
+              {isPartnerOnline && (
+                <span
+                  className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white"
+                  title="Online now"
                 />
-              ) : (
-                partner.displayName.charAt(0).toUpperCase()
               )}
             </div>
+
             <div className="min-w-0">
-              <h3 className="font-bold text-sm text-gray-900 truncate">{partner.displayName}</h3>
-              <p className="text-xs text-gray-500 truncate">@{partner.username}</p>
+              <div className="flex items-center gap-1.5">
+                <h3 className="font-bold text-sm text-gray-900 truncate">{partner.displayName}</h3>
+              </div>
+              <p className="text-xs truncate">
+                {isPartnerTyping ? (
+                  <span className="text-brand-600 font-semibold animate-pulse">typing...</span>
+                ) : isPartnerOnline ? (
+                  <span className="text-emerald-600 font-medium">Online</span>
+                ) : (
+                  <span className="text-gray-500">@{partner.username}</span>
+                )}
+              </p>
             </div>
           </div>
 
@@ -330,6 +423,21 @@ export default function ChatDrawer({
               )
             })
           )}
+
+          {/* Typing Bubble */}
+          {isPartnerTyping && (
+            <div className="flex flex-col items-start animate-in fade-in duration-200">
+              <div className="bg-white border border-gray-200/80 rounded-2xl rounded-bl-xs px-4 py-3 flex items-center gap-1.5 shadow-xs">
+                <span className="w-2 h-2 bg-brand-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                <span className="w-2 h-2 bg-brand-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                <span className="w-2 h-2 bg-brand-500 rounded-full animate-bounce" />
+              </div>
+              <span className="text-[10px] text-brand-600 font-medium mt-1 px-1">
+                {partner.displayName} is typing...
+              </span>
+            </div>
+          )}
+
           <div ref={messagesEndRef} />
         </div>
 
@@ -377,7 +485,7 @@ export default function ChatDrawer({
             type="text"
             placeholder={imageFile ? "Add a caption..." : "Type a message..."}
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => handleTextChange(e.target.value)}
             disabled={sending}
             className="input-field text-xs py-2.5 px-3.5 flex-1 rounded-xl focus:border-brand-500"
             autoFocus
