@@ -171,11 +171,36 @@ export default function CreateScreen() {
       }
     }
 
-    const { error } = await supabase.from('posts').insert({
-      author_id: user.user.id,
-      content: finalContent || (uploadedUrls.length > 0 ? 'Voice attachment' : ''),
-      image_urls: uploadedUrls,
-    })
+    const { data: newPost, error } = await supabase
+      .from('posts')
+      .insert({
+        author_id: user.user.id,
+        content: finalContent || (uploadedUrls.length > 0 ? 'Voice attachment' : ''),
+        image_urls: uploadedUrls,
+      })
+      .select('id')
+      .single()
+
+    if (!error && newPost && showPollCreator && validPollOptions.length >= 2) {
+      const { data: newPoll } = await supabase
+        .from('polls')
+        .insert({
+          post_id: newPost.id,
+          question: content.trim() ? (content.length > 50 ? content.slice(0, 50) + '...' : content) : 'Community Poll',
+        })
+        .select('id')
+        .single()
+
+      if (newPoll) {
+        const optionRows = validPollOptions.map((opt, idx) => ({
+          poll_id: newPoll.id,
+          option_text: opt.trim(),
+          option_order: idx,
+          vote_count: 0,
+        }))
+        await supabase.from('poll_options').insert(optionRows)
+      }
+    }
 
     setLoading(false)
 
@@ -184,6 +209,8 @@ export default function CreateScreen() {
     } else {
       setContent('')
       setMediaItems([])
+      setShowPollCreator(false)
+      setPollOptions(['', ''])
       router.back()
     }
   }

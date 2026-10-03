@@ -2,7 +2,7 @@
 
 import React, { useState, useRef } from 'react'
 import Image from 'next/image'
-import { Image as ImageIcon, Send, X } from 'lucide-react'
+import { Image as ImageIcon, Send, X, BarChart2, Plus, Trash2 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import MentionAutocomplete from '../common/MentionAutocomplete'
 
@@ -18,6 +18,10 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const [showPollCreator, setShowPollCreator] = useState(false)
+  const [pollQuestion, setPollQuestion] = useState('')
+  const [pollOptions, setPollOptions] = useState(['', ''])
 
   const mentionMatch = content.match(/(?:^|\s)@([a-zA-Z0-9_]*)$/)
   const mentionQuery = mentionMatch ? mentionMatch[1] : null
@@ -59,7 +63,7 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!content.trim() && imageFiles.length === 0) return
+    if (!content.trim() && imageFiles.length === 0 && !showPollCreator) return
 
     setLoading(true)
     setError(null)
@@ -96,11 +100,15 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
       }
     }
 
-    const { error: postError } = await supabase.from('posts').insert({
-      author_id: user.user.id,
-      content: content.trim() || (uploadedUrls.length > 0 ? 'Voice attachment' : ''),
-      image_urls: uploadedUrls,
-    })
+    const { data: newPost, error: postError } = await supabase
+      .from('posts')
+      .insert({
+        author_id: user.user.id,
+        content: content.trim() || (uploadedUrls.length > 0 ? 'Voice attachment' : 'Community Poll'),
+        image_urls: uploadedUrls,
+      })
+      .select('id')
+      .single()
 
     if (postError) {
       setError(postError.message)
@@ -108,11 +116,39 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
       return
     }
 
+    // Insert poll if created
+    if (newPost && showPollCreator) {
+      const validOptions = pollOptions.filter((o) => o.trim() !== '')
+      if (validOptions.length >= 2) {
+        const { data: newPoll } = await supabase
+          .from('polls')
+          .insert({
+            post_id: newPost.id,
+            question: pollQuestion.trim() || (content.trim() ? content.trim().slice(0, 80) : 'Poll'),
+          })
+          .select('id')
+          .single()
+
+        if (newPoll) {
+          const optionRows = validOptions.map((opt, idx) => ({
+            poll_id: newPoll.id,
+            option_text: opt.trim(),
+            option_order: idx,
+            vote_count: 0,
+          }))
+          await supabase.from('poll_options').insert(optionRows)
+        }
+      }
+    }
+
     // Clean up previews
     previewUrls.forEach((url) => URL.revokeObjectURL(url))
     setContent('')
     setImageFiles([])
     setPreviewUrls([])
+    setShowPollCreator(false)
+    setPollQuestion('')
+    setPollOptions(['', ''])
     setLoading(false)
     if (onPostCreated) onPostCreated()
   }
@@ -143,6 +179,77 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
             className="w-full resize-none border-0 bg-transparent text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-0"
           />
         </div>
+
+        {/* Poll Builder Card */}
+        {showPollCreator && (
+          <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-200 space-y-2.5 relative">
+            <button
+              type="button"
+              onClick={() => {
+                setShowPollCreator(false)
+                setPollQuestion('')
+                setPollOptions(['', ''])
+              }}
+              className="absolute top-2.5 right-2.5 text-gray-400 hover:text-gray-600 p-1"
+            >
+              <X size={15} />
+            </button>
+
+            <div className="flex items-center gap-1.5 text-brand-600 font-bold text-xs uppercase tracking-wider">
+              <BarChart2 size={15} />
+              <span>Poll Details</span>
+            </div>
+
+            <input
+              type="text"
+              placeholder="Ask a question... (optional, or use voice text above)"
+              value={pollQuestion}
+              onChange={(e) => setPollQuestion(e.target.value)}
+              className="w-full text-xs p-2 rounded-lg border border-gray-200 bg-white text-gray-900 focus:outline-none focus:border-brand-500"
+            />
+
+            <div className="space-y-1.5">
+              {pollOptions.map((opt, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-[10px] font-bold">
+                    {i + 1}
+                  </span>
+                  <input
+                    type="text"
+                    placeholder={`Option ${i + 1}`}
+                    value={opt}
+                    onChange={(e) => {
+                      const next = [...pollOptions]
+                      next[i] = e.target.value
+                      setPollOptions(next)
+                    }}
+                    className="flex-1 text-xs p-2 rounded-lg border border-gray-200 bg-white text-gray-900 focus:outline-none focus:border-brand-500"
+                  />
+                  {pollOptions.length > 2 && (
+                    <button
+                      type="button"
+                      onClick={() => setPollOptions((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="text-gray-400 hover:text-red-500 p-1"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {pollOptions.length < 4 && (
+              <button
+                type="button"
+                onClick={() => setPollOptions((prev) => [...prev, ''])}
+                className="text-xs text-brand-600 hover:text-brand-700 font-semibold flex items-center gap-1 pt-1"
+              >
+                <Plus size={13} />
+                <span>Add Option</span>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Image preview strip */}
         {previewUrls.length > 0 && (
@@ -182,6 +289,20 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
             >
               <ImageIcon size={18} />
             </button>
+
+            <button
+              type="button"
+              onClick={() => setShowPollCreator(!showPollCreator)}
+              className={`p-2 rounded-lg transition-colors ${
+                showPollCreator
+                  ? 'text-brand-600 bg-brand-50'
+                  : 'text-gray-500 hover:text-brand-600 hover:bg-brand-50'
+              }`}
+              title="Create Poll"
+            >
+              <BarChart2 size={18} />
+            </button>
+
             {imageFiles.length > 0 && (
               <span className="text-xs text-gray-400 font-medium">
                 {imageFiles.length}/4
@@ -191,7 +312,12 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
 
           <button
             type="submit"
-            disabled={loading || (!content.trim() && imageFiles.length === 0)}
+            disabled={
+              loading ||
+              (!content.trim() &&
+                imageFiles.length === 0 &&
+                (!showPollCreator || pollOptions.filter((o) => o.trim()).length < 2))
+            }
             className="btn-primary text-xs py-2 px-4 flex items-center gap-1.5"
           >
             <span>{loading ? 'Posting…' : 'Post'}</span>

@@ -56,6 +56,24 @@ export interface PostAuthor {
   avatarUrl: string | null;
 }
 
+export interface PollOption {
+  id: string;
+  pollId: string;
+  optionText: string;
+  optionOrder: number;
+  voteCount: number;
+}
+
+export interface Poll {
+  id: string;
+  postId: string;
+  question: string;
+  options: PollOption[];
+  totalVotes: number;
+  myVoteOptionId?: string | null;
+  hasVoted?: boolean;
+}
+
 export interface Post {
   id: string;
   authorId: string;
@@ -69,6 +87,7 @@ export interface Post {
   isLikedByMe: boolean;
   isSavedByMe: boolean;
   isRepostedByMe: boolean;
+  poll?: Poll | null;
   createdAt: string;
   updatedAt: string;
 }

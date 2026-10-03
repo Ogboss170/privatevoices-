@@ -33,6 +33,7 @@ import { colors } from '../constants/colors'
 import type { Post } from '@private-voices/shared'
 import { FormattedText } from './FormattedText'
 import { MentionSuggestions } from './MentionSuggestions'
+import { MobileInteractivePoll } from './MobileInteractivePoll'
 
 interface MobilePostCardProps {
   post: Post
@@ -300,6 +301,13 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
             } as any)
           }
         }}
+      />
+
+      {/* Interactive Poll */}
+      <MobileInteractivePoll
+        postId={post.id}
+        currentUserId={currentUserId}
+        initialPoll={post.poll}
       />
 
       {/* Attached Media */}

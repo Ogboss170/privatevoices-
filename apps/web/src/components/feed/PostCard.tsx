@@ -8,6 +8,7 @@ import type { Post } from '@private-voices/shared'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import FormattedText from '../common/FormattedText'
 import MentionAutocomplete from '../common/MentionAutocomplete'
+import InteractivePoll from './InteractivePoll'
 
 interface PostCardProps {
   post: Post
@@ -267,6 +268,13 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
       <div className="text-gray-800 text-sm whitespace-pre-line leading-relaxed">
         <FormattedText text={post.content} />
       </div>
+
+      {/* Interactive Poll */}
+      <InteractivePoll
+        postId={post.id}
+        currentUserId={currentUserId}
+        initialPoll={post.poll}
+      />
 
       {/* Images Grid & Lightbox */}
       {post.imageUrls && post.imageUrls.length > 0 && (

@@ -167,11 +167,39 @@ export default function CreatePostPage(): React.JSX.Element {
       }
     }
 
-    const { error } = await supabase.from('posts').insert({
-      author_id: userRes.user.id,
-      content: finalContent || 'Voice attachment',
-      image_urls: uploadedUrls,
-    })
+    const { data: newPost, error } = await supabase
+      .from('posts')
+      .insert({
+        author_id: userRes.user.id,
+        content: finalContent || 'Voice attachment',
+        image_urls: uploadedUrls,
+      })
+      .select('id')
+      .single()
+
+    if (!error && newPost && showPollCreator && pollQuestion.trim()) {
+      const validOptions = pollOptions.filter((o) => o.trim() !== '')
+      if (validOptions.length >= 2) {
+        const { data: newPoll } = await supabase
+          .from('polls')
+          .insert({
+            post_id: newPost.id,
+            question: pollQuestion.trim(),
+          })
+          .select('id')
+          .single()
+
+        if (newPoll) {
+          const optionRows = validOptions.map((opt, idx) => ({
+            poll_id: newPoll.id,
+            option_text: opt.trim(),
+            option_order: idx,
+            vote_count: 0,
+          }))
+          await supabase.from('poll_options').insert(optionRows)
+        }
+      }
+    }
 
     setLoading(false)
 
