@@ -29,8 +29,10 @@ export default function FeedPage() {
     })
   }, [supabase])
 
-  const fetchPosts = useCallback(async () => {
-    setLoading(true)
+  const fetchPosts = useCallback(async (isInitial = false) => {
+    if (isInitial && posts.length === 0) {
+      setLoading(true)
+    }
     let query = supabase
       .from('posts')
       .select('*, author:profiles(id, username, display_name, avatar_url)')
@@ -119,7 +121,7 @@ export default function FeedPage() {
   }, [supabase, activeTab, currentUserId])
 
   useEffect(() => {
-    fetchPosts()
+    fetchPosts(true)
 
     // Realtime listener for instant feed updates upon new post creation
     const channel = supabase
@@ -128,7 +130,7 @@ export default function FeedPage() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'posts' },
         () => {
-          fetchPosts()
+          fetchPosts(false)
         }
       )
       .subscribe()

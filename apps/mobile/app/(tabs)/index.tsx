@@ -36,7 +36,10 @@ export default function HomeScreen() {
     })
   }, [])
 
-  const fetchPosts = useCallback(async () => {
+  const fetchPosts = useCallback(async (isInitial = false) => {
+    if (isInitial) {
+      setLoading(true)
+    }
     let query = supabase
       .from('posts')
       .select('*, author:profiles(id, username, display_name, avatar_url)')
@@ -120,15 +123,15 @@ export default function HomeScreen() {
     setRefreshing(false)
   }, [activeTab, currentUserId])
 
-  // Refetch posts when tab screen is focused
+  // Refetch posts in background when tab screen is focused
   useFocusEffect(
     useCallback(() => {
-      fetchPosts()
+      fetchPosts(false)
     }, [fetchPosts])
   )
 
   useEffect(() => {
-    fetchPosts()
+    fetchPosts(true)
 
     // Realtime listener for instant feed updates
     const channel = supabase
@@ -137,7 +140,7 @@ export default function HomeScreen() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'posts' },
         () => {
-          fetchPosts()
+          fetchPosts(false)
         }
       )
       .subscribe()
