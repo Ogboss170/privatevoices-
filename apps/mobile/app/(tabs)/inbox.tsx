@@ -652,6 +652,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.gray900,
   },
+  closeBtn: {
+    padding: 4,
+  },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -592,7 +592,6 @@ function InboxContent(): React.JSX.Element {
     </div>
   )
 }
-}
 
 export default function InboxPage(): React.JSX.Element {
   return (
