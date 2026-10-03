@@ -3,12 +3,13 @@
 import React, { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Heart, MessageCircle, Bookmark, Share2, Trash2, MoreVertical, Flag, ShieldOff, ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { Heart, MessageCircle, Bookmark, Share2, Trash2, MoreVertical, Flag, ShieldOff, ChevronLeft, ChevronRight, X, TrendingUp } from 'lucide-react'
 import type { Post } from '@private-voices/shared'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import FormattedText from '../common/FormattedText'
 import MentionAutocomplete from '../common/MentionAutocomplete'
 import InteractivePoll from './InteractivePoll'
+import PostInsightsModal from './PostInsightsModal'
 
 interface PostCardProps {
   post: Post
@@ -30,6 +31,7 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
   const [submittingComment, setSubmittingComment] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  const [showInsightsModal, setShowInsightsModal] = useState(false)
 
   const isOwner = currentUserId === post.authorId
 
@@ -261,7 +263,17 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
           </button>
 
           {showMenu && (
-            <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-xl shadow-lg p-1.5 z-20 w-44 space-y-1">
+            <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-xl shadow-lg p-1.5 z-20 w-48 space-y-1">
+              <button
+                onClick={() => {
+                  setShowInsightsModal(true)
+                  setShowMenu(false)
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+              >
+                <TrendingUp size={14} />
+                <span>View Progression</span>
+              </button>
               <button
                 onClick={handleReportPost}
                 className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
@@ -544,6 +556,9 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
             </div>
           )}
         </div>
+      {/* Post Progression & Insights Modal */}
+      {showInsightsModal && (
+        <PostInsightsModal post={post} onClose={() => setShowInsightsModal(false)} />
       )}
     </article>
   )

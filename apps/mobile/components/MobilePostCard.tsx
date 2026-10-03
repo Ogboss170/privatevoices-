@@ -25,6 +25,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  TrendingUp,
 } from 'lucide-react-native'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
@@ -34,6 +35,7 @@ import type { Post } from '@private-voices/shared'
 import { FormattedText } from './FormattedText'
 import { MentionSuggestions } from './MentionSuggestions'
 import { MobileInteractivePoll } from './MobileInteractivePoll'
+import { PostInsightsModal } from './PostInsightsModal'
 
 interface MobilePostCardProps {
   post: Post
@@ -61,6 +63,7 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
   const [activeImageIndex, setActiveImageIndex] = useState(0)
   const [modalVisible, setModalVisible] = useState(false)
   const [modalImageIndex, setModalImageIndex] = useState(0)
+  const [showInsightsModal, setShowInsightsModal] = useState(false)
 
   const mentionMatch = commentText.match(/(?:^|\s)@([a-zA-Z0-9_]*)$/)
   const mentionQuery = mentionMatch ? mentionMatch[1] : null
@@ -248,6 +251,12 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
         },
       })
     }
+
+    // Allow viewing insights for any post (especially owner's)
+    options.unshift({
+      text: 'View Insights & Progression 📈',
+      onPress: () => setShowInsightsModal(true),
+    })
 
     if (isOwner) {
       options.push({
@@ -557,6 +566,13 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
           )}
         </View>
       )}
+
+      {/* Post Progression & Insights Modal */}
+      <PostInsightsModal
+        visible={showInsightsModal}
+        post={post}
+        onClose={() => setShowInsightsModal(false)}
+      />
     </View>
   )
 }
