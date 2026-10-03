@@ -1,4 +1,4 @@
-﻿-- Private Voices: 013_interactive_polls.sql
+-- Private Voices: 013_interactive_polls.sql
 -- Run in Supabase SQL Editor (project trwraypolgqhkrxlijql). Safe to re-run.
 -- ============================================================
 -- Private Voices â€” Migration 013: Interactive Polls & Votes
@@ -42,16 +42,15 @@ CREATE INDEX IF NOT EXISTS poll_votes_user_id_idx ON public.poll_votes(user_id);
 
 -- 4. Function & Trigger to automatically update vote counts and enforce integrity
 CREATE OR REPLACE FUNCTION public.handle_poll_vote()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER AS $fn$
 BEGIN
-  -- Increment vote count on chosen option
   UPDATE public.poll_options
   SET vote_count = vote_count + 1
   WHERE id = NEW.option_id;
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$fn$ LANGUAGE plpgsql SECURITY DEFINER;
 
 DROP TRIGGER IF EXISTS trg_handle_poll_vote ON public.poll_votes;
 CREATE TRIGGER trg_handle_poll_vote
