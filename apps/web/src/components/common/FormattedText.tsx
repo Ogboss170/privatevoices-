@@ -31,10 +31,16 @@ export default function FormattedText({ text, className = '' }: FormattedTextPro
           )
         }
         if (token.startsWith('#')) {
+          const tag = token.slice(1)
           return (
-            <span key={index} className="font-medium text-brand-500">
+            <Link
+              key={index}
+              href={`/explore?q=%23${encodeURIComponent(tag)}&tab=voices`}
+              className="font-semibold text-brand-600 hover:text-brand-700 hover:underline transition-colors inline-block"
+              onClick={(e) => e.stopPropagation()}
+            >
               {token}
-            </span>
+            </Link>
           )
         }
         return <React.Fragment key={index}>{token}</React.Fragment>

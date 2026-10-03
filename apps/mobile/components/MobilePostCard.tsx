@@ -27,6 +27,7 @@ import {
   ChevronRight,
 } from 'lucide-react-native'
 import { Image } from 'expo-image'
+import { useRouter } from 'expo-router'
 import { supabase } from '../lib/supabase'
 import { colors } from '../constants/colors'
 import type { Post } from '@private-voices/shared'
@@ -39,10 +40,12 @@ interface MobilePostCardProps {
   onDelete?: (postId: string) => void
   onPressAuthor?: (userId: string) => void
   onPressMention?: (username: string) => void
+  onPressHashtag?: (hashtag: string) => void
   onToggleSave?: (postId: string, isSaved: boolean) => void
 }
 
-export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, onPressMention, onToggleSave }: MobilePostCardProps) {
+export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, onPressMention, onPressHashtag, onToggleSave }: MobilePostCardProps) {
+  const router = useRouter()
   const [isLiked, setIsLiked] = useState(post.isLikedByMe)
   const [likeCount, setLikeCount] = useState(post.likeCount)
   const [isSaved, setIsSaved] = useState(post.isSavedByMe)
@@ -287,6 +290,16 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
         text={post.content}
         style={styles.content}
         onPressMention={onPressMention}
+        onPressHashtag={(tag) => {
+          if (onPressHashtag) {
+            onPressHashtag(tag)
+          } else {
+            router.push({
+              pathname: '/(tabs)/explore',
+              params: { q: tag, tab: 'voices' },
+            } as any)
+          }
+        }}
       />
 
       {/* Attached Media */}
