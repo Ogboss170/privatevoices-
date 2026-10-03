@@ -41,37 +41,72 @@ export default function NotificationsPage(): React.JSX.Element {
     const uId = userRes.user.id
     setCurrentUserId(uId)
 
-    const { data, error } = await supabase
-      .from('notifications')
-      .select('*, actor:profiles!notifications_actor_id_fkey(id, username, display_name, avatar_url)')
-      .eq('recipient_id', uId)
-      .order('created_at', { ascending: false })
-      .limit(50)
+    try {
+      let { data, error } = await supabase
+        .from('notifications')
+        .select('*, actor:profiles!notifications_actor_id_fkey(id, username, display_name, avatar_url)')
+        .eq('recipient_id', uId)
+        .order('created_at', { ascending: false })
+        .limit(50)
 
-    if (!error && data) {
-      const formatted: AppNotification[] = data.map((n: any) => ({
-        id: n.id,
-        recipientId: n.recipient_id,
-        actorId: n.type === 'whisper' ? null : n.actor_id,
-        actor: n.type === 'whisper' || !n.actor ? null : {
-          id: n.actor.id,
-          username: n.actor.username,
-          displayName: n.actor.display_name,
-          avatarUrl: n.actor.avatar_url,
-        },
-        type: n.type,
-        title: n.title,
-        message: n.message,
-        entityType: n.entity_type,
-        entityId: n.entity_id,
-        isRead: n.is_read,
-        groupCount: n.group_count || 1,
-        createdAt: n.created_at,
-      }))
-      setNotifications(formatted)
+      if (error || !data) {
+        console.warn('Notifications FK query failed, falling back to direct select:', error)
+        const fallbackRes = await supabase
+          .from('notifications')
+          .select('*')
+          .eq('recipient_id', uId)
+          .order('created_at', { ascending: false })
+          .limit(50)
+        data = fallbackRes.data
+      }
+
+      if (data && data.length > 0) {
+        // Collect actor IDs for any missing actor profiles
+        const missingActorIds = data
+          .filter((n: any) => n.actor_id && !n.actor)
+          .map((n: any) => n.actor_id)
+
+        let profileMap = new Map()
+        if (missingActorIds.length > 0) {
+          const { data: profs } = await supabase
+            .from('profiles')
+            .select('id, username, display_name, avatar_url')
+            .in('id', missingActorIds)
+          profileMap = new Map((profs ?? []).map((p) => [p.id, p]))
+        }
+
+        const formatted: AppNotification[] = data.map((n: any) => {
+          const actorData = n.actor || profileMap.get(n.actor_id)
+          return {
+            id: n.id,
+            recipientId: n.recipient_id,
+            actorId: n.type === 'whisper' ? null : n.actor_id,
+            actor: n.type === 'whisper' || !actorData ? null : {
+              id: actorData.id,
+              username: actorData.username || 'user',
+              displayName: actorData.display_name || actorData.displayName || 'User',
+              avatarUrl: actorData.avatar_url || actorData.avatarUrl || null,
+            },
+            type: n.type,
+            title: n.title,
+            message: n.message,
+            entityType: n.entity_type,
+            entityId: n.entity_id,
+            isRead: n.is_read,
+            groupCount: n.group_count || 1,
+            createdAt: n.created_at,
+          }
+        })
+        setNotifications(formatted)
+      } else {
+        setNotifications([])
+      }
+    } catch (err) {
+      console.error('Fatal notifications error:', err)
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
     }
-    setLoading(false)
-    setRefreshing(false)
   }, [supabase, router])
 
   useEffect(() => {
