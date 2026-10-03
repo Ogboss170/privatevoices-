@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native'
-import { Heart, MessageCircle, Bookmark, Share2, Trash2 } from 'lucide-react-native'
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Share } from 'react-native'
+import { Heart, MessageCircle, Bookmark, Share2, Trash2, MoreVertical, Flag, ShieldOff } from 'lucide-react-native'
 import { supabase } from '../lib/supabase'
 import { colors } from '../constants/colors'
 import type { Post } from '@private-voices/shared'
@@ -51,6 +51,82 @@ export function MobilePostCard({ post, currentUserId, onDelete }: MobilePostCard
     }
   }
 
+  function handleShare() {
+    Share.share({
+      message: `Check out @${post.author.username}'s Voice on Private Voices: "${post.content.slice(0, 80)}..."`,
+      url: `https://privatevoices.app/post/${post.id}`,
+    })
+  }
+
+  function handleOpenOptionsMenu() {
+    const options: any[] = [
+      {
+        text: 'Report Post',
+        onPress: () => {
+          Alert.prompt(
+            'Report Post',
+            'Please describe why you are reporting this post:',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Submit',
+                onPress: async (reason) => {
+                  if (!currentUserId || !reason?.trim()) return
+                  await supabase.from('content_reports').insert({
+                    reporter_id: currentUserId,
+                    target_type: 'post',
+                    target_id: post.id,
+                    reason: reason.trim(),
+                  })
+                  Alert.alert('Report submitted', 'Thank you. Our moderation team will review this content.')
+                },
+              },
+            ]
+          )
+        },
+      },
+    ]
+
+    if (!isOwner && currentUserId) {
+      options.push({
+        text: `Block @${post.author.username}`,
+        style: 'destructive',
+        onPress: () => {
+          Alert.alert(
+            'Block User',
+            `Are you sure you want to block @${post.author.username}?`,
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Block',
+                style: 'destructive',
+                onPress: async () => {
+                  await supabase.from('user_blocks').insert({
+                    blocker_id: currentUserId,
+                    blocked_id: post.authorId,
+                  })
+                  Alert.alert('Blocked', `@${post.author.username} has been blocked.`)
+                },
+              },
+            ]
+          )
+        },
+      })
+    }
+
+    if (isOwner) {
+      options.push({
+        text: 'Delete Post',
+        style: 'destructive',
+        onPress: handleDelete,
+      })
+    }
+
+    options.push({ text: 'Cancel', style: 'cancel' })
+
+    Alert.alert('Post Options', undefined, options)
+  }
+
   function handleDelete() {
     Alert.alert('Delete post', 'Are you sure you want to delete this post?', [
       { text: 'Cancel', style: 'cancel' },
@@ -83,11 +159,9 @@ export function MobilePostCard({ post, currentUserId, onDelete }: MobilePostCard
           </View>
         </View>
 
-        {isOwner && (
-          <TouchableOpacity onPress={handleDelete} style={styles.deleteBtn}>
-            <Trash2 size={18} color="#9ca3af" />
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity onPress={handleOpenOptionsMenu} style={styles.deleteBtn}>
+          <MoreVertical size={20} color="#9ca3af" />
+        </TouchableOpacity>
       </View>
 
       {/* Body */}
@@ -117,7 +191,7 @@ export function MobilePostCard({ post, currentUserId, onDelete }: MobilePostCard
           />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionBtn}>
+        <TouchableOpacity style={styles.actionBtn} onPress={handleShare}>
           <Share2 size={20} color={colors.gray400} />
         </TouchableOpacity>
       </View>

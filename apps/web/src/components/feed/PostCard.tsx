@@ -3,7 +3,7 @@
 import React, { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Heart, MessageCircle, Bookmark, Share2, Trash2 } from 'lucide-react'
+import { Heart, MessageCircle, Bookmark, Share2, Trash2, MoreVertical, Flag, ShieldOff } from 'lucide-react'
 import type { Post } from '@private-voices/shared'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
@@ -23,8 +23,52 @@ export default function PostCard({ post, currentUserId, onDelete }: PostCardProp
   const [commentText, setCommentText] = useState('')
   const [loadingComments, setLoadingComments] = useState(false)
   const [submittingComment, setSubmittingComment] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
 
   const isOwner = currentUserId === post.authorId
+
+  async function handleReportPost() {
+    if (!currentUserId) {
+      alert('Please log in to report posts.')
+      return
+    }
+    const reason = prompt('Please enter the reason for reporting this post (e.g. Spam, Harassment, Inappropriate):')
+    if (!reason?.trim()) return
+
+    const { error } = await supabase.from('content_reports').insert({
+      reporter_id: currentUserId,
+      target_type: 'post',
+      target_id: post.id,
+      reason: reason.trim(),
+    })
+
+    if (error) {
+      alert(`Report failed: ${error.message}`)
+    } else {
+      alert('Thank you. The report has been submitted to moderators.')
+    }
+    setShowMenu(false)
+  }
+
+  async function handleBlockUser() {
+    if (!currentUserId) {
+      alert('Please log in to block users.')
+      return
+    }
+    if (!confirm(`Are you sure you want to block @${post.author.username}?`)) return
+
+    const { error } = await supabase.from('user_blocks').insert({
+      blocker_id: currentUserId,
+      blocked_id: post.authorId,
+    })
+
+    if (error) {
+      alert(`Block failed: ${error.message}`)
+    } else {
+      alert(`@${post.author.username} has been blocked.`)
+    }
+    setShowMenu(false)
+  }
 
   async function handleToggleLike() {
     const prevLiked = isLiked
@@ -139,7 +183,7 @@ export default function PostCard({ post, currentUserId, onDelete }: PostCardProp
           </div>
         </Link>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 relative">
           <span className="text-xs text-gray-400">
             {new Date(post.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
           </span>
@@ -151,6 +195,34 @@ export default function PostCard({ post, currentUserId, onDelete }: PostCardProp
             >
               <Trash2 size={16} />
             </button>
+          )}
+          <button
+            onClick={() => setShowMenu(!showMenu)}
+            className="text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+            title="More options"
+          >
+            <MoreVertical size={16} />
+          </button>
+
+          {showMenu && (
+            <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-xl shadow-lg p-1.5 z-20 w-44 space-y-1">
+              <button
+                onClick={handleReportPost}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <Flag size={14} className="text-amber-500" />
+                <span>Report Post</span>
+              </button>
+              {!isOwner && (
+                <button
+                  onClick={handleBlockUser}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  <ShieldOff size={14} />
+                  <span>Block User</span>
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
