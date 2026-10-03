@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Share } from 'react-native'
-import { Heart, MessageCircle, Bookmark, Share2, Trash2, MoreVertical, Flag, ShieldOff } from 'lucide-react-native'
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Share, TextInput, ActivityIndicator } from 'react-native'
+import { Heart, MessageCircle, Bookmark, Share2, Trash2, MoreVertical, Flag, ShieldOff, Send } from 'lucide-react-native'
 import { supabase } from '../lib/supabase'
 import { colors } from '../constants/colors'
 import type { Post } from '@private-voices/shared'
@@ -15,6 +15,12 @@ export function MobilePostCard({ post, currentUserId, onDelete }: MobilePostCard
   const [isLiked, setIsLiked] = useState(post.isLikedByMe)
   const [likeCount, setLikeCount] = useState(post.likeCount)
   const [isSaved, setIsSaved] = useState(post.isSavedByMe)
+  const [commentCount, setCommentCount] = useState(post.commentCount)
+  const [showComments, setShowComments] = useState(false)
+  const [comments, setComments] = useState<any[]>([])
+  const [commentText, setCommentText] = useState('')
+  const [loadingComments, setLoadingComments] = useState(false)
+  const [submittingComment, setSubmittingComment] = useState(false)
 
   const isOwner = currentUserId === post.authorId
 
@@ -56,6 +62,58 @@ export function MobilePostCard({ post, currentUserId, onDelete }: MobilePostCard
       message: `Check out @${post.author.username}'s Voice on Private Voices: "${post.content.slice(0, 80)}..."`,
       url: `https://privatevoices.app/post/${post.id}`,
     })
+  }
+
+  async function handleLoadComments() {
+    if (!showComments && comments.length === 0) {
+      setLoadingComments(true)
+      let { data, error } = await supabase
+        .from('comments')
+        .select('*, author:profiles!comments_author_id_fkey(id, username, display_name, avatar_url)')
+        .eq('post_id', post.id)
+        .order('created_at', { ascending: true })
+
+      if (error || !data) {
+        const fallback = await supabase
+          .from('comments')
+          .select('*')
+          .eq('post_id', post.id)
+          .order('created_at', { ascending: true })
+        data = fallback.data
+      }
+
+      setComments(data ?? [])
+      setLoadingComments(false)
+    }
+    setShowComments(!showComments)
+  }
+
+  async function handleAddComment() {
+    if (!commentText.trim()) return
+    if (!currentUserId) {
+      Alert.alert('Login Required', 'Please log in to leave a comment.')
+      return
+    }
+
+    setSubmittingComment(true)
+    const { data: newComment, error } = await supabase
+      .from('comments')
+      .insert({
+        post_id: post.id,
+        author_id: currentUserId,
+        content: commentText.trim(),
+      })
+      .select('*, author:profiles!comments_author_id_fkey(id, username, display_name, avatar_url)')
+      .maybeSingle()
+
+    if (error) {
+      Alert.alert('Error', error.message)
+    } else if (newComment) {
+      setComments((prev) => [...prev, newComment])
+      setCommentText('')
+      setCommentCount((prev) => prev + 1)
+    }
+    setSubmittingComment(false)
   }
 
   function handleOpenOptionsMenu() {
@@ -178,9 +236,11 @@ export function MobilePostCard({ post, currentUserId, onDelete }: MobilePostCard
           <Text style={[styles.actionText, isLiked && styles.likedText]}>{likeCount}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionBtn}>
-          <MessageCircle size={20} color={colors.gray400} />
-          <Text style={styles.actionText}>{post.commentCount}</Text>
+        <TouchableOpacity style={styles.actionBtn} onPress={handleLoadComments}>
+          <MessageCircle size={20} color={showComments ? colors.brand : colors.gray400} />
+          <Text style={[styles.actionText, showComments && { color: colors.brand, fontWeight: '600' }]}>
+            {commentCount}
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionBtn} onPress={handleToggleSave}>
@@ -195,6 +255,52 @@ export function MobilePostCard({ post, currentUserId, onDelete }: MobilePostCard
           <Share2 size={20} color={colors.gray400} />
         </TouchableOpacity>
       </View>
+
+      {/* Expandable Comments Section */}
+      {showComments && (
+        <View style={styles.commentsContainer}>
+          {/* Add Comment Input */}
+          <View style={styles.commentInputRow}>
+            <TextInput
+              style={styles.commentInput}
+              placeholder="Write a comment..."
+              placeholderTextColor="#9ca3af"
+              value={commentText}
+              onChangeText={setCommentText}
+            />
+            <TouchableOpacity
+              style={[
+                styles.sendCommentBtn,
+                (!commentText.trim() || submittingComment) && styles.sendCommentBtnDisabled,
+              ]}
+              onPress={handleAddComment}
+              disabled={!commentText.trim() || submittingComment}
+            >
+              {submittingComment ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <Send size={16} color="#ffffff" />
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Comment List */}
+          {loadingComments ? (
+            <ActivityIndicator size="small" color={colors.brand} style={{ paddingVertical: 8 }} />
+          ) : comments.length === 0 ? (
+            <Text style={styles.noCommentsText}>No comments yet. Be the first!</Text>
+          ) : (
+            <View style={styles.commentsList}>
+              {comments.map((c) => (
+                <View key={c.id} style={styles.commentItem}>
+                  <Text style={styles.commentAuthor}>@{c.author?.username || 'user'}:</Text>
+                  <Text style={styles.commentBody}>{c.content}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+      )}
     </View>
   )
 }
@@ -272,5 +378,66 @@ const styles = StyleSheet.create({
   likedText: {
     color: '#ef4444',
     fontWeight: '600',
+  },
+  commentsContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+    gap: 10,
+  },
+  commentInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  commentInput: {
+    flex: 1,
+    backgroundColor: '#f9fafb',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: colors.gray900,
+  },
+  sendCommentBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendCommentBtnDisabled: {
+    backgroundColor: colors.gray300,
+  },
+  noCommentsText: {
+    fontSize: 12,
+    color: colors.gray400,
+    textAlign: 'center',
+    paddingVertical: 6,
+  },
+  commentsList: {
+    gap: 8,
+  },
+  commentItem: {
+    backgroundColor: '#f9fafb',
+    padding: 10,
+    borderRadius: 10,
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  commentAuthor: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.gray900,
+  },
+  commentBody: {
+    fontSize: 12,
+    color: colors.gray700,
+    flexShrink: 1,
   },
 })

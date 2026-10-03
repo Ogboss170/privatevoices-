@@ -112,11 +112,20 @@ export default function PostCard({ post, currentUserId, onDelete }: PostCardProp
   async function handleLoadComments() {
     if (!showComments && comments.length === 0) {
       setLoadingComments(true)
-      const { data } = await supabase
+      let { data, error } = await supabase
         .from('comments')
-        .select('*, author:profiles(id, username, display_name, avatar_url)')
+        .select('*, author:profiles!comments_author_id_fkey(id, username, display_name, avatar_url)')
         .eq('post_id', post.id)
         .order('created_at', { ascending: true })
+
+      if (error || !data) {
+        const fallback = await supabase
+          .from('comments')
+          .select('*')
+          .eq('post_id', post.id)
+          .order('created_at', { ascending: true })
+        data = fallback.data
+      }
 
       setComments(data ?? [])
       setLoadingComments(false)
@@ -129,22 +138,29 @@ export default function PostCard({ post, currentUserId, onDelete }: PostCardProp
     if (!commentText.trim()) return
     setSubmittingComment(true)
 
-    const { data: user } = await supabase.auth.getUser()
-    if (!user.user) return
+    const { data: userRes } = await supabase.auth.getUser()
+    if (!userRes.user) {
+      alert('Please log in to leave a comment.')
+      setSubmittingComment(false)
+      return
+    }
 
     const { data: newComment, error } = await supabase
       .from('comments')
       .insert({
         post_id: post.id,
-        author_id: user.user.id,
+        author_id: userRes.user.id,
         content: commentText.trim(),
       })
-      .select('*, author:profiles(id, username, display_name, avatar_url)')
-      .single()
+      .select('*, author:profiles!comments_author_id_fkey(id, username, display_name, avatar_url)')
+      .maybeSingle()
 
-    if (!error && newComment) {
+    if (error) {
+      alert(`Could not post comment: ${error.message}`)
+    } else if (newComment) {
       setComments((prev) => [...prev, newComment])
       setCommentText('')
+      post.commentCount = (post.commentCount || 0) + 1
     }
     setSubmittingComment(false)
   }
