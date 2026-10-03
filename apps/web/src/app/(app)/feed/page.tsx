@@ -6,8 +6,9 @@ import { Bell } from 'lucide-react'
 import PostCard from '@/components/feed/PostCard'
 import StoriesTray from '@/components/stories/StoriesTray'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import type { Post } from '@private-voices/shared'
+import type { Post, FeedMode } from '@private-voices/shared'
 import { extractPostMediaAndCleanContent } from '@private-voices/shared'
+import { FeedAlgorithmEngine } from '@/lib/feed/feed.engine'
 
 const TABS = [
   { id: 'for-you', label: 'For You' },
@@ -19,7 +20,7 @@ const TABS = [
 
 export default function FeedPage() {
   const supabase = createSupabaseBrowserClient()
-  const [activeTab, setActiveTab] = useState('for-you')
+  const [activeTab, setActiveTab] = useState<FeedMode>('for-you')
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [currentUserId, setCurrentUserId] = useState<string | undefined>()
@@ -36,6 +37,7 @@ export default function FeedPage() {
     }
 
     try {
+      // 1. Fetch raw candidate posts
       let query = supabase
         .from('posts')
         .select('*, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url)')
@@ -54,17 +56,46 @@ export default function FeedPage() {
         query = query.not('community_id', 'is', null)
       }
 
-      let { data, error } = await query
+      let { data: rawPosts, error } = await query
 
-      // Fallback: If foreign key embedding fails for any reason, query posts directly
-      if (error || !data) {
-        console.warn('Initial feed query error, retrying without FK embedding:', error)
+      if (error || !rawPosts) {
         const fallbackRes = await supabase
           .from('posts')
           .select('*')
           .order('created_at', { ascending: false })
-        data = fallbackRes.data
+        rawPosts = fallbackRes.data
       }
+
+      // 2. Fetch User Safety Filters (Blocks, Mutes, Interaction Logs)
+      let userBlocks: string[] = []
+      let userMutes: string[] = []
+      let userInteractions: any[] = []
+
+      if (currentUserId) {
+        const [{ data: blocks }, { data: mutes }, { data: inters }] = await Promise.all([
+          supabase.from('user_blocks').select('blocked_id').eq('blocker_id', currentUserId),
+          supabase.from('user_mutes').select('muted_id').eq('muter_id', currentUserId),
+          supabase.from('feed_interactions').select('*').eq('user_id', currentUserId).limit(100),
+        ])
+
+        userBlocks = (blocks || []).map((b) => b.blocked_id)
+        userMutes = (mutes || []).map((m) => m.muted_id)
+        userInteractions = inters || []
+      }
+
+      // 3. Process candidates through Moderation-First Feed Algorithm Engine
+      const engineResult = FeedAlgorithmEngine.processAndRankFeed({
+        rawPosts: rawPosts || [],
+        userId: currentUserId || '',
+        mode: activeTab,
+        userBlocks,
+        userMutes,
+        hiddenPostIds: [],
+        userInteractions,
+        limit: 20,
+      })
+
+      data = engineResult.items
 
       if (data && data.length > 0) {
         // Collect all distinct author IDs to fetch profiles in ONE single query

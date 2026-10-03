@@ -344,3 +344,39 @@ export interface UserSafetyScore {
   isRestricted: boolean;
   restrictedUntil?: string | null;
 }
+
+
+// ─── Feed & Recommendation Types ────────────────────────────────────────────────
+
+export type FeedMode = 'for-you' | 'following' | 'trending' | 'latest' | 'community';
+
+export type FeedInteractionType =
+  | 'VIEW_POST'
+  | 'LIKE_POST'
+  | 'COMMENT_POST'
+  | 'REPOST_POST'
+  | 'SAVE_POST'
+  | 'SHARE_POST'
+  | 'FOLLOW_USER'
+  | 'OPEN_PROFILE'
+  | 'HIDE_POST'
+  | 'NOT_INTERESTED'
+  | 'REPORT_POST'
+  | 'BLOCK_USER'
+  | 'MUTE_USER';
+
+export interface FeedInteraction {
+  id: string;
+  userId: string;
+  targetType: 'post' | 'user' | 'community';
+  targetId: string;
+  eventType: FeedInteractionType;
+  weight: number;
+  createdAt: string;
+}
+
+export interface CursorPaginatedFeedResponse<T> {
+  items: T[];
+  nextCursor?: string | null;
+  hasMore: boolean;
+}
