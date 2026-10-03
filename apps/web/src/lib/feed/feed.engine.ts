@@ -47,7 +47,7 @@ export class FeedAlgorithmEngine {
     const hiddenSet = new Set(hiddenPostIds)
 
     // 1. STEP 1: Moderation / Safety Filter (MODERATION BEFORE RANKING)
-    // Filter out posts blocked, held for review, or originating from blocked/muted authors
+    // Filter out posts explicitly blocked or held for review, or originating from blocked/muted authors
     const safePosts = rawPosts.filter((post) => {
       if (!post || !post.id || !post.author_id) return false
 
@@ -56,7 +56,8 @@ export class FeedAlgorithmEngine {
       if (hiddenSet.has(post.id)) return false
 
       // Strict Moderation Gate: Exclude blocked or held posts from recommendation boost
-      if (post.moderation_status === 'BLOCK' || post.moderation_status === 'HOLD_FOR_REVIEW') {
+      const modStatus = post.moderation_status
+      if (modStatus === 'BLOCK' || modStatus === 'HOLD_FOR_REVIEW') {
         return false
       }
 
@@ -141,7 +142,9 @@ export class FeedAlgorithmEngine {
 
     // 4. STEP 4: Diversity & Repetition Control (Anti-Feed Domination)
     const diverseFeed: any[] = []
-    const MAX_POSTS_PER_AUTHOR = mode === 'for-you' ? 2 : 5
+    const distinctAuthors = new Set(scoredPosts.map((p) => p.author_id)).size
+    // Only apply strict 2-post author cap if there are at least 3 distinct authors publishing
+    const MAX_POSTS_PER_AUTHOR = mode === 'for-you' && distinctAuthors >= 3 ? 2 : 10
 
     for (const post of scoredPosts) {
       const count = authorPostCounts.get(post.author_id) || 0
