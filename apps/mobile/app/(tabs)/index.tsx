@@ -13,6 +13,7 @@ import { supabase } from '../../lib/supabase'
 import { colors } from '../../constants/colors'
 import { MobilePostCard } from '../../components/MobilePostCard'
 import { StoriesTray } from '../../components/StoriesTray'
+import { PublicProfileModal } from '../../components/PublicProfileModal'
 import type { Post } from '@private-voices/shared'
 
 const TABS = [
@@ -29,6 +30,8 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | undefined>()
+  const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(null)
+  const [profileModalVisible, setProfileModalVisible] = useState(false)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -227,6 +230,10 @@ export default function HomeScreen() {
               post={item}
               currentUserId={currentUserId}
               onDelete={handleDeletePost}
+              onPressAuthor={(authorId) => {
+                setSelectedAuthorId(authorId)
+                setProfileModalVisible(true)
+              }}
             />
           )}
           contentContainerStyle={styles.listContent}
@@ -237,6 +244,19 @@ export default function HomeScreen() {
               tintColor={colors.brand}
             />
           }
+        />
+      )}
+
+      {/* Public Profile Modal */}
+      {selectedAuthorId && (
+        <PublicProfileModal
+          visible={profileModalVisible}
+          userId={selectedAuthorId}
+          currentUserId={currentUserId}
+          onClose={() => {
+            setProfileModalVisible(false)
+            setSelectedAuthorId(null)
+          }}
         />
       )}
     </View>

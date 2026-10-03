@@ -13,6 +13,7 @@ import { useRouter } from 'expo-router'
 import { Search, TrendingUp, Users, User, Hash } from 'lucide-react-native'
 import { supabase } from '../../lib/supabase'
 import { colors } from '../../constants/colors'
+import { PublicProfileModal } from '../../components/PublicProfileModal'
 
 export default function ExploreScreen() {
   const router = useRouter()
@@ -21,8 +22,14 @@ export default function ExploreScreen() {
   const [communities, setCommunities] = useState<any[]>([])
   const [hashtags, setHashtags] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
+  const [profileModalVisible, setProfileModalVisible] = useState(false)
 
   useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) setCurrentUserId(data.user.id)
+    })
     loadExploreData()
   }, [])
 
@@ -99,7 +106,10 @@ export default function ExploreScreen() {
             <TouchableOpacity
               key={item.id}
               style={styles.userCard}
-              onPress={() => router.push('/(tabs)/profile')}
+              onPress={() => {
+                setSelectedUserId(item.id)
+                setProfileModalVisible(true)
+              }}
             >
               <View style={styles.avatarCircle}>
                 <Text style={styles.avatarText}>{item.display_name.charAt(0).toUpperCase()}</Text>
@@ -136,6 +146,19 @@ export default function ExploreScreen() {
           ))}
         </View>
       </View>
+
+      {/* Public Profile Modal */}
+      {selectedUserId && (
+        <PublicProfileModal
+          visible={profileModalVisible}
+          userId={selectedUserId}
+          currentUserId={currentUserId}
+          onClose={() => {
+            setProfileModalVisible(false)
+            setSelectedUserId(null)
+          }}
+        />
+      )}
     </ScrollView>
   )
 }

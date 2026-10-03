@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Share, TextInput, ActivityIndicator } from 'react-native'
 import { Heart, MessageCircle, Bookmark, Share2, Trash2, MoreVertical, Flag, ShieldOff, Send } from 'lucide-react-native'
+import { Image } from 'expo-image'
 import { supabase } from '../lib/supabase'
 import { colors } from '../constants/colors'
 import type { Post } from '@private-voices/shared'
@@ -9,9 +10,10 @@ interface MobilePostCardProps {
   post: Post
   currentUserId?: string
   onDelete?: (postId: string) => void
+  onPressAuthor?: (userId: string) => void
 }
 
-export function MobilePostCard({ post, currentUserId, onDelete }: MobilePostCardProps) {
+export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor }: MobilePostCardProps) {
   const [isLiked, setIsLiked] = useState(post.isLikedByMe)
   const [likeCount, setLikeCount] = useState(post.likeCount)
   const [isSaved, setIsSaved] = useState(post.isSavedByMe)
@@ -205,17 +207,26 @@ export function MobilePostCard({ post, currentUserId, onDelete }: MobilePostCard
     <View style={styles.card}>
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.authorGroup}>
+        <TouchableOpacity
+          style={styles.authorGroup}
+          onPress={() => onPressAuthor?.(post.authorId)}
+          activeOpacity={onPressAuthor ? 0.7 : 1}
+          disabled={!onPressAuthor}
+        >
           <View style={styles.avatarCircle}>
-            <Text style={styles.avatarInitial}>
-              {post.author.displayName.charAt(0).toUpperCase()}
-            </Text>
+            {post.author.avatarUrl ? (
+              <Image source={{ uri: post.author.avatarUrl }} style={styles.avatarImg} />
+            ) : (
+              <Text style={styles.avatarInitial}>
+                {post.author.displayName.charAt(0).toUpperCase()}
+              </Text>
+            )}
           </View>
           <View>
             <Text style={styles.displayName}>{post.author.displayName}</Text>
             <Text style={styles.username}>@{post.author.username}</Text>
           </View>
-        </View>
+        </TouchableOpacity>
 
         <TouchableOpacity onPress={handleOpenOptionsMenu} style={styles.deleteBtn}>
           <MoreVertical size={20} color="#9ca3af" />
@@ -332,6 +343,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.brandLight,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImg: {
+    width: 40,
+    height: 40,
   },
   avatarInitial: {
     fontSize: 16,
