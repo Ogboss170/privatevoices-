@@ -13,7 +13,7 @@ import {
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { MessageSquare, EyeOff, Users, ShieldCheck, ChevronRight } from 'lucide-react-native'
+import { MessageSquare, EyeOff, Users, ShieldCheck, ChevronRight, LucideIcon } from 'lucide-react-native'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
@@ -23,7 +23,7 @@ interface OnboardingSlide {
   id: string
   title: string
   subtitle: string
-  icon: React.ComponentType<{ size: number; color: string }>
+  icon: LucideIcon
   accentColor: string
   badgeText?: string
 }
