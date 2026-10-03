@@ -73,6 +73,11 @@ export default function CreateScreen() {
   }
 
   const pickImage = async () => {
+    if (mediaItems.length >= 4) {
+      Alert.alert('Limit reached', 'You can upload up to 4 images per Voice.')
+      return
+    }
+
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync()
     if (!permissionResult.granted) {
       Alert.alert('Permission required', 'Permission to access gallery is required!')
@@ -87,11 +92,16 @@ export default function CreateScreen() {
 
     if (!result.canceled) {
       const newUris = result.assets.map((asset) => asset.uri)
-      setMediaItems((prev) => [...prev, ...newUris])
+      setMediaItems((prev) => [...prev, ...newUris].slice(0, 4))
     }
   }
 
   const openCamera = async () => {
+    if (mediaItems.length >= 4) {
+      Alert.alert('Limit reached', 'You can upload up to 4 images per Voice.')
+      return
+    }
+
     const permissionResult = await ImagePicker.requestCameraPermissionsAsync()
     if (!permissionResult.granted) {
       Alert.alert('Permission required', 'Permission to access camera is required!')
@@ -103,7 +113,7 @@ export default function CreateScreen() {
     })
 
     if (!result.canceled && result.assets[0]?.uri) {
-      setMediaItems((prev) => [...prev, result.assets[0].uri])
+      setMediaItems((prev) => [...prev, result.assets[0].uri].slice(0, 4))
     }
   }
 
@@ -122,9 +132,49 @@ export default function CreateScreen() {
       return
     }
 
+    let finalContent = content.trim()
+    const validPollOptions = pollOptions.filter((o) => o.trim())
+    if (showPollCreator && validPollOptions.length >= 2) {
+      finalContent += '\n\n📊 Poll:\n' + validPollOptions.map((o, idx) => `${idx + 1}. ${o.trim()}`).join('\n')
+    }
+
+    let uploadedUrls: string[] = []
+    if (mediaItems.length > 0) {
+      for (let i = 0; i < mediaItems.length; i++) {
+        const uri = mediaItems[i]
+        try {
+          const fileExt = uri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg'
+          const fileName = `${user.user.id}/${Date.now()}_${i}.${fileExt}`
+
+          const response = await fetch(uri)
+          const blob = await response.blob()
+          const arrayBuffer = await new Response(blob).arrayBuffer()
+
+          const { error: uploadError } = await supabase.storage
+            .from('post-media')
+            .upload(fileName, arrayBuffer, {
+              contentType: `image/${fileExt === 'png' ? 'png' : fileExt === 'webp' ? 'webp' : 'jpeg'}`,
+              upsert: true,
+            })
+
+          if (!uploadError) {
+            const { data: publicUrlData } = supabase.storage
+              .from('post-media')
+              .getPublicUrl(fileName)
+            uploadedUrls.push(publicUrlData.publicUrl)
+          } else {
+            console.error('Mobile upload error:', uploadError)
+          }
+        } catch (uploadErr) {
+          console.error('Failed to read image buffer:', uploadErr)
+        }
+      }
+    }
+
     const { error } = await supabase.from('posts').insert({
       author_id: user.user.id,
-      content: content.trim(),
+      content: finalContent || (uploadedUrls.length > 0 ? 'Voice attachment' : ''),
+      image_urls: uploadedUrls,
     })
 
     setLoading(false)

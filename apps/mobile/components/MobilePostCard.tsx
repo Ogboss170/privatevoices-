@@ -1,6 +1,31 @@
 import React, { useState } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Share, TextInput, ActivityIndicator } from 'react-native'
-import { Heart, MessageCircle, Bookmark, Share2, Trash2, MoreVertical, Flag, ShieldOff, Send } from 'lucide-react-native'
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Alert,
+  Share,
+  TextInput,
+  ActivityIndicator,
+  ScrollView,
+  Modal,
+  SafeAreaView,
+} from 'react-native'
+import {
+  Heart,
+  MessageCircle,
+  Bookmark,
+  Share2,
+  Trash2,
+  MoreVertical,
+  Flag,
+  ShieldOff,
+  Send,
+  X,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react-native'
 import { Image } from 'expo-image'
 import { supabase } from '../lib/supabase'
 import { colors } from '../constants/colors'
@@ -27,6 +52,10 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
   const [commentText, setCommentText] = useState('')
   const [loadingComments, setLoadingComments] = useState(false)
   const [submittingComment, setSubmittingComment] = useState(false)
+  const [carouselWidth, setCarouselWidth] = useState(0)
+  const [activeImageIndex, setActiveImageIndex] = useState(0)
+  const [modalVisible, setModalVisible] = useState(false)
+  const [modalImageIndex, setModalImageIndex] = useState(0)
 
   const mentionMatch = commentText.match(/(?:^|\s)@([a-zA-Z0-9_]*)$/)
   const mentionQuery = mentionMatch ? mentionMatch[1] : null
@@ -259,6 +288,136 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
         style={styles.content}
         onPressMention={onPressMention}
       />
+
+      {/* Attached Media */}
+      {post.imageUrls && post.imageUrls.length > 0 && (
+        <View
+          style={styles.mediaSection}
+          onLayout={(e) => {
+            const w = e.nativeEvent.layout.width
+            if (w > 0) setCarouselWidth(w)
+          }}
+        >
+          {post.imageUrls.length === 1 ? (
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={styles.singleImageContainer}
+              onPress={() => {
+                setModalImageIndex(0)
+                setModalVisible(true)
+              }}
+            >
+              <Image
+                source={{ uri: post.imageUrls[0] }}
+                style={styles.singleImage}
+                contentFit="cover"
+                transition={200}
+              />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.carouselContainer}>
+              <ScrollView
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={(e) => {
+                  if (carouselWidth > 0) {
+                    const idx = Math.round(e.nativeEvent.contentOffset.x / carouselWidth)
+                    setActiveImageIndex(Math.max(0, Math.min(idx, post.imageUrls.length - 1)))
+                  }
+                }}
+              >
+                {post.imageUrls.map((url, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    activeOpacity={0.9}
+                    style={{ width: carouselWidth || 300, height: 240 }}
+                    onPress={() => {
+                      setModalImageIndex(idx)
+                      setModalVisible(true)
+                    }}
+                  >
+                    <Image
+                      source={{ uri: url }}
+                      style={styles.carouselImage}
+                      contentFit="cover"
+                      transition={200}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Counter Pill */}
+              <View style={styles.counterBadge}>
+                <Text style={styles.counterText}>
+                  {activeImageIndex + 1}/{post.imageUrls.length}
+                </Text>
+              </View>
+
+              {/* Dots */}
+              <View style={styles.dotsRow}>
+                {post.imageUrls.map((_, idx) => (
+                  <View
+                    key={idx}
+                    style={[
+                      styles.dot,
+                      idx === activeImageIndex ? styles.activeDot : styles.inactiveDot,
+                    ]}
+                  />
+                ))}
+              </View>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Full-screen Image Viewer Modal */}
+      <Modal visible={modalVisible} transparent animationType="fade">
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalCounter}>
+              {modalImageIndex + 1} / {post.imageUrls?.length ?? 1}
+            </Text>
+            <TouchableOpacity
+              onPress={() => setModalVisible(false)}
+              style={styles.modalCloseBtn}
+            >
+              <X size={24} color="#ffffff" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.modalBody}>
+            {post.imageUrls && post.imageUrls[modalImageIndex] && (
+              <Image
+                source={{ uri: post.imageUrls[modalImageIndex] }}
+                style={styles.modalImage}
+                contentFit="contain"
+              />
+            )}
+
+            {post.imageUrls && post.imageUrls.length > 1 && (
+              <>
+                {modalImageIndex > 0 && (
+                  <TouchableOpacity
+                    style={[styles.modalNavBtn, styles.modalNavLeft]}
+                    onPress={() => setModalImageIndex((prev) => prev - 1)}
+                  >
+                    <ChevronLeft size={28} color="#ffffff" />
+                  </TouchableOpacity>
+                )}
+                {modalImageIndex < post.imageUrls.length - 1 && (
+                  <TouchableOpacity
+                    style={[styles.modalNavBtn, styles.modalNavRight]}
+                    onPress={() => setModalImageIndex((prev) => prev + 1)}
+                  >
+                    <ChevronRight size={28} color="#ffffff" />
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
+          </View>
+        </SafeAreaView>
+      </Modal>
 
       {/* Footer / Actions */}
       <View style={styles.footer}>
@@ -498,5 +657,117 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.gray700,
     flexShrink: 1,
+  },
+  mediaSection: {
+    marginBottom: 14,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  singleImageContainer: {
+    width: '100%',
+    height: 240,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#f3f4f6',
+  },
+  singleImage: {
+    width: '100%',
+    height: '100%',
+  },
+  carouselContainer: {
+    position: 'relative',
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#f3f4f6',
+  },
+  carouselImage: {
+    width: '100%',
+    height: '100%',
+  },
+  counterBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    zIndex: 10,
+  },
+  counterText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  dotsRow: {
+    position: 'absolute',
+    bottom: 10,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    zIndex: 10,
+  },
+  dot: {
+    height: 6,
+    borderRadius: 3,
+  },
+  activeDot: {
+    width: 18,
+    backgroundColor: '#ffffff',
+  },
+  inactiveDot: {
+    width: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  modalCounter: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalCloseBtn: {
+    padding: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 20,
+  },
+  modalBody: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  modalImage: {
+    width: '100%',
+    height: '100%',
+  },
+  modalNavBtn: {
+    position: 'absolute',
+    top: '50%',
+    transform: [{ translateY: -24 }],
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 24,
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalNavLeft: {
+    left: 12,
+  },
+  modalNavRight: {
+    right: 12,
   },
 })

@@ -36,6 +36,7 @@ export default function CreatePostPage(): React.JSX.Element {
   const [content, setContent] = useState('')
   const [audience, setAudience] = useState<'everyone' | 'followers' | 'close_friends'>('everyone')
   const [selectedImages, setSelectedImages] = useState<string[]>([])
+  const [imageFiles, setImageFiles] = useState<File[]>([])
   const [selectedGif, setSelectedGif] = useState<string | null>(null)
   const [showPollCreator, setShowPollCreator] = useState(false)
   const [pollQuestion, setPollQuestion] = useState('')
@@ -88,13 +89,15 @@ export default function CreatePostPage(): React.JSX.Element {
     const files = e.target.files
     if (!files) return
 
-    const newUrls: string[] = []
-    Array.from(files).forEach((file) => {
-      if (selectedImages.length + newUrls.length < 4) {
-        newUrls.push(URL.createObjectURL(file))
-      }
-    })
-    setSelectedImages((prev) => [...prev, ...newUrls].slice(0, 4))
+    const incoming = Array.from(files)
+    const availableSlots = 4 - imageFiles.length
+    const toAdd = incoming.slice(0, availableSlots)
+
+    if (toAdd.length > 0) {
+      setImageFiles((prev) => [...prev, ...toAdd])
+      const newUrls = toAdd.map((file) => URL.createObjectURL(file))
+      setSelectedImages((prev) => [...prev, ...newUrls])
+    }
   }
 
   function handleAddPollOption() {
@@ -139,10 +142,35 @@ export default function CreatePostPage(): React.JSX.Element {
       }
     }
 
+    let uploadedUrls: string[] = []
+    if (imageFiles.length > 0) {
+      for (let i = 0; i < imageFiles.length; i++) {
+        const file = imageFiles[i]
+        const fileExt = file.name.split('.').pop() || 'jpg'
+        const fileName = `${userRes.user.id}/${Date.now()}_${i}.${fileExt}`
+
+        const { error: uploadError } = await supabase.storage
+          .from('post-media')
+          .upload(fileName, file, {
+            contentType: file.type || `image/${fileExt === 'png' ? 'png' : 'jpeg'}`,
+            upsert: true,
+          })
+
+        if (!uploadError) {
+          const { data: publicUrlData } = supabase.storage
+            .from('post-media')
+            .getPublicUrl(fileName)
+          uploadedUrls.push(publicUrlData.publicUrl)
+        } else {
+          console.error('Failed to upload image:', uploadError)
+        }
+      }
+    }
+
     const { error } = await supabase.from('posts').insert({
       author_id: userRes.user.id,
       content: finalContent || 'Voice attachment',
-      image_urls: selectedImages,
+      image_urls: uploadedUrls,
     })
 
     setLoading(false)
@@ -260,7 +288,10 @@ export default function CreatePostPage(): React.JSX.Element {
               <div key={index} className="relative aspect-video rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 group">
                 <img src={src} alt={`Upload preview ${index + 1}`} className="w-full h-full object-cover" />
                 <button
-                  onClick={() => setSelectedImages((prev) => prev.filter((_, i) => i !== index))}
+                  onClick={() => {
+                    setSelectedImages((prev) => prev.filter((_, i) => i !== index))
+                    setImageFiles((prev) => prev.filter((_, i) => i !== index))
+                  }}
                   className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/80 text-white rounded-full transition-all"
                   title="Remove image"
                 >

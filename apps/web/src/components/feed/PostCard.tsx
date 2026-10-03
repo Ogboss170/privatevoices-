@@ -3,7 +3,7 @@
 import React, { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Heart, MessageCircle, Bookmark, Share2, Trash2, MoreVertical, Flag, ShieldOff } from 'lucide-react'
+import { Heart, MessageCircle, Bookmark, Share2, Trash2, MoreVertical, Flag, ShieldOff, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import type { Post } from '@private-voices/shared'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import FormattedText from '../common/FormattedText'
@@ -27,6 +27,7 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
   const [loadingComments, setLoadingComments] = useState(false)
   const [submittingComment, setSubmittingComment] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
 
   const isOwner = currentUserId === post.authorId
 
@@ -267,19 +268,162 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
         <FormattedText text={post.content} />
       </div>
 
-      {/* Images */}
+      {/* Images Grid & Lightbox */}
       {post.imageUrls && post.imageUrls.length > 0 && (
-        <div className="rounded-xl overflow-hidden border border-gray-200">
-          {post.imageUrls.map((url, i) => (
-            <Image
-              key={i}
-              src={url}
-              alt="Post attachment"
-              width={600}
-              height={400}
-              className="w-full object-cover max-h-96"
+        <div className="mt-2">
+          {post.imageUrls.length === 1 && (
+            <div
+              className="relative w-full aspect-[16/9] max-h-[440px] rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 cursor-pointer group"
+              onClick={() => setLightboxIndex(0)}
+            >
+              <Image
+                src={post.imageUrls[0]}
+                alt="Voice attachment"
+                fill
+                className="object-cover group-hover:scale-[1.01] transition-transform duration-200"
+              />
+            </div>
+          )}
+
+          {post.imageUrls.length === 2 && (
+            <div className="grid grid-cols-2 gap-1.5 aspect-[16/9] max-h-[440px] rounded-2xl overflow-hidden border border-gray-200">
+              {post.imageUrls.map((url, i) => (
+                <div
+                  key={i}
+                  className="relative w-full h-full bg-gray-100 cursor-pointer group overflow-hidden"
+                  onClick={() => setLightboxIndex(i)}
+                >
+                  <Image
+                    src={url}
+                    alt={`Voice attachment ${i + 1}`}
+                    fill
+                    className="object-cover group-hover:scale-[1.02] transition-transform duration-200"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {post.imageUrls.length === 3 && (
+            <div className="grid grid-cols-2 grid-rows-2 gap-1.5 aspect-[16/9] max-h-[440px] rounded-2xl overflow-hidden border border-gray-200">
+              <div
+                className="relative row-span-2 col-span-1 bg-gray-100 cursor-pointer group overflow-hidden"
+                onClick={() => setLightboxIndex(0)}
+              >
+                <Image
+                  src={post.imageUrls[0]}
+                  alt="Voice attachment 1"
+                  fill
+                  className="object-cover group-hover:scale-[1.02] transition-transform duration-200"
+                />
+              </div>
+              <div
+                className="relative row-span-1 col-span-1 bg-gray-100 cursor-pointer group overflow-hidden"
+                onClick={() => setLightboxIndex(1)}
+              >
+                <Image
+                  src={post.imageUrls[1]}
+                  alt="Voice attachment 2"
+                  fill
+                  className="object-cover group-hover:scale-[1.02] transition-transform duration-200"
+                />
+              </div>
+              <div
+                className="relative row-span-1 col-span-1 bg-gray-100 cursor-pointer group overflow-hidden"
+                onClick={() => setLightboxIndex(2)}
+              >
+                <Image
+                  src={post.imageUrls[2]}
+                  alt="Voice attachment 3"
+                  fill
+                  className="object-cover group-hover:scale-[1.02] transition-transform duration-200"
+                />
+              </div>
+            </div>
+          )}
+
+          {post.imageUrls.length >= 4 && (
+            <div className="grid grid-cols-2 grid-rows-2 gap-1.5 aspect-[16/9] max-h-[440px] rounded-2xl overflow-hidden border border-gray-200">
+              {post.imageUrls.slice(0, 4).map((url, i) => (
+                <div
+                  key={i}
+                  className="relative w-full h-full bg-gray-100 cursor-pointer group overflow-hidden"
+                  onClick={() => setLightboxIndex(i)}
+                >
+                  <Image
+                    src={url}
+                    alt={`Voice attachment ${i + 1}`}
+                    fill
+                    className="object-cover group-hover:scale-[1.02] transition-transform duration-200"
+                  />
+                  {i === 3 && post.imageUrls.length > 4 && (
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white font-bold text-lg">
+                      +{post.imageUrls.length - 4}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Lightbox Modal */}
+      {lightboxIndex !== null && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 backdrop-blur-sm"
+          onClick={() => setLightboxIndex(null)}
+        >
+          <button
+            onClick={() => setLightboxIndex(null)}
+            className="absolute top-4 right-4 p-2 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition-colors z-50"
+            title="Close"
+          >
+            <X size={24} />
+          </button>
+
+          {post.imageUrls.length > 1 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setLightboxIndex((prev) => (prev! > 0 ? prev! - 1 : post.imageUrls.length - 1))
+              }}
+              className="absolute left-4 p-2 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition-colors z-50"
+              title="Previous"
+            >
+              <ChevronLeft size={28} />
+            </button>
+          )}
+
+          <div
+            className="relative max-w-4xl max-h-[85vh] w-full h-full flex items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={post.imageUrls[lightboxIndex]}
+              alt={`Full size attachment ${lightboxIndex + 1}`}
+              className="max-h-[85vh] max-w-full object-contain rounded-lg"
             />
-          ))}
+          </div>
+
+          {post.imageUrls.length > 1 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setLightboxIndex((prev) => (prev! < post.imageUrls.length - 1 ? prev! + 1 : 0))
+              }}
+              className="absolute right-4 p-2 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition-colors z-50"
+              title="Next"
+            >
+              <ChevronRight size={28} />
+            </button>
+          )}
+
+          {post.imageUrls.length > 1 && (
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/60 px-3 py-1 rounded-full text-white text-xs font-medium">
+              {lightboxIndex + 1} / {post.imageUrls.length}
+            </div>
+          )}
         </div>
       )}
 
