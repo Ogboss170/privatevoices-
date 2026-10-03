@@ -44,7 +44,7 @@ export default function AdminDashboardPage(): React.JSX.Element {
         { count: reportCount, data: reportRows },
       ] = await Promise.all([
         supabase.from('profiles').select('*', { count: 'exact' }).order('created_at', { ascending: false }).limit(50),
-        supabase.from('posts').select('*, author:profiles(username, display_name)').order('created_at', { ascending: false }).limit(50),
+        supabase.from('posts').select('*, author:profiles!posts_author_id_fkey(username, display_name)').order('created_at', { ascending: false }).limit(50),
         supabase.from('whispers').select('*').order('created_at', { ascending: false }).limit(50),
         supabase.from('reports').select('*').order('created_at', { ascending: false }).limit(50),
       ])

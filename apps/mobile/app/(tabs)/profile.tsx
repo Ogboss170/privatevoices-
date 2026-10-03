@@ -62,7 +62,7 @@ export default function ProfileScreen() {
 
     const { data: myPosts } = await supabase
       .from('posts')
-      .select('*, author:profiles(id, username, display_name, avatar_url)')
+      .select('*, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url)')
       .eq('author_id', userId)
       .order('created_at', { ascending: false })
 

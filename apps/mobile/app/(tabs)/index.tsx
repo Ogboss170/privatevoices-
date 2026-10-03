@@ -42,7 +42,7 @@ export default function HomeScreen() {
     }
     let query = supabase
       .from('posts')
-      .select('*, author:profiles(id, username, display_name, avatar_url)')
+      .select('*, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url)')
       .order('created_at', { ascending: false })
 
     if (activeTab === 'following' && currentUserId) {

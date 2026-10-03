@@ -32,7 +32,7 @@ export class ExploreService {
           .limit(10),
         this.supabase.admin
           .from('posts')
-          .select('*, author:profiles(id, username, display_name, avatar_url)')
+          .select('*, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url)')
           .ilike('content', `%${term}%`)
           .order('created_at', { ascending: false })
           .limit(10),

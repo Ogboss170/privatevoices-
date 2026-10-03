@@ -98,7 +98,7 @@ export default function CommunityDetailPage(): React.JSX.Element {
     // 4. Fetch community posts
     const { data: rawPosts } = await supabase
       .from('posts')
-      .select('*, author:profiles(id, username, display_name, avatar_url)')
+      .select('*, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url)')
       .eq('community_id', comm.id)
       .order('created_at', { ascending: false })
 

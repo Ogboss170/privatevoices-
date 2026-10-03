@@ -52,7 +52,7 @@ async function getProfileData(rawUsername: string, currentUserId?: string) {
   if (canViewPosts) {
     const { data: postRows } = await supabase
       .from('posts')
-      .select('*, author:profiles(id, username, display_name, avatar_url)')
+      .select('*, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url)')
       .eq('author_id', profile.id)
       .order('created_at', { ascending: false })
 

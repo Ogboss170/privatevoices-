@@ -30,7 +30,7 @@ export class PostsService {
         content: dto.content,
         image_urls: dto.imageUrls ?? [],
       })
-      .select('*, author:profiles(id, username, display_name, avatar_url)')
+      .select('*, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url)')
       .single();
 
     if (error || !post) {
@@ -62,7 +62,7 @@ export class PostsService {
     const offset = (page - 1) * limit;
     let query = this.supabase.admin
       .from('posts')
-      .select('*, author:profiles(id, username, display_name, avatar_url)', { count: 'exact' });
+      .select('*, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url)', { count: 'exact' });
 
     if (feedType === 'following' && user) {
       const { data: following } = await this.supabase.admin
@@ -101,7 +101,7 @@ export class PostsService {
   async getPostById(postId: string, currentUserId?: string) {
     const { data: post, error } = await this.supabase.admin
       .from('posts')
-      .select('*, author:profiles(id, username, display_name, avatar_url)')
+      .select('*, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url)')
       .eq('id', postId)
       .single();
 

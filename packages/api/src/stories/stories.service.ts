@@ -22,7 +22,7 @@ export class StoriesService {
         media_type: dto.mediaType ?? (dto.imageUrl ? 'image' : 'text'),
         visibility: dto.visibility ?? 'everyone',
       })
-      .select('*, author:profiles(id, username, display_name, avatar_url)')
+      .select('*, author:profiles!stories_author_id_fkey(id, username, display_name, avatar_url)')
       .single();
 
     if (error || !story) throw new InternalServerErrorException('Failed to create story');
@@ -35,7 +35,7 @@ export class StoriesService {
 
     const { data: stories, error } = await this.supabase.admin
       .from('stories')
-      .select('*, author:profiles(id, username, display_name, avatar_url)')
+      .select('*, author:profiles!stories_author_id_fkey(id, username, display_name, avatar_url)')
       .gt('expires_at', now)
       .order('created_at', { ascending: false });
 

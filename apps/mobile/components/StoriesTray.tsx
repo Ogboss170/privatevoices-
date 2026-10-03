@@ -41,7 +41,7 @@ export function StoriesTray() {
     const now = new Date().toISOString()
     const { data: stories } = await supabase
       .from('stories')
-      .select('*, author:profiles(id, username, display_name, avatar_url)')
+      .select('*, author:profiles!stories_author_id_fkey(id, username, display_name, avatar_url)')
       .gt('expires_at', now)
       .order('created_at', { ascending: false })
 
