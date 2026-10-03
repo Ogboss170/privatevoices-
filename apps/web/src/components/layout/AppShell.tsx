@@ -1,10 +1,11 @@
 'use client'
 
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Home, Search, PlusSquare, Inbox, Users, User, Bell } from 'lucide-react'
 import RightSidebar from '@/components/layout/RightSidebar'
+import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 const NAV_ITEMS = [
   { href: '/feed',        label: 'Home',        Icon: Home },
@@ -18,6 +19,77 @@ const NAV_ITEMS = [
 
 export default function AppShell({ children }: { children: React.ReactNode }): React.JSX.Element {
   const pathname = usePathname()
+  const [unreadNotifications, setUnreadNotifications] = useState(0)
+  const [unreadMessages, setUnreadMessages] = useState(0)
+
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient()
+
+    async function fetchCounts() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+
+        // 1. Unread notifications
+        const { count: notifCount } = await supabase
+          .from('notifications')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('is_read', false)
+
+        setUnreadNotifications(notifCount || 0)
+
+        // 2. Unread whispers
+        const { count: whisperCount } = await supabase
+          .from('whispers')
+          .select('*', { count: 'exact', head: true })
+          .eq('recipient_id', user.id)
+          .eq('is_read', false)
+
+        // 3. Unread direct messages
+        const { data: userConvs } = await supabase
+          .from('conversations')
+          .select('id')
+          .or(`user_a_id.eq.${user.id},user_b_id.eq.${user.id}`)
+
+        let dmCount = 0
+        if (userConvs && userConvs.length > 0) {
+          const convIds = userConvs.map((c: any) => c.id)
+          const { count: unreadDmCount } = await supabase
+            .from('messages')
+            .select('*', { count: 'exact', head: true })
+            .in('conversation_id', convIds)
+            .eq('is_read', false)
+            .neq('sender_id', user.id)
+
+          dmCount = unreadDmCount || 0
+        }
+
+        setUnreadMessages((whisperCount || 0) + dmCount)
+      } catch (err) {
+        console.error('Error fetching shell counts:', err)
+      }
+    }
+
+    fetchCounts()
+
+    const channel = supabase
+      .channel('appshell:live_counts')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => {
+        fetchCounts()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => {
+        fetchCounts()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'whispers' }, () => {
+        fetchCounts()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [pathname])
 
   const isCreatePage = pathname === '/create' || pathname.startsWith('/create/')
   if (isCreatePage) {
@@ -45,18 +117,35 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
           <nav className="flex-1 space-y-1.5">
             {NAV_ITEMS.map(({ href, label, Icon }) => {
               const isActive = pathname === href || pathname.startsWith(href + '/')
+              const badgeCount =
+                href === '/notifications' ? unreadNotifications : href === '/inbox' ? unreadMessages : 0
+
               return (
                 <Link
                   key={href}
                   href={href}
-                  className={`flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
+                  className={`flex items-center justify-between px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
                     isActive
                       ? 'bg-brand-600 text-white shadow-md shadow-brand-600/20'
                       : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                   }`}
                 >
-                  <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
-                  <span>{label}</span>
+                  <div className="flex items-center gap-3.5">
+                    <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+                    <span>{label}</span>
+                  </div>
+
+                  {badgeCount > 0 && (
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full font-bold transition-transform ${
+                        isActive
+                          ? 'bg-white text-brand-600'
+                          : 'bg-brand-600 text-white shadow-xs'
+                      }`}
+                    >
+                      {badgeCount > 99 ? '99+' : badgeCount}
+                    </span>
+                  )}
                 </Link>
               )
             })}
@@ -89,15 +178,23 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
       <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-gray-200 flex items-center justify-around px-2 py-2 z-20 shadow-lg">
         {NAV_ITEMS.slice(0, 5).map(({ href, label, Icon }) => {
           const isActive = pathname === href || pathname.startsWith(href + '/')
+          const badgeCount =
+            href === '/notifications' ? unreadNotifications : href === '/inbox' ? unreadMessages : 0
+
           return (
             <Link
               key={href}
               href={href}
-              className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-colors ${
+              className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-colors relative ${
                 isActive ? 'text-brand-600 font-bold' : 'text-gray-400 hover:text-gray-600'
               }`}
             >
-              <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
+              <div className="relative">
+                <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
+                {badgeCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full ring-2 ring-white" />
+                )}
+              </div>
               <span className="text-[10px]">{label}</span>
             </Link>
           )

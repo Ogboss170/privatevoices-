@@ -1,11 +1,58 @@
-import React from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { View, TouchableOpacity, StyleSheet } from 'react-native'
 import { Tabs, useRouter } from 'expo-router'
 import { Bell } from 'lucide-react-native'
 import { FloatingTabBar } from '../../components/FloatingTabBar'
+import { supabase } from '../../lib/supabase'
 
 export default function TabLayout() {
   const router = useRouter()
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) {
+        setCurrentUserId(data.user.id)
+      }
+    })
+  }, [])
+
+  const fetchUnreadCount = useCallback(async () => {
+    if (!currentUserId) return
+    try {
+      const { count } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', currentUserId)
+        .eq('is_read', false)
+
+      setUnreadNotifCount(count ?? 0)
+    } catch (err) {
+      console.error('Error fetching unread notifs count:', err)
+    }
+  }, [currentUserId])
+
+  useEffect(() => {
+    fetchUnreadCount()
+
+    if (!currentUserId) return
+
+    const channel = supabase
+      .channel('tablayout:notifications')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notifications' },
+        () => {
+          fetchUnreadCount()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [currentUserId, fetchUnreadCount])
 
   return (
     <Tabs
@@ -21,7 +68,7 @@ export default function TabLayout() {
             activeOpacity={0.7}
           >
             <Bell color="#111827" size={22} />
-            <View style={styles.headerBadge} />
+            {unreadNotifCount > 0 && <View style={styles.headerBadge} />}
           </TouchableOpacity>
         ),
       }}
