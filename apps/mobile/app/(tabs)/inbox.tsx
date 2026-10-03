@@ -9,8 +9,10 @@ import {
   ActivityIndicator,
   RefreshControl,
   Share,
+  Modal,
+  TextInput,
 } from 'react-native'
-import { Trash2, Share2, ShieldCheck, MessageCircle } from 'lucide-react-native'
+import { Trash2, Share2, ShieldCheck, MessageCircle, UserPlus, Search, X } from 'lucide-react-native'
 import { Image } from 'expo-image'
 import { supabase } from '../../lib/supabase'
 import { colors } from '../../constants/colors'
@@ -31,6 +33,52 @@ export default function InboxScreen() {
     partner: any
   } | null>(null)
   const [chatModalVisible, setChatModalVisible] = useState(false)
+
+  // New Chat modal state
+  const [showNewChatModal, setShowNewChatModal] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [searching, setSearching] = useState(false)
+
+  const handleSearchUsers = async (query: string) => {
+    setSearchQuery(query)
+    if (!query.trim() || !currentUserId) {
+      setSearchResults([])
+      return
+    }
+
+    setSearching(true)
+    const cleanQuery = query.trim().replace(/^@/, '')
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, username, display_name, avatar_url')
+      .neq('id', currentUserId)
+      .or(`username.ilike.%${cleanQuery}%,display_name.ilike.%${cleanQuery}%`)
+      .limit(10)
+
+    setSearchResults(data ?? [])
+    setSearching(false)
+  }
+
+  async function handleStartNewChat(targetUser: any) {
+    if (!currentUserId) return
+    setShowNewChatModal(false)
+
+    const [userA, userB] = currentUserId < targetUser.id ? [currentUserId, targetUser.id] : [targetUser.id, currentUserId]
+    const { data } = await supabase
+      .from('conversations')
+      .upsert({ user_a_id: userA, user_b_id: userB }, { onConflict: 'user_a_id,user_b_id' })
+      .select('id')
+      .single()
+
+    if (data) {
+      setSelectedConversation({
+        id: data.id,
+        partner: targetUser,
+      })
+      setChatModalVisible(true)
+    }
+  }
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -227,6 +275,17 @@ export default function InboxScreen() {
             )}
           </View>
         </TouchableOpacity>
+
+        {activeTab === 'messages' && (
+          <TouchableOpacity
+            style={styles.newChatBtn}
+            onPress={() => setShowNewChatModal(true)}
+            activeOpacity={0.7}
+          >
+            <UserPlus size={16} color={colors.brand} />
+            <Text style={styles.newChatBtnText}>New Chat</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Content */}
@@ -360,6 +419,66 @@ export default function InboxScreen() {
           onClose={handleCloseChat}
         />
       )}
+
+      {/* New Chat Search Modal */}
+      <Modal visible={showNewChatModal} animationType="slide" transparent={true} onRequestClose={() => setShowNewChatModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>New Direct Message</Text>
+              <TouchableOpacity onPress={() => setShowNewChatModal(false)} style={styles.closeBtn}>
+                <X size={20} color="#94a3b8" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.searchBar}>
+              <Search size={18} color="#94a3b8" />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search user by name or @username..."
+                placeholderTextColor="#94a3b8"
+                value={searchQuery}
+                onChangeText={handleSearchUsers}
+                autoFocus
+              />
+            </View>
+
+            {searching ? (
+              <ActivityIndicator color={colors.brand} style={{ marginVertical: 20 }} />
+            ) : searchResults.length === 0 ? (
+              <Text style={styles.noSearchText}>
+                {searchQuery.trim() ? 'No users found matching query.' : 'Type a username or display name to search.'}
+              </Text>
+            ) : (
+              <FlatList
+                data={searchResults}
+                keyExtractor={(item) => item.id}
+                style={{ maxHeight: 300, marginVertical: 10 }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.searchResultItem}
+                    onPress={() => handleStartNewChat(item)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.avatarCircle}>
+                      {item.avatar_url ? (
+                        <Image source={{ uri: item.avatar_url }} style={styles.avatarImg} />
+                      ) : (
+                        <Text style={styles.avatarText}>{(item.display_name || item.username).charAt(0).toUpperCase()}</Text>
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.searchResultName}>{item.display_name || item.username}</Text>
+                      <Text style={styles.searchResultHandle}>@{item.username}</Text>
+                    </View>
+                    <Text style={styles.chatStartText}>Chat</Text>
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   )
 }
@@ -486,5 +605,94 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 11,
     fontWeight: '700',
+  },
+  newChatBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: 'auto',
+    alignSelf: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: colors.brandLight,
+  },
+  newChatBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.brand,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    maxHeight: '80%',
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.gray900,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.gray100,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 40,
+    marginBottom: 12,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 14,
+    color: colors.gray900,
+  },
+  noSearchText: {
+    textAlign: 'center',
+    color: colors.gray500,
+    fontSize: 14,
+    marginVertical: 24,
+  },
+  searchResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray100,
+    gap: 12,
+  },
+  searchResultName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.gray900,
+  },
+  searchResultHandle: {
+    fontSize: 12,
+    color: colors.gray500,
+  },
+  chatStartText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.brand,
   },
 })

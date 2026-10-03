@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, Suspense } from 'react'
 import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
-import { Trash2, Share2, Shield, Flag, Check, Copy, MessageCircle, Loader2 } from 'lucide-react'
+import { Trash2, Share2, Shield, Flag, Check, Copy, MessageCircle, Loader2, UserPlus, Search, X } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import ChatDrawer from '@/components/messages/ChatDrawer'
 
@@ -23,6 +23,12 @@ function InboxContent(): React.JSX.Element {
   const [shareStatus, setShareStatus] = useState<{ [id: string]: 'copied' | 'shared' | 'error' | null }>({})
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({})
 
+  // New Chat Modal state
+  const [showNewChatModal, setShowNewChatModal] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [searching, setSearching] = useState(false)
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) {
@@ -30,6 +36,85 @@ function InboxContent(): React.JSX.Element {
       }
     })
   }, [supabase])
+
+  const handleSearchUsers = async (query: string) => {
+    setSearchQuery(query)
+    if (!query.trim()) {
+      setSearchResults([])
+      return
+    }
+    setSearching(true)
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, username, display_name, avatar_url')
+        .neq('id', currentUserId || '')
+        .or(`username.ilike.%${query.trim()}%,display_name.ilike.%${query.trim()}%`)
+        .limit(10)
+
+      if (!error && data) {
+        setSearchResults(data)
+      }
+    } catch (err) {
+      console.error('Error searching users for chat:', err)
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const handleStartNewChat = async (targetUser: any) => {
+    if (!currentUserId) return
+    setShowNewChatModal(false)
+    setSearchQuery('')
+    setSearchResults([])
+
+    // Check if conversation already exists between currentUserId and targetUser.id
+    const userA = currentUserId < targetUser.id ? currentUserId : targetUser.id
+    const userB = currentUserId < targetUser.id ? targetUser.id : currentUserId
+
+    const { data: existingConv } = await supabase
+      .from('conversations')
+      .select('*')
+      .eq('user_a_id', userA)
+      .eq('user_b_id', userB)
+      .single()
+
+    if (existingConv) {
+      setActiveConversation({
+        id: existingConv.id,
+        partner: {
+          id: targetUser.id,
+          username: targetUser.username,
+          displayName: targetUser.display_name,
+          avatarUrl: targetUser.avatar_url,
+        },
+      })
+    } else {
+      const { data: newConv, error } = await supabase
+        .from('conversations')
+        .insert({
+          user_a_id: userA,
+          user_b_id: userB,
+          last_message: 'Started a new conversation',
+          last_message_at: new Date().toISOString(),
+        })
+        .select()
+        .single()
+
+      if (!error && newConv) {
+        setActiveConversation({
+          id: newConv.id,
+          partner: {
+            id: targetUser.id,
+            username: targetUser.username,
+            displayName: targetUser.display_name,
+            avatarUrl: targetUser.avatar_url,
+          },
+        })
+        fetchInboxData()
+      }
+    }
+  }
 
   const fetchInboxData = useCallback(async () => {
     if (!currentUserId) return
@@ -175,6 +260,15 @@ function InboxContent(): React.JSX.Element {
           <h1 className="text-xl font-bold text-gray-900">Inbox</h1>
           <p className="text-xs text-gray-500">One-way anonymous Whispers & direct 1-on-1 chats</p>
         </div>
+        {activeTab === 'messages' && (
+          <button
+            onClick={() => setShowNewChatModal(true)}
+            className="btn-primary text-xs py-2 px-3 flex items-center gap-1.5 shadow-sm"
+          >
+            <UserPlus size={14} />
+            <span>New Chat</span>
+          </button>
+        )}
       </div>
 
       {/* Tab Filter */}
@@ -321,8 +415,15 @@ function InboxContent(): React.JSX.Element {
             <div className="text-5xl">💬</div>
             <h3 className="font-bold text-gray-900">No Direct Conversations</h3>
             <p className="text-xs text-gray-500 max-w-xs mx-auto">
-              Start an identity-verified chat with users directly from their profile pages.
+              Start an identity-verified chat with users directly or search for a user with the New Chat button.
             </p>
+            <button
+              onClick={() => setShowNewChatModal(true)}
+              className="btn-primary text-xs py-2 px-4 inline-flex items-center gap-1.5 shadow-sm mt-2"
+            >
+              <UserPlus size={14} />
+              <span>Start New Chat</span>
+            </button>
           </div>
         ) : (
           <div className="card divide-y divide-gray-100 overflow-hidden shadow-xs">
@@ -408,8 +509,89 @@ function InboxContent(): React.JSX.Element {
           onClose={() => setActiveConversation(null)}
         />
       )}
+
+      {/* New Chat User Search Modal */}
+      {showNewChatModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-xl animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
+                <UserPlus size={18} className="text-brand-600" />
+                <span>Start a New Chat</span>
+              </h3>
+              <button
+                onClick={() => setShowNewChatModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-3 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search by username or name..."
+                value={searchQuery}
+                onChange={(e) => handleSearchUsers(e.target.value)}
+                autoFocus
+                className="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition-all"
+              />
+            </div>
+
+            <div className="max-h-64 overflow-y-auto space-y-1 divide-y divide-gray-50">
+              {searching ? (
+                <div className="py-8 text-center text-gray-400">
+                  <Loader2 size={20} className="animate-spin text-brand-600 mx-auto mb-1" />
+                  <span className="text-xs">Searching users...</span>
+                </div>
+              ) : searchResults.length === 0 ? (
+                <div className="py-8 text-center text-gray-400 text-xs">
+                  {searchQuery.trim()
+                    ? 'No users found matching query.'
+                    : 'Type a username or display name to search.'}
+                </div>
+              ) : (
+                searchResults.map((user) => (
+                  <div
+                    key={user.id}
+                    onClick={() => handleStartNewChat(user)}
+                    className="p-3 flex items-center justify-between hover:bg-brand-50/50 rounded-xl transition-colors cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center font-bold text-brand-600 overflow-hidden">
+                        {user.avatar_url ? (
+                          <Image
+                            src={user.avatar_url}
+                            alt={user.display_name || user.username}
+                            width={40}
+                            height={40}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          (user.display_name || user.username).charAt(0).toUpperCase()
+                        )}
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-gray-900 group-hover:text-brand-600 transition-colors">
+                          {user.display_name || user.username}
+                        </h4>
+                        <p className="text-xs text-gray-400">@{user.username}</p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-semibold text-brand-600 bg-brand-50 group-hover:bg-brand-600 group-hover:text-white px-3 py-1 rounded-full transition-colors">
+                      Chat
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
+}
 }
 
 export default function InboxPage(): React.JSX.Element {
