@@ -26,6 +26,7 @@ import { colors } from '../../constants/colors'
 import { PublicProfileModal } from '../../components/PublicProfileModal'
 import { MobilePostCard } from '../../components/MobilePostCard'
 import type { Post } from '@private-voices/shared'
+import { extractPostMediaAndCleanContent } from '@private-voices/shared'
 
 type SearchTab = 'all' | 'voices' | 'people' | 'communities'
 
@@ -110,6 +111,7 @@ export default function ExploreScreen() {
           }
 
           const authorData = p.author || profileMap.get(p.author_id)
+          const { content: cleanContent, imageUrls } = extractPostMediaAndCleanContent(p.content, p.image_urls)
 
           return {
             id: p.id,
@@ -120,8 +122,8 @@ export default function ExploreScreen() {
               displayName: authorData?.display_name || 'User',
               avatarUrl: authorData?.avatar_url || null,
             },
-            content: p.content,
-            imageUrls: p.image_urls ?? [],
+            content: cleanContent,
+            imageUrls,
             hashtags: [],
             likeCount,
             commentCount,

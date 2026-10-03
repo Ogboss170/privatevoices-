@@ -18,6 +18,7 @@ import { FollowListModal } from '../../components/FollowListModal'
 import { MobilePostCard } from '../../components/MobilePostCard'
 import { PublicProfileModal } from '../../components/PublicProfileModal'
 import type { Post } from '@private-voices/shared'
+import { extractPostMediaAndCleanContent } from '@private-voices/shared'
 import type { User } from '@supabase/supabase-js'
 
 export default function ProfileScreen() {
@@ -95,6 +96,7 @@ export default function ProfileScreen() {
             // ignore
           }
 
+          const { content: cleanContent, imageUrls } = extractPostMediaAndCleanContent(p.content, p.image_urls)
           return {
             id: p.id,
             authorId: p.author_id,
@@ -104,8 +106,8 @@ export default function ProfileScreen() {
               displayName: p.author?.display_name || 'User',
               avatarUrl: p.author?.avatar_url || null,
             },
-            content: p.content,
-            imageUrls: p.image_urls ?? [],
+            content: cleanContent,
+            imageUrls,
             hashtags: [],
             likeCount,
             commentCount,
@@ -170,6 +172,7 @@ export default function ProfileScreen() {
             }
 
             const authorObj = p.author || profileMap.get(p.author_id)
+            const { content: cleanContent, imageUrls } = extractPostMediaAndCleanContent(p.content, p.image_urls)
             return {
               id: p.id,
               authorId: p.author_id,
@@ -179,8 +182,8 @@ export default function ProfileScreen() {
                 displayName: authorObj?.display_name || 'User',
                 avatarUrl: authorObj?.avatar_url || null,
               },
-              content: p.content,
-              imageUrls: p.image_urls ?? [],
+              content: cleanContent,
+              imageUrls,
               hashtags: [],
               likeCount,
               commentCount,

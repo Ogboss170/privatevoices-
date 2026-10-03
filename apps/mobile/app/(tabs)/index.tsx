@@ -15,6 +15,7 @@ import { MobilePostCard } from '../../components/MobilePostCard'
 import { StoriesTray } from '../../components/StoriesTray'
 import { PublicProfileModal } from '../../components/PublicProfileModal'
 import type { Post } from '@private-voices/shared'
+import { extractPostMediaAndCleanContent } from '@private-voices/shared'
 
 const TABS = [
   { id: 'for-you', label: 'For You' },
@@ -115,6 +116,7 @@ export default function HomeScreen() {
             }
 
             const authorData = p.author || profileMap.get(p.author_id)
+            const { content: cleanContent, imageUrls } = extractPostMediaAndCleanContent(p.content, p.image_urls)
 
             return {
               id: p.id,
@@ -125,8 +127,8 @@ export default function HomeScreen() {
                 displayName: authorData?.display_name || 'User',
                 avatarUrl: authorData?.avatar_url || null,
               },
-              content: p.content,
-              imageUrls: p.image_urls ?? [],
+              content: cleanContent,
+              imageUrls,
               hashtags: [],
               likeCount,
               commentCount,

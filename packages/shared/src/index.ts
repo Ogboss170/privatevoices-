@@ -222,3 +222,45 @@ export interface AppNotification {
   createdAt: string;
   updatedAt?: string;
 }
+
+// ─── Post Media Extraction Helper ──────────────────────────────────────────────
+
+export function extractPostMediaAndCleanContent(
+  rawContent: string,
+  existingImageUrls: string[] = []
+): { content: string; imageUrls: string[] } {
+  if (!rawContent && (!existingImageUrls || existingImageUrls.length === 0)) {
+    return { content: '', imageUrls: [] };
+  }
+
+  const extractedUrls: string[] = [...(existingImageUrls || [])];
+
+  // 1. Extract markdown image tags: ![alt](url)
+  const markdownImgRegex = /!\[.*?\]\((https?:\/\/[^\s\)]+)\)/gi;
+  let cleanedContent = (rawContent || '').replace(markdownImgRegex, (_, url) => {
+    if (url && !extractedUrls.includes(url)) {
+      extractedUrls.push(url);
+    }
+    return '';
+  });
+
+  // 2. Extract standalone image & GIF URLs (e.g. .gif, .png, .jpg, .jpeg, .webp, giphy, tenor, unsplash, supabase storage)
+  const standaloneMediaUrlRegex = /(https?:\/\/[^\s]+(?:\.(?:png|jpg|jpeg|gif|webp)|giphy\.com|tenor\.com|unsplash\.com|supabase\.co\/storage\/v1\/object\/public\/post-media)[^\s]*)/gi;
+
+  cleanedContent = cleanedContent.replace(standaloneMediaUrlRegex, (url) => {
+    const cleanUrl = url.replace(/[.,;!?]+$/, '');
+    if (cleanUrl && !extractedUrls.includes(cleanUrl)) {
+      extractedUrls.push(cleanUrl);
+    }
+    return '';
+  });
+
+  // Clean up extra blank lines created by removal
+  cleanedContent = cleanedContent.replace(/\n{3,}/g, '\n\n').trim();
+
+  return {
+    content: cleanedContent,
+    imageUrls: extractedUrls,
+  };
+}
+

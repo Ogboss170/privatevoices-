@@ -7,6 +7,7 @@ import PostCard from '@/components/feed/PostCard'
 import StoriesTray from '@/components/stories/StoriesTray'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import type { Post } from '@private-voices/shared'
+import { extractPostMediaAndCleanContent } from '@private-voices/shared'
 
 const TABS = [
   { id: 'for-you', label: 'For You' },
@@ -109,6 +110,7 @@ export default function FeedPage() {
             }
 
             const authorData = p.author || profileMap.get(p.author_id)
+            const { content: cleanContent, imageUrls } = extractPostMediaAndCleanContent(p.content, p.image_urls)
 
             return {
               id: p.id,
@@ -119,8 +121,8 @@ export default function FeedPage() {
                 displayName: authorData?.display_name || 'User',
                 avatarUrl: authorData?.avatar_url || null,
               },
-              content: p.content,
-              imageUrls: p.image_urls ?? [],
+              content: cleanContent,
+              imageUrls,
               hashtags: [],
               likeCount,
               commentCount,

@@ -9,6 +9,7 @@ import EditProfileModal from '@/components/profile/EditProfileModal'
 import FollowListModal from '@/components/profile/FollowListModal'
 import PostCard from '@/components/feed/PostCard'
 import type { Post } from '@private-voices/shared'
+import { extractPostMediaAndCleanContent } from '@private-voices/shared'
 import { useRouter } from 'next/navigation'
 
 export default function ProfileDashboardPage(): React.JSX.Element {
@@ -69,6 +70,7 @@ export default function ProfileDashboardPage(): React.JSX.Element {
             supabase.from('saved_posts').select('user_id').match({ user_id: userId, post_id: p.id }).maybeSingle(),
           ])
 
+          const { content: cleanContent, imageUrls } = extractPostMediaAndCleanContent(p.content, p.image_urls)
           return {
             id: p.id,
             authorId: p.author_id,
@@ -78,8 +80,8 @@ export default function ProfileDashboardPage(): React.JSX.Element {
               displayName: p.author?.display_name || p.author?.username || 'User',
               avatarUrl: p.author?.avatar_url,
             },
-            content: p.content,
-            imageUrls: p.image_urls ?? [],
+            content: cleanContent,
+            imageUrls,
             hashtags: [],
             likeCount: likeCount ?? 0,
             commentCount: commentCount ?? 0,
@@ -121,6 +123,7 @@ export default function ProfileDashboardPage(): React.JSX.Element {
               supabase.from('likes').select('user_id').match({ user_id: userId, post_id: p.id }).maybeSingle(),
             ])
 
+            const { content: cleanContent, imageUrls } = extractPostMediaAndCleanContent(p.content, p.image_urls)
             return {
               id: p.id,
               authorId: p.author_id,
@@ -130,8 +133,8 @@ export default function ProfileDashboardPage(): React.JSX.Element {
                 displayName: p.author?.display_name || p.author?.username || 'User',
                 avatarUrl: p.author?.avatar_url,
               },
-              content: p.content,
-              imageUrls: p.image_urls ?? [],
+              content: cleanContent,
+              imageUrls,
               hashtags: [],
               likeCount: likeCount ?? 0,
               commentCount: commentCount ?? 0,

@@ -167,6 +167,10 @@ export default function CreatePostPage(): React.JSX.Element {
       }
     }
 
+    if (selectedGif && !uploadedUrls.includes(selectedGif)) {
+      uploadedUrls.push(selectedGif)
+    }
+
     const { data: newPost, error } = await supabase
       .from('posts')
       .insert({
