@@ -3,6 +3,7 @@ import Image from 'next/image'
 import type { Metadata } from 'next'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import PostCard from '@/components/feed/PostCard'
+import PublicProfileHeader from '@/components/profile/PublicProfileHeader'
 import type { PublicProfile, Post } from '@private-voices/shared'
 
 interface Props {
@@ -142,82 +143,12 @@ export default async function ProfilePage({ params }: Props) {
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
-        {/* Profile Card */}
-        <div className="card p-6 space-y-4">
-          <div className="flex items-start gap-4">
-            <div className="w-20 h-20 rounded-full bg-brand-100 flex items-center justify-center text-2xl font-bold text-brand-600 flex-shrink-0">
-              {profile.avatarUrl ? (
-                <Image
-                  src={profile.avatarUrl}
-                  alt={profile.displayName}
-                  width={80}
-                  height={80}
-                  className="rounded-full object-cover"
-                />
-              ) : (
-                profile.displayName.charAt(0).toUpperCase()
-              )}
-            </div>
-
-            <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-bold text-gray-900">{profile.displayName}</h1>
-              <p className="text-sm text-gray-500">@{profile.username}</p>
-
-              {profile.bio && <p className="mt-2 text-sm text-gray-700">{profile.bio}</p>}
-
-              <div className="mt-3 flex gap-4 text-sm">
-                <div>
-                  <span className="font-semibold text-gray-900">{profile.followerCount}</span>{' '}
-                  <span className="text-gray-500">followers</span>
-                </div>
-                <div>
-                  <span className="font-semibold text-gray-900">{profile.followingCount}</span>{' '}
-                  <span className="text-gray-500">following</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Action buttons */}
-          <div className="flex gap-3 pt-2 border-t border-gray-100">
-            {!isSelf && user && (
-              <form action={async () => {
-                'use server'
-                const supabaseClient = await createSupabaseServerClient()
-                if (isFollowing) {
-                  await supabaseClient.from('follows').delete().match({ follower_id: user.id, following_id: profile.id })
-                } else {
-                  await supabaseClient.from('follows').insert({ follower_id: user.id, following_id: profile.id })
-                }
-              }}>
-                <button type="submit" className={`btn-primary flex-1 ${isFollowing ? 'bg-gray-800 hover:bg-gray-900' : ''}`}>
-                  {isFollowing ? 'Following' : 'Follow'}
-                </button>
-              </form>
-            )}
-
-            {!isSelf && (
-              <>
-                <button className="btn-secondary flex-1">
-                  🤫 Send Whisper
-                </button>
-
-                {user && (
-                  <form action={async () => {
-                    'use server'
-                    const supabaseClient = await createSupabaseServerClient()
-                    const [userA, userB] = user.id < profile.id ? [user.id, profile.id] : [profile.id, user.id]
-                    await supabaseClient.from('conversations').upsert({ user_a_id: userA, user_b_id: userB }, { onConflict: 'user_a_id,user_b_id' })
-                  }}>
-                    <button type="submit" className="btn-secondary flex-1">
-                      💬 Direct Message
-                    </button>
-                  </form>
-                )}
-              </>
-            )}
-          </div>
-        </div>
+        {/* Profile Card with interactive following and followers modal */}
+        <PublicProfileHeader
+          profile={profile}
+          currentUserId={user?.id}
+          initialIsFollowing={isFollowing}
+        />
 
         {/* Private profile notice */}
         {!canViewPosts ? (

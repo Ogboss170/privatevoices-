@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { colors } from '../../constants/colors'
 import { EditProfileModal } from '../../components/EditProfileModal'
+import { FollowListModal } from '../../components/FollowListModal'
 import { MobilePostCard } from '../../components/MobilePostCard'
 import type { Post } from '@private-voices/shared'
 import type { User } from '@supabase/supabase-js'
@@ -32,6 +33,8 @@ export default function ProfileScreen() {
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [editModalVisible, setEditModalVisible] = useState(false)
+  const [followModalVisible, setFollowModalVisible] = useState(false)
+  const [followModalTab, setFollowModalTab] = useState<'followers' | 'following'>('followers')
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -161,14 +164,26 @@ export default function ProfileScreen() {
           <Text style={styles.statNumber}>{stats.postCount}</Text>
           <Text style={styles.statLabel}>posts</Text>
         </View>
-        <View style={styles.stat}>
+        <TouchableOpacity
+          style={styles.stat}
+          onPress={() => {
+            setFollowModalTab('followers')
+            setFollowModalVisible(true)
+          }}
+        >
           <Text style={styles.statNumber}>{stats.followerCount}</Text>
           <Text style={styles.statLabel}>followers</Text>
-        </View>
-        <View style={styles.stat}>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.stat}
+          onPress={() => {
+            setFollowModalTab('following')
+            setFollowModalVisible(true)
+          }}
+        >
           <Text style={styles.statNumber}>{stats.followingCount}</Text>
           <Text style={styles.statLabel}>following</Text>
-        </View>
+        </TouchableOpacity>
       </View>
 
       {/* Anonymous Whisper Link Card */}
@@ -235,6 +250,19 @@ export default function ProfileScreen() {
           }}
           onClose={() => setEditModalVisible(false)}
           onUpdated={() => user && fetchProfileData(user.id)}
+        />
+      )}
+
+      {/* Follow List Modal (Followers & Following) */}
+      {user && profile && (
+        <FollowListModal
+          visible={followModalVisible}
+          onClose={() => setFollowModalVisible(false)}
+          targetUserId={user.id}
+          targetUsername={profile.username}
+          initialTab={followModalTab}
+          canView={true}
+          currentUserId={user.id}
         />
       )}
     </ScrollView>

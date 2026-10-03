@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Edit3, Lock, Shield, ExternalLink, LogOut, Settings } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import EditProfileModal from '@/components/profile/EditProfileModal'
+import FollowListModal from '@/components/profile/FollowListModal'
 import PostCard from '@/components/feed/PostCard'
 import type { Post } from '@private-voices/shared'
 import { useRouter } from 'next/navigation'
@@ -19,6 +20,8 @@ export default function ProfileDashboardPage(): React.JSX.Element {
   const [stats, setStats] = useState({ followers: 0, following: 0, posts: 0 })
   const [loading, setLoading] = useState(true)
   const [showEditModal, setShowEditModal] = useState(false)
+  const [showFollowModal, setShowFollowModal] = useState(false)
+  const [followModalTab, setFollowModalTab] = useState<'followers' | 'following'>('followers')
   const [activeSection, setActiveSection] = useState<'posts' | 'privacy'>('posts')
 
   const fetchUserData = useCallback(async () => {
@@ -158,12 +161,26 @@ export default function ProfileDashboardPage(): React.JSX.Element {
               <div>
                 <span className="font-semibold text-gray-900">{stats.posts}</span> <span className="text-gray-500">posts</span>
               </div>
-              <div>
+              <button
+                type="button"
+                onClick={() => {
+                  setFollowModalTab('followers')
+                  setShowFollowModal(true)
+                }}
+                className="hover:opacity-80 transition-opacity focus:outline-none"
+              >
                 <span className="font-semibold text-gray-900">{stats.followers}</span> <span className="text-gray-500">followers</span>
-              </div>
-              <div>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFollowModalTab('following')
+                  setShowFollowModal(true)
+                }}
+                className="hover:opacity-80 transition-opacity focus:outline-none"
+              >
                 <span className="font-semibold text-gray-900">{stats.following}</span> <span className="text-gray-500">following</span>
-              </div>
+              </button>
             </div>
           </div>
         </div>
@@ -330,6 +347,17 @@ export default function ProfileDashboardPage(): React.JSX.Element {
           onUpdated={fetchUserData}
         />
       )}
+
+      {/* Follow List Modal (Followers & Following) */}
+      <FollowListModal
+        isOpen={showFollowModal}
+        onClose={() => setShowFollowModal(false)}
+        targetUserId={profile.id}
+        targetUsername={profile.username}
+        initialTab={followModalTab}
+        canView={true}
+        currentUserId={profile.id}
+      />
     </div>
   )
 }
