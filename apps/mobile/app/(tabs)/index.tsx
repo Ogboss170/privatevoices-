@@ -57,7 +57,11 @@ export default function HomeScreen() {
 
     const { data, error } = await query
 
-    if (!error && data) {
+    if (error) {
+      console.error('Error fetching mobile feed posts:', error)
+    }
+
+    if (data) {
       const formatted: Post[] = await Promise.all(
         data.map(async (p) => {
           const [{ count: likeCount }, { count: commentCount }] = await Promise.all([
@@ -77,14 +81,24 @@ export default function HomeScreen() {
             isSavedByMe = !!save
           }
 
+          let authorData = p.author
+          if (!authorData) {
+            const { data: fallbackProf } = await supabase
+              .from('profiles')
+              .select('id, username, display_name, avatar_url')
+              .eq('id', p.author_id)
+              .maybeSingle()
+            if (fallbackProf) authorData = fallbackProf
+          }
+
           return {
             id: p.id,
             authorId: p.author_id,
             author: {
-              id: p.author?.id || p.author_id,
-              username: p.author?.username || 'user',
-              displayName: p.author?.display_name || 'User',
-              avatarUrl: p.author?.avatar_url || null,
+              id: authorData?.id || p.author_id,
+              username: authorData?.username || 'user',
+              displayName: authorData?.display_name || 'User',
+              avatarUrl: authorData?.avatar_url || null,
             },
             content: p.content,
             imageUrls: p.image_urls ?? [],
