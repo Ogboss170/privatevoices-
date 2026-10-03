@@ -22,7 +22,8 @@ import type { Post } from '@private-voices/shared'
 
 interface PublicProfileModalProps {
   visible: boolean
-  userId: string
+  userId?: string
+  username?: string
   currentUserId?: string | null
   onClose: () => void
 }
@@ -30,6 +31,7 @@ interface PublicProfileModalProps {
 export function PublicProfileModal({
   visible,
   userId,
+  username,
   currentUserId,
   onClose,
 }: PublicProfileModalProps) {
@@ -46,20 +48,29 @@ export function PublicProfileModal({
   const [chatModalVisible, setChatModalVisible] = useState(false)
   const [conversationId, setConversationId] = useState<string | null>(null)
 
-  const isSelf = !!currentUserId && currentUserId === userId
+  const [activeTarget, setActiveTarget] = useState<{ userId?: string; username?: string }>({ userId, username })
 
   useEffect(() => {
-    if (!visible || !userId) return
+    setActiveTarget({ userId, username })
+  }, [userId, username, visible])
+
+  const effectiveUserId = profile?.id || activeTarget.userId || userId
+  const isSelf = !!currentUserId && currentUserId === effectiveUserId
+
+  useEffect(() => {
+    if (!visible || (!activeTarget.userId && !activeTarget.username)) return
 
     async function loadProfile() {
       setLoading(true)
       try {
         // 1. Fetch Profile
-        const { data: prof, error } = await supabase
+        const query = supabase
           .from('profiles')
           .select('id, username, display_name, avatar_url, bio, is_private')
-          .eq('id', userId)
-          .single()
+
+        const { data: prof, error } = activeTarget.userId
+          ? await query.eq('id', activeTarget.userId).single()
+          : await query.ilike('username', (activeTarget.username || '').replace(/^@/, '')).single()
 
         if (error || !prof) {
           console.error('Error fetching user profile:', error)
@@ -68,6 +79,7 @@ export function PublicProfileModal({
         }
 
         setProfile(prof)
+        const targetId = prof.id
 
         // 2. Fetch stats & follow status
         const [
@@ -76,14 +88,14 @@ export function PublicProfileModal({
           { count: postCount },
           { count: isFollowingCount },
         ] = await Promise.all([
-          supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', userId),
-          supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', userId),
-          supabase.from('posts').select('*', { count: 'exact', head: true }).eq('author_id', userId),
+          supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', targetId),
+          supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', targetId),
+          supabase.from('posts').select('*', { count: 'exact', head: true }).eq('author_id', targetId),
           currentUserId
             ? supabase
                 .from('follows')
                 .select('*', { count: 'exact', head: true })
-                .match({ follower_id: currentUserId, following_id: userId })
+                .match({ follower_id: currentUserId, following_id: targetId })
             : Promise.resolve({ count: 0 }),
         ])
 
@@ -96,13 +108,13 @@ export function PublicProfileModal({
         })
 
         // 3. Privacy check for posts
-        const canViewContent = !prof.is_private || followingStatus || (currentUserId === userId)
+        const canViewContent = !prof.is_private || followingStatus || (currentUserId === targetId)
 
         if (canViewContent) {
           const { data: userPosts } = await supabase
             .from('posts')
             .select('*, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url)')
-            .eq('author_id', userId)
+            .eq('author_id', targetId)
             .order('created_at', { ascending: false })
             .limit(20)
 
@@ -158,13 +170,16 @@ export function PublicProfileModal({
     }
 
     loadProfile()
-  }, [visible, userId, currentUserId])
+  }, [visible, activeTarget, currentUserId])
 
   async function handleToggleFollow() {
     if (!currentUserId) {
       Alert.alert('Login Required', 'Please log in to follow this user.')
       return
     }
+
+    const targetId = profile?.id || userId
+    if (!targetId) return
 
     const nextState = !isFollowing
     setIsFollowing(nextState)
@@ -177,13 +192,13 @@ export function PublicProfileModal({
       if (nextState) {
         await supabase.from('follows').insert({
           follower_id: currentUserId,
-          following_id: userId,
+          following_id: targetId,
         })
       } else {
         await supabase
           .from('follows')
           .delete()
-          .match({ follower_id: currentUserId, following_id: userId })
+          .match({ follower_id: currentUserId, following_id: targetId })
       }
     } catch {
       // Revert on error
@@ -201,8 +216,11 @@ export function PublicProfileModal({
       return
     }
 
+    const targetId = profile?.id || userId
+    if (!targetId) return
+
     try {
-      const [userA, userB] = currentUserId < userId ? [currentUserId, userId] : [userId, currentUserId]
+      const [userA, userB] = currentUserId < targetId ? [currentUserId, targetId] : [targetId, currentUserId]
       const { data, error } = await supabase
         .from('conversations')
         .upsert({ user_a_id: userA, user_b_id: userB }, { onConflict: 'user_a_id,user_b_id' })
@@ -378,6 +396,8 @@ export function PublicProfileModal({
                     key={post.id}
                     post={post}
                     currentUserId={currentUserId || undefined}
+                    onPressAuthor={(authorId) => setActiveTarget({ userId: authorId })}
+                    onPressMention={(u) => setActiveTarget({ username: u })}
                   />
                 ))}
               </View>
@@ -389,7 +409,7 @@ export function PublicProfileModal({
         <FollowListModal
           visible={followModalVisible}
           onClose={() => setFollowModalVisible(false)}
-          targetUserId={userId}
+          targetUserId={profile?.id || userId || ''}
           targetUsername={profile?.username || 'user'}
           initialTab={followModalTab}
           canView={canViewFollows}
@@ -399,7 +419,7 @@ export function PublicProfileModal({
         {/* Anonymous Whisper Modal */}
         <SendWhisperModal
           visible={whisperModalVisible}
-          recipientId={userId}
+          recipientId={profile?.id || userId || ''}
           recipientUsername={profile?.username || 'user'}
           recipientDisplayName={profile?.display_name || profile?.username || 'User'}
           onClose={() => setWhisperModalVisible(false)}

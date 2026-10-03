@@ -30,8 +30,7 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | undefined>()
-  const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(null)
-  const [profileModalVisible, setProfileModalVisible] = useState(false)
+  const [selectedProfileTarget, setSelectedProfileTarget] = useState<{ userId?: string; username?: string } | null>(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -230,10 +229,8 @@ export default function HomeScreen() {
               post={item}
               currentUserId={currentUserId}
               onDelete={handleDeletePost}
-              onPressAuthor={(authorId) => {
-                setSelectedAuthorId(authorId)
-                setProfileModalVisible(true)
-              }}
+              onPressAuthor={(authorId) => setSelectedProfileTarget({ userId: authorId })}
+              onPressMention={(username) => setSelectedProfileTarget({ username })}
             />
           )}
           contentContainerStyle={styles.listContent}
@@ -248,15 +245,13 @@ export default function HomeScreen() {
       )}
 
       {/* Public Profile Modal */}
-      {selectedAuthorId && (
+      {selectedProfileTarget && (
         <PublicProfileModal
-          visible={profileModalVisible}
-          userId={selectedAuthorId}
+          visible={!!selectedProfileTarget}
+          userId={selectedProfileTarget.userId}
+          username={selectedProfileTarget.username}
           currentUserId={currentUserId}
-          onClose={() => {
-            setProfileModalVisible(false)
-            setSelectedAuthorId(null)
-          }}
+          onClose={() => setSelectedProfileTarget(null)}
         />
       )}
     </View>

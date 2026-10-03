@@ -16,6 +16,7 @@ import { colors } from '../../constants/colors'
 import { EditProfileModal } from '../../components/EditProfileModal'
 import { FollowListModal } from '../../components/FollowListModal'
 import { MobilePostCard } from '../../components/MobilePostCard'
+import { PublicProfileModal } from '../../components/PublicProfileModal'
 import type { Post } from '@private-voices/shared'
 import type { User } from '@supabase/supabase-js'
 
@@ -35,6 +36,7 @@ export default function ProfileScreen() {
   const [editModalVisible, setEditModalVisible] = useState(false)
   const [followModalVisible, setFollowModalVisible] = useState(false)
   const [followModalTab, setFollowModalTab] = useState<'followers' | 'following'>('followers')
+  const [selectedProfileTarget, setSelectedProfileTarget] = useState<{ userId?: string; username?: string } | null>(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -234,6 +236,8 @@ export default function ProfileScreen() {
               post={item}
               currentUserId={user?.id}
               onDelete={(id) => setPosts((prev) => prev.filter((p) => p.id !== id))}
+              onPressAuthor={(authorId) => setSelectedProfileTarget({ userId: authorId })}
+              onPressMention={(username) => setSelectedProfileTarget({ username })}
             />
           ))}
         </View>
@@ -263,6 +267,17 @@ export default function ProfileScreen() {
           initialTab={followModalTab}
           canView={true}
           currentUserId={user.id}
+        />
+      )}
+
+      {/* Public Profile Modal (when tapping mentions/authors) */}
+      {selectedProfileTarget && (
+        <PublicProfileModal
+          visible={!!selectedProfileTarget}
+          userId={selectedProfileTarget.userId}
+          username={selectedProfileTarget.username}
+          currentUserId={user?.id}
+          onClose={() => setSelectedProfileTarget(null)}
         />
       )}
     </ScrollView>

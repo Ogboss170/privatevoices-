@@ -5,15 +5,18 @@ import { Image } from 'expo-image'
 import { supabase } from '../lib/supabase'
 import { colors } from '../constants/colors'
 import type { Post } from '@private-voices/shared'
+import { FormattedText } from './FormattedText'
+import { MentionSuggestions } from './MentionSuggestions'
 
 interface MobilePostCardProps {
   post: Post
   currentUserId?: string
   onDelete?: (postId: string) => void
   onPressAuthor?: (userId: string) => void
+  onPressMention?: (username: string) => void
 }
 
-export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor }: MobilePostCardProps) {
+export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, onPressMention }: MobilePostCardProps) {
   const [isLiked, setIsLiked] = useState(post.isLikedByMe)
   const [likeCount, setLikeCount] = useState(post.likeCount)
   const [isSaved, setIsSaved] = useState(post.isSavedByMe)
@@ -23,6 +26,19 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor }:
   const [commentText, setCommentText] = useState('')
   const [loadingComments, setLoadingComments] = useState(false)
   const [submittingComment, setSubmittingComment] = useState(false)
+
+  const mentionMatch = commentText.match(/(?:^|\s)@([a-zA-Z0-9_]*)$/)
+  const mentionQuery = mentionMatch ? mentionMatch[1] : null
+  const isMentioning = mentionQuery !== null
+
+  function handleSelectMention(username: string) {
+    setCommentText((prev) => {
+      return prev.replace(/(?:^|\s)@([a-zA-Z0-9_]*)$/, (match) => {
+        const prefix = match.startsWith(' ') ? ' ' : ''
+        return `${prefix}@${username} `
+      })
+    })
+  }
 
   const isOwner = currentUserId === post.authorId
 
@@ -234,7 +250,11 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor }:
       </View>
 
       {/* Body */}
-      <Text style={styles.content}>{post.content}</Text>
+      <FormattedText
+        text={post.content}
+        style={styles.content}
+        onPressMention={onPressMention}
+      />
 
       {/* Footer / Actions */}
       <View style={styles.footer}>
@@ -270,11 +290,18 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor }:
       {/* Expandable Comments Section */}
       {showComments && (
         <View style={styles.commentsContainer}>
+          {/* Mention Autocomplete suggestions bar */}
+          <MentionSuggestions
+            query={mentionQuery ?? ''}
+            visible={isMentioning}
+            onSelect={handleSelectMention}
+          />
+
           {/* Add Comment Input */}
           <View style={styles.commentInputRow}>
             <TextInput
               style={styles.commentInput}
-              placeholder="Write a comment..."
+              placeholder="Write a comment... (use @ to mention)"
               placeholderTextColor="#9ca3af"
               value={commentText}
               onChangeText={setCommentText}
@@ -304,8 +331,20 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor }:
             <View style={styles.commentsList}>
               {comments.map((c) => (
                 <View key={c.id} style={styles.commentItem}>
-                  <Text style={styles.commentAuthor}>@{c.author?.username || 'user'}:</Text>
-                  <Text style={styles.commentBody}>{c.content}</Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (onPressMention && c.author?.username) onPressMention(c.author.username)
+                      else if (c.author_id && onPressAuthor) onPressAuthor(c.author_id)
+                    }}
+                    disabled={!onPressMention && !onPressAuthor}
+                  >
+                    <Text style={styles.commentAuthor}>@{c.author?.username || 'user'}:</Text>
+                  </TouchableOpacity>
+                  <FormattedText
+                    text={c.content}
+                    style={styles.commentBody}
+                    onPressMention={onPressMention}
+                  />
                 </View>
               ))}
             </View>

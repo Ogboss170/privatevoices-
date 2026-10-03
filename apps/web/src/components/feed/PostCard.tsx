@@ -6,6 +6,8 @@ import Link from 'next/link'
 import { Heart, MessageCircle, Bookmark, Share2, Trash2, MoreVertical, Flag, ShieldOff } from 'lucide-react'
 import type { Post } from '@private-voices/shared'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import FormattedText from '../common/FormattedText'
+import MentionAutocomplete from '../common/MentionAutocomplete'
 
 interface PostCardProps {
   post: Post
@@ -26,6 +28,19 @@ export default function PostCard({ post, currentUserId, onDelete }: PostCardProp
   const [showMenu, setShowMenu] = useState(false)
 
   const isOwner = currentUserId === post.authorId
+
+  const mentionMatch = commentText.match(/(?:^|\s)@([a-zA-Z0-9_]*)$/)
+  const mentionQuery = mentionMatch ? mentionMatch[1] : null
+  const isMentioning = mentionQuery !== null
+
+  function handleSelectMention(username: string) {
+    setCommentText((prev) => {
+      return prev.replace(/(?:^|\s)@([a-zA-Z0-9_]*)$/, (match) => {
+        const prefix = match.startsWith(' ') ? ' ' : ''
+        return `${prefix}@${username} `
+      })
+    })
+  }
 
   async function handleReportPost() {
     if (!currentUserId) {
@@ -244,7 +259,9 @@ export default function PostCard({ post, currentUserId, onDelete }: PostCardProp
       </div>
 
       {/* Content */}
-      <p className="text-gray-800 text-sm whitespace-pre-line leading-relaxed">{post.content}</p>
+      <div className="text-gray-800 text-sm whitespace-pre-line leading-relaxed">
+        <FormattedText text={post.content} />
+      </div>
 
       {/* Images */}
       {post.imageUrls && post.imageUrls.length > 0 && (
@@ -305,22 +322,29 @@ export default function PostCard({ post, currentUserId, onDelete }: PostCardProp
       {/* Comments section */}
       {showComments && (
         <div className="pt-3 border-t border-gray-100 space-y-3">
-          <form onSubmit={handleAddComment} className="flex gap-2">
-            <input
-              type="text"
-              placeholder="Write a comment…"
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              className="input-field text-xs py-2 flex-1"
+          <div className="relative">
+            <MentionAutocomplete
+              query={mentionQuery ?? ''}
+              visible={isMentioning}
+              onSelect={handleSelectMention}
             />
-            <button
-              type="submit"
-              disabled={submittingComment || !commentText.trim()}
-              className="btn-primary text-xs py-2 px-3"
-            >
-              Post
-            </button>
-          </form>
+            <form onSubmit={handleAddComment} className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Write a comment… (use @ to mention)"
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                className="input-field text-xs py-2 flex-1"
+              />
+              <button
+                type="submit"
+                disabled={submittingComment || !commentText.trim()}
+                className="btn-primary text-xs py-2 px-3"
+              >
+                Post
+              </button>
+            </form>
+          </div>
 
           {loadingComments ? (
             <p className="text-xs text-gray-400 text-center py-2">Loading comments…</p>
@@ -330,8 +354,16 @@ export default function PostCard({ post, currentUserId, onDelete }: PostCardProp
             <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
               {comments.map((comment) => (
                 <div key={comment.id} className="flex gap-2 text-xs bg-gray-50 p-2.5 rounded-lg">
-                  <span className="font-semibold text-gray-900">@{comment.author?.username}:</span>
-                  <span className="text-gray-700 flex-1">{comment.content}</span>
+                  <Link
+                    href={`/@${comment.author?.username || 'user'}`}
+                    className="font-semibold text-gray-900 hover:text-brand-600 transition-colors flex-shrink-0"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    @{comment.author?.username || 'user'}:
+                  </Link>
+                  <div className="text-gray-700 flex-1 whitespace-pre-line">
+                    <FormattedText text={comment.content} />
+                  </div>
                 </div>
               ))}
             </div>

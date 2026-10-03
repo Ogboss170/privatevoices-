@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { Image as ImageIcon, Send } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import MentionAutocomplete from '../common/MentionAutocomplete'
 
 interface CreatePostComposerProps {
   onPostCreated?: () => void
@@ -13,6 +14,19 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
   const [content, setContent] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const mentionMatch = content.match(/(?:^|\s)@([a-zA-Z0-9_]*)$/)
+  const mentionQuery = mentionMatch ? mentionMatch[1] : null
+  const isMentioning = mentionQuery !== null
+
+  function handleSelectMention(username: string) {
+    setContent((prev) => {
+      return prev.replace(/(?:^|\s)@([a-zA-Z0-9_]*)$/, (match) => {
+        const prefix = match.startsWith(' ') ? ' ' : ''
+        return `${prefix}@${username} `
+      })
+    })
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -47,13 +61,20 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
   return (
     <div className="card p-4 space-y-3">
       <form onSubmit={handleSubmit} className="space-y-3">
-        <textarea
-          rows={3}
-          placeholder="What's on your mind? Speak freely..."
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          className="w-full resize-none border-0 bg-transparent text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-0"
-        />
+        <div className="relative">
+          <MentionAutocomplete
+            query={mentionQuery ?? ''}
+            visible={isMentioning}
+            onSelect={handleSelectMention}
+          />
+          <textarea
+            rows={3}
+            placeholder="What's on your mind? Speak freely... (use @ to mention someone)"
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            className="w-full resize-none border-0 bg-transparent text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-0"
+          />
+        </div>
 
         {error && <p className="text-xs text-red-600">{error}</p>}
 

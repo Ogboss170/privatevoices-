@@ -40,8 +40,7 @@ export default function CommunityDetailScreen() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   // Public Profile Modal State
-  const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(null)
-  const [profileModalVisible, setProfileModalVisible] = useState(false)
+  const [selectedProfileTarget, setSelectedProfileTarget] = useState<{ userId?: string; username?: string } | null>(null)
 
   const fetchCommunityData = useCallback(async () => {
     setLoading(true)
@@ -214,8 +213,11 @@ export default function CommunityDetailScreen() {
   }
 
   function handleOpenAuthorProfile(authorId: string) {
-    setSelectedAuthorId(authorId)
-    setProfileModalVisible(true)
+    setSelectedProfileTarget({ userId: authorId })
+  }
+
+  function handleOpenMentionProfile(username: string) {
+    setSelectedProfileTarget({ username })
   }
 
   if (loading) {
@@ -335,6 +337,7 @@ export default function CommunityDetailScreen() {
                   post={post}
                   currentUserId={currentUserId || undefined}
                   onPressAuthor={handleOpenAuthorProfile}
+                  onPressMention={handleOpenMentionProfile}
                 />
               ))}
             </View>
@@ -399,15 +402,13 @@ export default function CommunityDetailScreen() {
       </ScrollView>
 
       {/* Public Profile Modal */}
-      {selectedAuthorId && (
+      {selectedProfileTarget && (
         <PublicProfileModal
-          visible={profileModalVisible}
-          userId={selectedAuthorId}
+          visible={!!selectedProfileTarget}
+          userId={selectedProfileTarget.userId}
+          username={selectedProfileTarget.username}
           currentUserId={currentUserId}
-          onClose={() => {
-            setProfileModalVisible(false)
-            setSelectedAuthorId(null)
-          }}
+          onClose={() => setSelectedProfileTarget(null)}
         />
       )}
     </SafeAreaView>
