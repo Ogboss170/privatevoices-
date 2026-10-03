@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Edit3, Lock, Shield, ExternalLink, LogOut, Settings } from 'lucide-react'
+import { Edit3, Lock, Shield, ExternalLink, LogOut, Settings, Bookmark } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import EditProfileModal from '@/components/profile/EditProfileModal'
 import FollowListModal from '@/components/profile/FollowListModal'
@@ -17,12 +17,13 @@ export default function ProfileDashboardPage(): React.JSX.Element {
   const [profile, setProfile] = useState<any>(null)
   const [privacy, setPrivacy] = useState<any>(null)
   const [posts, setPosts] = useState<Post[]>([])
+  const [savedPosts, setSavedPosts] = useState<Post[]>([])
   const [stats, setStats] = useState({ followers: 0, following: 0, posts: 0 })
   const [loading, setLoading] = useState(true)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showFollowModal, setShowFollowModal] = useState(false)
   const [followModalTab, setFollowModalTab] = useState<'followers' | 'following'>('followers')
-  const [activeSection, setActiveSection] = useState<'posts' | 'privacy'>('posts')
+  const [activeSection, setActiveSection] = useState<'posts' | 'saved' | 'privacy'>('posts')
 
   const fetchUserData = useCallback(async () => {
     setLoading(true)
@@ -61,19 +62,21 @@ export default function ProfileDashboardPage(): React.JSX.Element {
     if (myPosts) {
       const formatted: Post[] = await Promise.all(
         myPosts.map(async (p) => {
-          const [{ count: likeCount }, { count: commentCount }] = await Promise.all([
+          const [{ count: likeCount }, { count: commentCount }, { data: myLike }, { data: mySave }] = await Promise.all([
             supabase.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
             supabase.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
+            supabase.from('likes').select('user_id').match({ user_id: userId, post_id: p.id }).maybeSingle(),
+            supabase.from('saved_posts').select('user_id').match({ user_id: userId, post_id: p.id }).maybeSingle(),
           ])
 
           return {
             id: p.id,
             authorId: p.author_id,
             author: {
-              id: p.author.id,
-              username: p.author.username,
-              displayName: p.author.display_name,
-              avatarUrl: p.author.avatar_url,
+              id: p.author?.id || p.author_id,
+              username: p.author?.username || 'user',
+              displayName: p.author?.display_name || p.author?.username || 'User',
+              avatarUrl: p.author?.avatar_url,
             },
             content: p.content,
             imageUrls: p.image_urls ?? [],
@@ -81,8 +84,8 @@ export default function ProfileDashboardPage(): React.JSX.Element {
             likeCount: likeCount ?? 0,
             commentCount: commentCount ?? 0,
             repostCount: 0,
-            isLikedByMe: false,
-            isSavedByMe: false,
+            isLikedByMe: !!myLike,
+            isSavedByMe: !!mySave,
             isRepostedByMe: false,
             createdAt: p.created_at,
             updatedAt: p.updated_at,
@@ -90,6 +93,61 @@ export default function ProfileDashboardPage(): React.JSX.Element {
         })
       )
       setPosts(formatted)
+    }
+
+    // Fetch user saved posts
+    const { data: savedRows } = await supabase
+      .from('saved_posts')
+      .select('post_id, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+
+    if (savedRows && savedRows.length > 0) {
+      const savedIds = savedRows.map((r) => r.post_id)
+      const { data: rawSavedPosts } = await supabase
+        .from('posts')
+        .select('*, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url)')
+        .in('id', savedIds)
+
+      if (rawSavedPosts) {
+        const postMap = new Map(rawSavedPosts.map((p) => [p.id, p]))
+        const orderedSaved = savedIds.map((id) => postMap.get(id)).filter(Boolean) as any[]
+
+        const formattedSaved: Post[] = await Promise.all(
+          orderedSaved.map(async (p) => {
+            const [{ count: likeCount }, { count: commentCount }, { data: myLike }] = await Promise.all([
+              supabase.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
+              supabase.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
+              supabase.from('likes').select('user_id').match({ user_id: userId, post_id: p.id }).maybeSingle(),
+            ])
+
+            return {
+              id: p.id,
+              authorId: p.author_id,
+              author: {
+                id: p.author?.id || p.author_id,
+                username: p.author?.username || 'user',
+                displayName: p.author?.display_name || p.author?.username || 'User',
+                avatarUrl: p.author?.avatar_url,
+              },
+              content: p.content,
+              imageUrls: p.image_urls ?? [],
+              hashtags: [],
+              likeCount: likeCount ?? 0,
+              commentCount: commentCount ?? 0,
+              repostCount: 0,
+              isLikedByMe: !!myLike,
+              isSavedByMe: true,
+              isRepostedByMe: false,
+              createdAt: p.created_at,
+              updatedAt: p.updated_at,
+            }
+          })
+        )
+        setSavedPosts(formattedSaved)
+      }
+    } else {
+      setSavedPosts([])
     }
 
     setLoading(false)
@@ -253,7 +311,17 @@ export default function ProfileDashboardPage(): React.JSX.Element {
             activeSection === 'posts' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'
           }`}
         >
-          My Posts ({posts.length})
+          My Voices ({posts.length})
+        </button>
+
+        <button
+          onClick={() => setActiveSection('saved')}
+          className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
+            activeSection === 'saved' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'
+          }`}
+        >
+          <Bookmark size={14} />
+          <span>Saved ({savedPosts.length})</span>
         </button>
 
         <button
@@ -270,8 +338,9 @@ export default function ProfileDashboardPage(): React.JSX.Element {
       {/* Section Content */}
       {activeSection === 'posts' ? (
         posts.length === 0 ? (
-          <div className="card p-12 text-center text-gray-400">
-            <p className="text-sm">You haven't posted anything yet.</p>
+          <div className="card p-12 text-center text-gray-400 space-y-1">
+            <p className="text-sm font-medium">You haven't posted anything yet.</p>
+            <p className="text-xs text-gray-500">Share your thoughts freely with the world!</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -281,6 +350,40 @@ export default function ProfileDashboardPage(): React.JSX.Element {
                 post={post}
                 currentUserId={profile.id}
                 onDelete={(id) => setPosts((prev) => prev.filter((p) => p.id !== id))}
+                onToggleSave={(id, isSaved) => {
+                  if (!isSaved) {
+                    setSavedPosts((prev) => prev.filter((p) => p.id !== id))
+                  } else {
+                    const postToAdd = posts.find((p) => p.id === id)
+                    if (postToAdd) setSavedPosts((prev) => [postToAdd, ...prev])
+                  }
+                }}
+              />
+            ))}
+          </div>
+        )
+      ) : activeSection === 'saved' ? (
+        savedPosts.length === 0 ? (
+          <div className="card p-12 text-center text-gray-400 space-y-2">
+            <div className="text-3xl">🔖</div>
+            <p className="text-sm font-semibold text-gray-700">No saved Voices yet</p>
+            <p className="text-xs text-gray-500">
+              Bookmark interesting voices by clicking the bookmark icon on any post to read them anytime.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {savedPosts.map((post) => (
+              <PostCard
+                key={post.id}
+                post={post}
+                currentUserId={profile.id}
+                onDelete={(id) => setSavedPosts((prev) => prev.filter((p) => p.id !== id))}
+                onToggleSave={(id, isSaved) => {
+                  if (!isSaved) {
+                    setSavedPosts((prev) => prev.filter((p) => p.id !== id))
+                  }
+                }}
               />
             ))}
           </div>

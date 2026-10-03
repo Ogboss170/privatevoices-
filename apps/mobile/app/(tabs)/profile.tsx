@@ -9,7 +9,7 @@ import {
   ScrollView,
   Share,
 } from 'react-native'
-import { Edit3, Lock, LogOut, Settings } from 'lucide-react-native'
+import { Edit3, Lock, LogOut, Settings, Bookmark } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { colors } from '../../constants/colors'
@@ -31,7 +31,9 @@ export default function ProfileScreen() {
     is_private: boolean
   } | null>(null)
   const [stats, setStats] = useState({ followerCount: 0, followingCount: 0, postCount: 0 })
+  const [activeTab, setActiveTab] = useState<'posts' | 'saved'>('posts')
   const [posts, setPosts] = useState<Post[]>([])
+  const [savedPosts, setSavedPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [editModalVisible, setEditModalVisible] = useState(false)
   const [followModalVisible, setFollowModalVisible] = useState(false)
@@ -74,10 +76,24 @@ export default function ProfileScreen() {
     if (myPosts) {
       const formatted: Post[] = await Promise.all(
         myPosts.map(async (p) => {
-          const [{ count: likeCount }, { count: commentCount }] = await Promise.all([
-            supabase.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
-            supabase.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
-          ])
+          let likeCount = 0
+          let commentCount = 0
+          let isLiked = false
+          let isSaved = false
+          try {
+            const [{ count: lCount }, { count: cCount }, { data: myLike }, { data: mySave }] = await Promise.all([
+              supabase.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
+              supabase.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
+              supabase.from('likes').select('user_id').match({ user_id: userId, post_id: p.id }).maybeSingle(),
+              supabase.from('saved_posts').select('user_id').match({ user_id: userId, post_id: p.id }).maybeSingle(),
+            ])
+            likeCount = lCount ?? 0
+            commentCount = cCount ?? 0
+            isLiked = !!myLike
+            isSaved = !!mySave
+          } catch {
+            // ignore
+          }
 
           return {
             id: p.id,
@@ -91,11 +107,11 @@ export default function ProfileScreen() {
             content: p.content,
             imageUrls: p.image_urls ?? [],
             hashtags: [],
-            likeCount: likeCount ?? 0,
-            commentCount: commentCount ?? 0,
+            likeCount,
+            commentCount,
             repostCount: 0,
-            isLikedByMe: false,
-            isSavedByMe: false,
+            isLikedByMe: isLiked,
+            isSavedByMe: isSaved,
             isRepostedByMe: false,
             createdAt: p.created_at,
             updatedAt: p.updated_at,
@@ -103,6 +119,84 @@ export default function ProfileScreen() {
         })
       )
       setPosts(formatted)
+    }
+
+    // Fetch user saved posts
+    const { data: savedRows } = await supabase
+      .from('saved_posts')
+      .select('post_id, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+
+    if (savedRows && savedRows.length > 0) {
+      const savedPostIds = savedRows.map((r) => r.post_id)
+      let { data: rawSavedPosts } = await supabase
+        .from('posts')
+        .select('*, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url)')
+        .in('id', savedPostIds)
+
+      if (!rawSavedPosts) {
+        const fallbackRes = await supabase.from('posts').select('*').in('id', savedPostIds)
+        rawSavedPosts = fallbackRes.data
+      }
+
+      if (rawSavedPosts) {
+        const authorIds = Array.from(new Set(rawSavedPosts.map((p) => p.author_id)))
+        const { data: profList } = await supabase
+          .from('profiles')
+          .select('id, username, display_name, avatar_url')
+          .in('id', authorIds)
+        const profileMap = new Map((profList ?? []).map((prof) => [prof.id, prof]))
+
+        const postMap = new Map(rawSavedPosts.map((p) => [p.id, p]))
+        const orderedSaved = savedPostIds.map((id) => postMap.get(id)).filter(Boolean) as any[]
+
+        const formattedSaved: Post[] = await Promise.all(
+          orderedSaved.map(async (p) => {
+            let likeCount = 0
+            let commentCount = 0
+            let isLiked = false
+            try {
+              const [{ count: lCount }, { count: cCount }, { data: myLike }] = await Promise.all([
+                supabase.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
+                supabase.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
+                supabase.from('likes').select('user_id').match({ user_id: userId, post_id: p.id }).maybeSingle(),
+              ])
+              likeCount = lCount ?? 0
+              commentCount = cCount ?? 0
+              isLiked = !!myLike
+            } catch {
+              // ignore
+            }
+
+            const authorObj = p.author || profileMap.get(p.author_id)
+            return {
+              id: p.id,
+              authorId: p.author_id,
+              author: {
+                id: authorObj?.id || p.author_id,
+                username: authorObj?.username || 'user',
+                displayName: authorObj?.display_name || 'User',
+                avatarUrl: authorObj?.avatar_url || null,
+              },
+              content: p.content,
+              imageUrls: p.image_urls ?? [],
+              hashtags: [],
+              likeCount,
+              commentCount,
+              repostCount: 0,
+              isLikedByMe: isLiked,
+              isSavedByMe: true,
+              isRepostedByMe: false,
+              createdAt: p.created_at,
+              updatedAt: p.updated_at,
+            }
+          })
+        )
+        setSavedPosts(formattedSaved)
+      }
+    } else {
+      setSavedPosts([])
     }
 
     setLoading(false)
@@ -219,28 +313,91 @@ export default function ProfileScreen() {
         </View>
       )}
 
-      {/* Posts Section */}
-      <View style={styles.postsSectionHeader}>
-        <Text style={styles.postsSectionTitle}>My Posts ({posts.length})</Text>
+      {/* Segmented Tabs: My Voices vs Saved */}
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'posts' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('posts')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.tabText, activeTab === 'posts' && styles.tabTextActive]}>
+            My Voices ({posts.length})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'saved' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('saved')}
+          activeOpacity={0.7}
+        >
+          <Bookmark
+            size={14}
+            color={activeTab === 'saved' ? colors.brand : colors.gray500}
+            fill={activeTab === 'saved' ? colors.brand : 'none'}
+          />
+          <Text style={[styles.tabText, activeTab === 'saved' && styles.tabTextActive]}>
+            Saved ({savedPosts.length})
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      {posts.length === 0 ? (
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyText}>You haven't posted anything yet.</Text>
-        </View>
+      {/* Tab Content */}
+      {activeTab === 'posts' ? (
+        posts.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>No Voices Yet</Text>
+            <Text style={styles.emptyText}>You haven't posted anything yet. Speak freely!</Text>
+          </View>
+        ) : (
+          <View style={styles.postsList}>
+            {posts.map((item) => (
+              <MobilePostCard
+                key={item.id}
+                post={item}
+                currentUserId={user?.id}
+                onDelete={(id) => setPosts((prev) => prev.filter((p) => p.id !== id))}
+                onPressAuthor={(authorId) => setSelectedProfileTarget({ userId: authorId })}
+                onPressMention={(username) => setSelectedProfileTarget({ username })}
+                onToggleSave={(id, isSaved) => {
+                  if (!isSaved) {
+                    setSavedPosts((prev) => prev.filter((p) => p.id !== id))
+                  } else {
+                    const postToAdd = posts.find((p) => p.id === id)
+                    if (postToAdd) setSavedPosts((prev) => [postToAdd, ...prev])
+                  }
+                }}
+              />
+            ))}
+          </View>
+        )
       ) : (
-        <View style={styles.postsList}>
-          {posts.map((item) => (
-            <MobilePostCard
-              key={item.id}
-              post={item}
-              currentUserId={user?.id}
-              onDelete={(id) => setPosts((prev) => prev.filter((p) => p.id !== id))}
-              onPressAuthor={(authorId) => setSelectedProfileTarget({ userId: authorId })}
-              onPressMention={(username) => setSelectedProfileTarget({ username })}
-            />
-          ))}
-        </View>
+        savedPosts.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={{ fontSize: 32, marginBottom: 8 }}>🔖</Text>
+            <Text style={styles.emptyTitle}>No Saved Voices</Text>
+            <Text style={styles.emptyText}>
+              Bookmark voices you want to revisit later by tapping the bookmark icon on any post.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.postsList}>
+            {savedPosts.map((item) => (
+              <MobilePostCard
+                key={item.id}
+                post={item}
+                currentUserId={user?.id}
+                onDelete={(id) => setSavedPosts((prev) => prev.filter((p) => p.id !== id))}
+                onPressAuthor={(authorId) => setSelectedProfileTarget({ userId: authorId })}
+                onPressMention={(username) => setSelectedProfileTarget({ username })}
+                onToggleSave={(id, isSaved) => {
+                  if (!isSaved) {
+                    setSavedPosts((prev) => prev.filter((p) => p.id !== id))
+                  }
+                }}
+              />
+            ))}
+          </View>
+        )
       )}
 
       {/* Edit Profile Modal */}
@@ -387,6 +544,38 @@ const styles = StyleSheet.create({
   whisperUrlText: { flex: 1, fontSize: 12, color: '#ffffff', fontFamily: 'monospace', marginRight: 8 },
   shareBtn: { backgroundColor: '#ffffff', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 12 },
   shareBtnText: { fontSize: 12, fontWeight: '700', color: colors.brand },
+  tabBar: {
+    width: '100%',
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 4,
+    marginTop: 20,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+  },
+  tabButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  tabButtonActive: {
+    backgroundColor: colors.brandLight,
+  },
+  tabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.gray500,
+  },
+  tabTextActive: {
+    color: colors.brand,
+    fontWeight: '700',
+  },
   postsSectionHeader: { width: '100%', marginTop: 24, marginBottom: 12 },
   postsSectionTitle: { fontSize: 16, fontWeight: '700', color: colors.gray900 },
   postsList: { width: '100%', gap: 12 },
@@ -400,5 +589,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyText: { fontSize: 14, color: colors.gray500 },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.gray900,
+    marginBottom: 4,
+  },
+  emptyText: {
+    fontSize: 13,
+    color: colors.gray500,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
 })

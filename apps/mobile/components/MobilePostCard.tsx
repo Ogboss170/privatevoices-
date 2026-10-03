@@ -14,9 +14,10 @@ interface MobilePostCardProps {
   onDelete?: (postId: string) => void
   onPressAuthor?: (userId: string) => void
   onPressMention?: (username: string) => void
+  onToggleSave?: (postId: string, isSaved: boolean) => void
 }
 
-export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, onPressMention }: MobilePostCardProps) {
+export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, onPressMention, onToggleSave }: MobilePostCardProps) {
   const [isLiked, setIsLiked] = useState(post.isLikedByMe)
   const [likeCount, setLikeCount] = useState(post.likeCount)
   const [isSaved, setIsSaved] = useState(post.isSavedByMe)
@@ -62,7 +63,9 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
 
   async function handleToggleSave() {
     const prevSaved = isSaved
-    setIsSaved(!prevSaved)
+    const nextSaved = !prevSaved
+    setIsSaved(nextSaved)
+    onToggleSave?.(post.id, nextSaved)
 
     try {
       if (prevSaved) {
@@ -72,6 +75,7 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
       }
     } catch {
       setIsSaved(prevSaved)
+      onToggleSave?.(post.id, prevSaved)
     }
   }
 

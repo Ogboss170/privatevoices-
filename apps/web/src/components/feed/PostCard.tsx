@@ -13,9 +13,10 @@ interface PostCardProps {
   post: Post
   currentUserId?: string
   onDelete?: (postId: string) => void
+  onToggleSave?: (postId: string, isSaved: boolean) => void
 }
 
-export default function PostCard({ post, currentUserId, onDelete }: PostCardProps): React.JSX.Element {
+export default function PostCard({ post, currentUserId, onDelete, onToggleSave }: PostCardProps): React.JSX.Element {
   const supabase = createSupabaseBrowserClient()
   const [isLiked, setIsLiked] = useState(post.isLikedByMe)
   const [likeCount, setLikeCount] = useState(post.likeCount)
@@ -108,7 +109,9 @@ export default function PostCard({ post, currentUserId, onDelete }: PostCardProp
 
   async function handleToggleSave() {
     const prevSaved = isSaved
-    setIsSaved(!prevSaved)
+    const nextSaved = !prevSaved
+    setIsSaved(nextSaved)
+    onToggleSave?.(post.id, nextSaved)
 
     try {
       if (prevSaved) {
@@ -121,6 +124,7 @@ export default function PostCard({ post, currentUserId, onDelete }: PostCardProp
       }
     } catch {
       setIsSaved(prevSaved)
+      onToggleSave?.(post.id, prevSaved)
     }
   }
 
