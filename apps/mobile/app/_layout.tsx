@@ -1,10 +1,11 @@
 import { useEffect } from 'react'
 import { Slot, useRouter, useSegments } from 'expo-router'
 import { supabase } from '../lib/supabase'
+import { registerForPushNotificationsAsync, setupNotificationListeners } from '../lib/pushNotifications'
 
 /**
- * Root layout — handles Supabase auth state changes and redirects
- * unauthenticated users to the (auth) group.
+ * Root layout — handles Supabase auth state changes, redirects,
+ * and registers device push notification tokens.
  */
 export default function RootLayout() {
   const router = useRouter()
@@ -20,10 +21,28 @@ export default function RootLayout() {
         } else if (session && inAuthGroup) {
           router.replace('/(tabs)')
         }
+
+        if (session?.user) {
+          registerForPushNotificationsAsync(session.user.id)
+        }
       }
     )
 
-    return () => subscription.unsubscribe()
+    // Setup deep-link listener for incoming notification taps
+    const removeListener = setupNotificationListeners((targetUrl) => {
+      if (targetUrl) {
+        try {
+          router.push(targetUrl as any)
+        } catch {
+          // Fallback if route formatting varies
+        }
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
+      removeListener()
+    }
   }, [segments, router])
 
   return <Slot />
