@@ -102,6 +102,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="communities"
         options={{
+          href: null,
           title: 'Communities',
         }}
       />
