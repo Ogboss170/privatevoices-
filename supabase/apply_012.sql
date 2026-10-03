@@ -1,4 +1,4 @@
-﻿-- Private Voices: 012_hashtag_sync_and_search.sql
+-- Private Voices: 012_hashtag_sync_and_search.sql
 -- Run in Supabase SQL Editor (project trwraypolgqhkrxlijql). Safe to re-run.
 -- ============================================================
 -- Private Voices â€” Migration 012: Hashtags Sync & Discovery
@@ -25,28 +25,25 @@ CREATE POLICY "Post hashtags can be inserted by authenticated"
 ON public.post_hashtags FOR INSERT
 WITH CHECK (TRUE);
 
--- 2. Function to automatically extract and link #hashtags on post create/update
+-- 2. Function to automatically extract and link hashtags on post create/update
 CREATE OR REPLACE FUNCTION public.sync_post_hashtags()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER AS $fn$
 DECLARE
   tag_record RECORD;
   tag_text TEXT;
   found_tag_id UUID;
 BEGIN
-  -- Clear previous associations if updating post content
   IF TG_OP = 'UPDATE' THEN
     DELETE FROM public.post_hashtags WHERE post_id = NEW.id;
   END IF;
 
-  -- Find and link all #hashtags from post content
   IF NEW.content IS NOT NULL AND NEW.content <> '' THEN
     FOR tag_record IN
       SELECT DISTINCT LOWER(m[1]) AS tag
-      FROM regexp_matches(NEW.content, '#([A-Za-z0-9_]{2,50})', 'g') AS m
+      FROM regexp_matches(NEW.content, '\x23([A-Za-z0-9_]{2,50})', 'g') AS m
     LOOP
       tag_text := tag_record.tag;
       IF length(tag_text) > 0 THEN
-        -- Upsert tag
         INSERT INTO public.hashtags (name)
         VALUES (tag_text)
         ON CONFLICT (LOWER(name)) DO UPDATE SET name = EXCLUDED.name
@@ -67,7 +64,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$fn$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 3. Trigger on public.posts
 DROP TRIGGER IF EXISTS trg_sync_post_hashtags ON public.posts;
