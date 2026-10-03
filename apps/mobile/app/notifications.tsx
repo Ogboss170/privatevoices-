@@ -44,23 +44,13 @@ export default function NotificationsScreen() {
     try {
       let { data, error } = await supabase
         .from('notifications')
-        .select('*, actor:profiles!notifications_actor_id_fkey(id, username, display_name, avatar_url)')
-        .eq('recipient_id', uId)
+        .select('*')
         .order('created_at', { ascending: false })
         .limit(50)
 
-      if (error || !data) {
-        console.warn('Mobile notifications FK query failed, falling back to direct select:', error)
-        const fallbackRes = await supabase
-          .from('notifications')
-          .select('*')
-          .eq('recipient_id', uId)
-          .order('created_at', { ascending: false })
-          .limit(50)
-        data = fallbackRes.data
-      }
-
       if (data && data.length > 0) {
+        data = data.filter((n: any) => (n.recipient_id === uId) || (n.user_id === uId))
+
         const missingActorIds = data
           .filter((n: any) => n.actor_id && !n.actor)
           .map((n: any) => n.actor_id)
@@ -78,7 +68,7 @@ export default function NotificationsScreen() {
           const actorData = n.actor || profileMap.get(n.actor_id)
           return {
             id: n.id,
-            recipientId: n.recipient_id,
+            recipientId: n.recipient_id || n.user_id,
             actorId: n.type === 'whisper' ? null : n.actor_id,
             actor: n.type === 'whisper' || !actorData ? null : {
               id: actorData.id,
@@ -88,7 +78,7 @@ export default function NotificationsScreen() {
             },
             type: n.type,
             title: n.title,
-            message: n.message,
+            message: n.message || n.body || '',
             entityType: n.entity_type,
             entityId: n.entity_id,
             isRead: n.is_read,
