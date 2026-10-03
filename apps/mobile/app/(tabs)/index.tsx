@@ -40,87 +40,113 @@ export default function HomeScreen() {
     if (isInitial) {
       setLoading(true)
     }
-    let query = supabase
-      .from('posts')
-      .select('*, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url)')
-      .order('created_at', { ascending: false })
 
-    if (activeTab === 'following' && currentUserId) {
-      const { data: follows } = await supabase
-        .from('follows')
-        .select('following_id')
-        .eq('follower_id', currentUserId)
+    try {
+      let query = supabase
+        .from('posts')
+        .select('*, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url)')
+        .order('created_at', { ascending: false })
 
-      const followingIds = (follows ?? []).map((f) => f.following_id)
-      followingIds.push(currentUserId)
-      query = query.in('author_id', followingIds)
-    } else if (activeTab === 'community') {
-      query = query.not('community_id', 'is', null)
+      if (activeTab === 'following' && currentUserId) {
+        const { data: follows } = await supabase
+          .from('follows')
+          .select('following_id')
+          .eq('follower_id', currentUserId)
+
+        const followingIds = (follows ?? []).map((f) => f.following_id)
+        followingIds.push(currentUserId)
+        query = query.in('author_id', followingIds)
+      } else if (activeTab === 'community') {
+        query = query.not('community_id', 'is', null)
+      }
+
+      let { data, error } = await query
+
+      if (error || !data) {
+        console.warn('Mobile feed query error, retrying without FK embedding:', error)
+        const fallbackRes = await supabase
+          .from('posts')
+          .select('*')
+          .order('created_at', { ascending: false })
+        data = fallbackRes.data
+      }
+
+      if (data && data.length > 0) {
+        const authorIds = Array.from(new Set(data.map((p) => p.author_id)))
+        const { data: profList } = await supabase
+          .from('profiles')
+          .select('id, username, display_name, avatar_url')
+          .in('id', authorIds)
+
+        const profileMap = new Map((profList ?? []).map((prof) => [prof.id, prof]))
+
+        const formatted: Post[] = await Promise.all(
+          data.map(async (p) => {
+            let likeCount = 0
+            let commentCount = 0
+
+            try {
+              const [{ count: lCount }, { count: cCount }] = await Promise.all([
+                supabase.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
+                supabase.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
+              ])
+              likeCount = lCount ?? 0
+              commentCount = cCount ?? 0
+            } catch {
+              // ignore
+            }
+
+            let isLikedByMe = false
+            let isSavedByMe = false
+
+            if (currentUserId) {
+              try {
+                const [{ data: like }, { data: save }] = await Promise.all([
+                  supabase.from('likes').select('user_id').match({ user_id: currentUserId, post_id: p.id }).maybeSingle(),
+                  supabase.from('saved_posts').select('user_id').match({ user_id: currentUserId, post_id: p.id }).maybeSingle(),
+                ])
+                isLikedByMe = !!like
+                isSavedByMe = !!save
+              } catch {
+                // ignore
+              }
+            }
+
+            const authorData = p.author || profileMap.get(p.author_id)
+
+            return {
+              id: p.id,
+              authorId: p.author_id,
+              author: {
+                id: authorData?.id || p.author_id,
+                username: authorData?.username || 'user',
+                displayName: authorData?.display_name || 'User',
+                avatarUrl: authorData?.avatar_url || null,
+              },
+              content: p.content,
+              imageUrls: p.image_urls ?? [],
+              hashtags: [],
+              likeCount,
+              commentCount,
+              repostCount: 0,
+              isLikedByMe,
+              isSavedByMe,
+              isRepostedByMe: false,
+              createdAt: p.created_at,
+              updatedAt: p.updated_at,
+            }
+          })
+        )
+        setPosts(formatted)
+      } else {
+        setPosts([])
+      }
+    } catch (err) {
+      console.error('Fatal mobile feed error:', err)
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
     }
-
-    const { data, error } = await query
-
-    if (error) {
-      console.error('Error fetching mobile feed posts:', error)
-    }
-
-    if (data) {
-      const formatted: Post[] = await Promise.all(
-        data.map(async (p) => {
-          const [{ count: likeCount }, { count: commentCount }] = await Promise.all([
-            supabase.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
-            supabase.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
-          ])
-
-          let isLikedByMe = false
-          let isSavedByMe = false
-
-          if (currentUserId) {
-            const [{ data: like }, { data: save }] = await Promise.all([
-              supabase.from('likes').select('user_id').match({ user_id: currentUserId, post_id: p.id }).maybeSingle(),
-              supabase.from('saved_posts').select('user_id').match({ user_id: currentUserId, post_id: p.id }).maybeSingle(),
-            ])
-            isLikedByMe = !!like
-            isSavedByMe = !!save
-          }
-
-          let authorData = p.author
-          if (!authorData) {
-            const { data: fallbackProf } = await supabase
-              .from('profiles')
-              .select('id, username, display_name, avatar_url')
-              .eq('id', p.author_id)
-              .maybeSingle()
-            if (fallbackProf) authorData = fallbackProf
-          }
-
-          return {
-            id: p.id,
-            authorId: p.author_id,
-            author: {
-              id: authorData?.id || p.author_id,
-              username: authorData?.username || 'user',
-              displayName: authorData?.display_name || 'User',
-              avatarUrl: authorData?.avatar_url || null,
-            },
-            content: p.content,
-            imageUrls: p.image_urls ?? [],
-            hashtags: [],
-            likeCount: likeCount ?? 0,
-            commentCount: commentCount ?? 0,
-            repostCount: 0,
-            isLikedByMe,
-            isSavedByMe,
-            isRepostedByMe: false,
-            createdAt: p.created_at,
-            updatedAt: p.updated_at,
-          }
-        })
-      )
-      setPosts(formatted)
-    }
-    setLoading(false)
-    setRefreshing(false)
   }, [activeTab, currentUserId])
 
   // Refetch posts in background when tab screen is focused

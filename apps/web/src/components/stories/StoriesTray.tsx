@@ -32,36 +32,74 @@ export default function StoriesTray(): React.JSX.Element {
 
   const fetchStories = async () => {
     setLoading(true)
-    const now = new Date().toISOString()
+    try {
+      const now = new Date().toISOString()
 
-    const { data: stories } = await supabase
-      .from('stories')
-      .select('*, author:profiles!stories_author_id_fkey(id, username, display_name, avatar_url)')
-      .gt('expires_at', now)
-      .order('created_at', { ascending: false })
+      let { data: stories, error } = await supabase
+        .from('stories')
+        .select('*, author:profiles!stories_author_id_fkey(id, username, display_name, avatar_url)')
+        .gt('expires_at', now)
+        .order('created_at', { ascending: false })
 
-    if (stories) {
-      const authorMap = new Map<string, StoryGroup>()
-
-      for (const story of stories) {
-        const authorId = story.author_id
-        if (!authorMap.has(authorId)) {
-          authorMap.set(authorId, {
-            author: {
-              id: story.author.id,
-              username: story.author.username,
-              displayName: story.author.display_name,
-              avatarUrl: story.author.avatar_url,
-            },
-            stories: [],
-          })
-        }
-        authorMap.get(authorId)!.stories.push(story)
+      if (error || !stories) {
+        console.warn('Stories FK query failed, falling back to direct select:', error)
+        const fallbackRes = await supabase
+          .from('stories')
+          .select('*')
+          .gt('expires_at', now)
+          .order('created_at', { ascending: false })
+        stories = fallbackRes.data
       }
 
-      setStoryGroups(Array.from(authorMap.values()))
+      if (stories && stories.length > 0) {
+        // Collect distinct author IDs for missing author profiles
+        const missingAuthorIds = stories
+          .filter((s) => !s.author)
+          .map((s) => s.author_id)
+
+        let profileMap = new Map()
+        if (missingAuthorIds.length > 0) {
+          const { data: profs } = await supabase
+            .from('profiles')
+            .select('id, username, display_name, avatar_url')
+            .in('id', missingAuthorIds)
+          profileMap = new Map((profs ?? []).map((p) => [p.id, p]))
+        }
+
+        const authorMap = new Map<string, StoryGroup>()
+
+        for (const story of stories) {
+          const authorId = story.author_id
+          const authorData = story.author || profileMap.get(authorId) || {
+            id: authorId,
+            username: 'user',
+            displayName: 'User',
+            avatarUrl: null,
+          }
+
+          if (!authorMap.has(authorId)) {
+            authorMap.set(authorId, {
+              author: {
+                id: authorData.id,
+                username: authorData.username || 'user',
+                displayName: authorData.display_name || authorData.displayName || 'User',
+                avatarUrl: authorData.avatar_url || authorData.avatarUrl || null,
+              },
+              stories: [],
+            })
+          }
+          authorMap.get(authorId)!.stories.push(story)
+        }
+
+        setStoryGroups(Array.from(authorMap.values()))
+      } else {
+        setStoryGroups([])
+      }
+    } catch (err) {
+      console.error('Error fetching stories:', err)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   useEffect(() => {
