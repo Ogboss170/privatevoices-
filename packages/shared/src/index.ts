@@ -276,6 +276,7 @@ export type ModerationAction =
   | 'ALLOW_AND_FLAG'
   | 'BLUR_RESTRICT'
   | 'HOLD_FOR_REVIEW'
+  | 'BLOCK'
   | 'REMOVE'
   | 'RESTRICT_ACCOUNT'
   | 'SUSPEND_TEMPORARY'
