@@ -124,8 +124,13 @@ export default function PublicProfileHeader({
 
             {profile.bio && <p className="mt-2 text-sm text-gray-700 leading-relaxed">{profile.bio}</p>}
 
-            {/* Clickable Followers and Following stats */}
+            {/* Profile Stats: Posts · Followers · Following */}
             <div className="mt-3 flex gap-5 text-sm">
+              <div>
+                <span className="font-bold text-gray-900">{profile.postCount}</span>{' '}
+                <span className="text-gray-500">posts</span>
+              </div>
+
               <button
                 type="button"
                 onClick={() => handleOpenFollowModal('followers')}
