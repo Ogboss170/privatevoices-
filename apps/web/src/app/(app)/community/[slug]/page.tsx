@@ -395,34 +395,107 @@ export default function CommunityDetailPage(): React.JSX.Element {
                   <p className="text-xs text-gray-400">@{m.user?.username}</p>
                 </div>
               </div>
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 capitalize">
-                {m.role}
-              </span>
+              {/* Role Badge */}
+              {m.role === 'owner' ? (
+                <span className="flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                  <Shield size={12} />
+                  Owner
+                </span>
+              ) : m.role === 'moderator' ? (
+                <span className="flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                  <UserCheck size={12} />
+                  Moderator
+                </span>
+              ) : (
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">
+                  Member
+                </span>
+              )}
             </div>
           ))}
         </div>
       )}
 
       {activeTab === 'manage' && isOwnerOrMod && (
-        <div className="card p-6 space-y-4">
-          <h3 className="font-bold text-gray-900 text-base">Community Moderation & Management</h3>
-          <p className="text-xs text-gray-500">Owner and moderator administrative tools.</p>
+        <div className="space-y-4">
+          {/* Role Assignment Panel */}
+          <div className="card p-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <Shield size={18} className="text-brand-600" />
+              <h3 className="font-bold text-gray-900 text-base">Member Roles & Moderation</h3>
+            </div>
+            <p className="text-xs text-gray-500">Promote members to Moderator, demote, or remove them from the community.</p>
 
-          <div className="space-y-2 pt-2 text-xs">
-            <button
-              onClick={() => alert('Pending join requests reviewed.')}
-              className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-xl font-medium text-gray-700 flex justify-between items-center"
-            >
-              <span>Review Join Requests</span>
-              <span className="text-gray-400 font-mono">0 pending</span>
-            </button>
-            <button
-              onClick={() => alert('Community reports opened.')}
-              className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-xl font-medium text-gray-700 flex justify-between items-center"
-            >
-              <span>Review Content Reports</span>
-              <span className="text-gray-400 font-mono">0 reports</span>
-            </button>
+            <div className="space-y-3 pt-2">
+              {members
+                .filter((m) => m.role !== 'owner')
+                .map((m) => (
+                  <div key={m.user?.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center font-bold text-brand-600 text-xs">
+                        {m.user?.display_name?.charAt(0).toUpperCase() || 'U'}
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-gray-900 block">{m.user?.display_name}</span>
+                        <span className="text-[11px] text-gray-400 font-mono">@{m.user?.username}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {/* Current role badge */}
+                      {m.role === 'moderator' ? (
+                        <span className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                          <UserCheck size={11} />
+                          Mod
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                          Member
+                        </span>
+                      )}
+
+                      {/* Promote / Demote */}
+                      {userRole === 'owner' && (
+                        <button
+                          onClick={async () => {
+                            const newRole = m.role === 'moderator' ? 'member' : 'moderator'
+                            await supabase
+                              .from('community_members')
+                              .update({ role: newRole })
+                              .match({ community_id: community.id, user_id: m.user_id })
+                            fetchCommunityData()
+                          }}
+                          className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-colors ${
+                            m.role === 'moderator'
+                              ? 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                              : 'bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200'
+                          }`}
+                        >
+                          {m.role === 'moderator' ? 'Demote' : 'Make Mod'}
+                        </button>
+                      )}
+
+                      {/* Remove from community */}
+                      {(userRole === 'owner' || (userRole === 'moderator' && m.role === 'member')) && (
+                        <button
+                          onClick={async () => {
+                            if (!confirm(`Remove @${m.user?.username} from this community?`)) return
+                            await supabase
+                              .from('community_members')
+                              .delete()
+                              .match({ community_id: community.id, user_id: m.user_id })
+                            fetchCommunityData()
+                          }}
+                          className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Remove member"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+            </div>
           </div>
         </div>
       )}
