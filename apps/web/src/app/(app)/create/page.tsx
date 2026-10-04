@@ -47,6 +47,7 @@ export default function CreatePostPage(): React.JSX.Element {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [showDiscardModal, setShowDiscardModal] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
 
   const imageInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
@@ -145,6 +146,7 @@ export default function CreatePostPage(): React.JSX.Element {
 
     let uploadedUrls: string[] = []
     if (imageFiles.length > 0) {
+      setUploadProgress(10)
       for (let i = 0; i < imageFiles.length; i++) {
         const file = imageFiles[i]
         const fileExt = file.name.split('.').pop() || 'jpg'
@@ -165,8 +167,10 @@ export default function CreatePostPage(): React.JSX.Element {
         } else {
           console.error('Failed to upload image:', uploadError)
         }
+        setUploadProgress(Math.round(((i + 1) / imageFiles.length) * 80) + 10)
       }
     }
+    setUploadProgress(95)
 
     if (selectedGif && !uploadedUrls.includes(selectedGif)) {
       uploadedUrls.push(selectedGif)
@@ -294,12 +298,24 @@ export default function CreatePostPage(): React.JSX.Element {
           className="px-4 py-1.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-40 disabled:hover:bg-brand-600 text-white font-bold rounded-full text-xs transition-all shadow-sm flex items-center space-x-1.5"
         >
           {loading ? (
-            <span className="animate-pulse">Publishing…</span>
+            <span className="animate-pulse">
+              {uploadProgress !== null ? `Uploading (${uploadProgress}%)` : 'Publishing…'}
+            </span>
           ) : (
             <span>Post</span>
           )}
         </button>
       </header>
+
+      {/* Upload Progress Bar */}
+      {uploadProgress !== null && (
+        <div className="w-full bg-gray-100 h-1.5 overflow-hidden">
+          <div
+            className="bg-brand-600 h-full transition-all duration-300 ease-out"
+            style={{ width: `${uploadProgress}%` }}
+          />
+        </div>
+      )}
 
       {/* ── Composer Body ── */}
       <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-6 space-y-6">
