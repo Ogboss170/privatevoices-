@@ -50,6 +50,13 @@ export default function SettingsPage(): React.JSX.Element {
   const [profile, setProfile] = useState<any>(null)
   const [privacy, setPrivacy] = useState<any>(null)
 
+  // Blocked and Muted user modal states
+  const [showBlockedModal, setShowBlockedModal] = useState(false)
+  const [showMutedModal, setShowMutedModal] = useState(false)
+  const [blockedUsers, setBlockedUsers] = useState<any[]>([])
+  const [mutedUsers, setMutedUsers] = useState<any[]>([])
+  const [loadingSafetyLists, setLoadingSafetyLists] = useState(false)
+
   // Report Bug Modal states
   const [showReportBugModal, setShowReportBugModal] = useState(false)
   const [bugCategory, setBugCategory] = useState('ui_glitch')
@@ -146,6 +153,40 @@ export default function SettingsPage(): React.JSX.Element {
   function showSavedBadge() {
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+  }
+
+  async function fetchBlockedUsers() {
+    if (!userId) return
+    setLoadingSafetyLists(true)
+    const { data } = await supabase
+      .from('user_blocks')
+      .select('blocked_id, profile:profiles!user_blocks_blocked_id_fkey(id, username, display_name, avatar_url)')
+      .eq('blocker_id', userId)
+    setBlockedUsers(data || [])
+    setLoadingSafetyLists(false)
+  }
+
+  async function fetchMutedUsers() {
+    if (!userId) return
+    setLoadingSafetyLists(true)
+    const { data } = await supabase
+      .from('user_mutes')
+      .select('muted_id, profile:profiles!user_mutes_muted_id_fkey(id, username, display_name, avatar_url)')
+      .eq('muter_id', userId)
+    setMutedUsers(data || [])
+    setLoadingSafetyLists(false)
+  }
+
+  async function handleUnblock(blockedId: string) {
+    if (!userId) return
+    await supabase.from('user_blocks').delete().eq('blocker_id', userId).eq('blocked_id', blockedId)
+    setBlockedUsers((prev) => prev.filter((item) => item.blocked_id !== blockedId))
+  }
+
+  async function handleUnmute(mutedId: string) {
+    if (!userId) return
+    await supabase.from('user_mutes').delete().eq('muter_id', userId).eq('muted_id', mutedId)
+    setMutedUsers((prev) => prev.filter((item) => item.muted_id !== mutedId))
   }
 
   async function handleLogoutAllDevices() {
@@ -348,7 +389,13 @@ export default function SettingsPage(): React.JSX.Element {
             />
           </div>
 
-          <div className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors">
+          <div
+            onClick={() => {
+              setShowBlockedModal(true)
+              fetchBlockedUsers()
+            }}
+            className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
+          >
             <div className="flex items-center space-x-3">
               <Ban size={18} className="text-gray-500" />
               <div>
@@ -389,7 +436,13 @@ export default function SettingsPage(): React.JSX.Element {
             <ChevronRight size={16} className="text-gray-400" />
           </div>
 
-          <div className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors">
+          <div
+            onClick={() => {
+              setShowMutedModal(true)
+              fetchMutedUsers()
+            }}
+            className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
+          >
             <div className="flex items-center space-x-3">
               <VolumeX size={18} className="text-gray-500" />
               <div>
@@ -917,6 +970,104 @@ export default function SettingsPage(): React.JSX.Element {
                   </button>
                 </div>
               </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── BLOCKED ACCOUNTS MODAL ── */}
+      {showBlockedModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-gray-100">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center space-x-2 text-gray-900 font-bold text-base">
+                <Ban size={20} className="text-red-500" />
+                <span>Blocked Accounts</span>
+              </div>
+              <button
+                onClick={() => setShowBlockedModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-full transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {loadingSafetyLists ? (
+              <div className="py-8 text-center text-xs text-gray-400">Loading blocked list...</div>
+            ) : blockedUsers.length === 0 ? (
+              <div className="py-8 text-center text-xs text-gray-500">
+                You haven't blocked any accounts.
+              </div>
+            ) : (
+              <div className="max-h-64 overflow-y-auto space-y-2 divide-y divide-gray-50">
+                {blockedUsers.map((item) => (
+                  <div key={item.blocked_id} className="flex items-center justify-between pt-2">
+                    <div>
+                      <span className="text-xs font-bold text-gray-800 block">
+                        {item.profile?.display_name || 'User'}
+                      </span>
+                      <span className="text-[11px] text-purple-600 font-mono">
+                        @{item.profile?.username || 'user'}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => handleUnblock(item.blocked_id)}
+                      className="px-3 py-1 bg-gray-100 hover:bg-red-50 hover:text-red-600 text-xs font-semibold text-gray-700 rounded-lg transition-colors"
+                    >
+                      Unblock
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── MUTED ACCOUNTS MODAL ── */}
+      {showMutedModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-gray-100">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center space-x-2 text-gray-900 font-bold text-base">
+                <VolumeX size={20} className="text-amber-500" />
+                <span>Muted Accounts</span>
+              </div>
+              <button
+                onClick={() => setShowMutedModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-full transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {loadingSafetyLists ? (
+              <div className="py-8 text-center text-xs text-gray-400">Loading muted list...</div>
+            ) : mutedUsers.length === 0 ? (
+              <div className="py-8 text-center text-xs text-gray-500">
+                You haven't muted any accounts.
+              </div>
+            ) : (
+              <div className="max-h-64 overflow-y-auto space-y-2 divide-y divide-gray-50">
+                {mutedUsers.map((item) => (
+                  <div key={item.muted_id} className="flex items-center justify-between pt-2">
+                    <div>
+                      <span className="text-xs font-bold text-gray-800 block">
+                        {item.profile?.display_name || 'User'}
+                      </span>
+                      <span className="text-[11px] text-purple-600 font-mono">
+                        @{item.profile?.username || 'user'}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => handleUnmute(item.muted_id)}
+                      className="px-3 py-1 bg-gray-100 hover:bg-amber-50 hover:text-amber-600 text-xs font-semibold text-gray-700 rounded-lg transition-colors"
+                    >
+                      Unmute
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>
