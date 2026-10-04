@@ -262,7 +262,9 @@ export default function AdminDashboardPage(): React.JSX.Element {
                   <th className="p-4">User</th>
                   <th className="p-4">Username</th>
                   <th className="p-4">Privacy</th>
+                  <th className="p-4">Status</th>
                   <th className="p-4">Joined</th>
+                  <th className="p-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
@@ -277,8 +279,32 @@ export default function AdminDashboardPage(): React.JSX.Element {
                         <span className="px-2 py-0.5 bg-slate-800 text-slate-300 rounded-md">Public</span>
                       )}
                     </td>
+                    <td className="p-4">
+                      {u.is_banned ? (
+                        <span className="px-2 py-0.5 bg-red-500/20 text-red-400 rounded-md font-semibold">Banned</span>
+                      ) : (
+                        <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded-md font-semibold">Active</span>
+                      )}
+                    </td>
                     <td className="p-4 text-slate-400">
                       {new Date(u.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="p-4 text-right">
+                      <button
+                        onClick={async () => {
+                          const newStatus = !u.is_banned
+                          if (!confirm(`Are you sure you want to ${newStatus ? 'BAN' : 'UNBAN'} @${u.username}?`)) return
+                          await supabase.from('profiles').update({ is_banned: newStatus }).eq('id', u.id)
+                          setUsers((prev) => prev.map((item) => item.id === u.id ? { ...item, is_banned: newStatus } : item))
+                        }}
+                        className={`px-3 py-1 text-[11px] font-bold rounded-lg transition-colors ${
+                          u.is_banned
+                            ? 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+                            : 'bg-red-900/40 hover:bg-red-900/60 text-red-300 border border-red-800/50'
+                        }`}
+                      >
+                        {u.is_banned ? 'Unban User' : 'Ban User'}
+                      </button>
                     </td>
                   </tr>
                 ))}
