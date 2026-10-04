@@ -138,6 +138,20 @@ export function ChatModal({
           }
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === payload.new.id ? { ...m, is_read: payload.new.is_read } : m))
+          )
+        }
+      )
       .on('broadcast', { event: 'typing' }, ({ payload }) => {
         if (payload?.userId !== currentUserId) {
           setIsPartnerTyping(!!payload?.isTyping)
