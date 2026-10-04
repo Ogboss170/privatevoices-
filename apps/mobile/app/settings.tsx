@@ -53,6 +53,13 @@ export default function SettingsScreen() {
   const [privacy, setPrivacy] = useState<any>(null)
   const [userId, setUserId] = useState<string | null>(null)
 
+  // Blocked and Muted user modal states
+  const [showBlockedModal, setShowBlockedModal] = useState(false)
+  const [showMutedModal, setShowMutedModal] = useState(false)
+  const [blockedUsers, setBlockedUsers] = useState<any[]>([])
+  const [mutedUsers, setMutedUsers] = useState<any[]>([])
+  const [loadingSafetyLists, setLoadingSafetyLists] = useState(false)
+
   // Report Bug Modal state
   const [showBugModal, setShowBugModal] = useState(false)
   const [bugCategory, setBugCategory] = useState('ui_glitch')
@@ -124,6 +131,40 @@ export default function SettingsScreen() {
     if (!error) {
       setPrivacy((prev: any) => ({ ...prev, [key]: value }))
     }
+  }
+
+  async function fetchBlockedUsers() {
+    if (!userId) return
+    setLoadingSafetyLists(true)
+    const { data } = await supabase
+      .from('user_blocks')
+      .select('blocked_id, profile:profiles!user_blocks_blocked_id_fkey(id, username, display_name, avatar_url)')
+      .eq('blocker_id', userId)
+    setBlockedUsers(data || [])
+    setLoadingSafetyLists(false)
+  }
+
+  async function fetchMutedUsers() {
+    if (!userId) return
+    setLoadingSafetyLists(true)
+    const { data } = await supabase
+      .from('user_mutes')
+      .select('muted_id, profile:profiles!user_mutes_muted_id_fkey(id, username, display_name, avatar_url)')
+      .eq('muter_id', userId)
+    setMutedUsers(data || [])
+    setLoadingSafetyLists(false)
+  }
+
+  async function handleUnblock(blockedId: string) {
+    if (!userId) return
+    await supabase.from('user_blocks').delete().eq('blocker_id', userId).eq('blocked_id', blockedId)
+    setBlockedUsers((prev) => prev.filter((item) => item.blocked_id !== blockedId))
+  }
+
+  async function handleUnmute(mutedId: string) {
+    if (!userId) return
+    await supabase.from('user_mutes').delete().eq('muter_id', userId).eq('muted_id', mutedId)
+    setMutedUsers((prev) => prev.filter((item) => item.muted_id !== mutedId))
   }
 
   function handleLogoutAllDevices() {
@@ -291,7 +332,14 @@ export default function SettingsScreen() {
           />
         </View>
 
-        <TouchableOpacity style={styles.rowItem} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.rowItem}
+          activeOpacity={0.7}
+          onPress={() => {
+            setShowBlockedModal(true)
+            fetchBlockedUsers()
+          }}
+        >
           <View style={styles.rowLeft}>
             <Ban size={18} color={colors.gray600} />
             <Text style={styles.rowLabel}>Blocked Accounts</Text>
@@ -320,7 +368,14 @@ export default function SettingsScreen() {
           <ChevronRight size={18} color={colors.gray400} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.rowItem} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.rowItem}
+          activeOpacity={0.7}
+          onPress={() => {
+            setShowMutedModal(true)
+            fetchMutedUsers()
+          }}
+        >
           <View style={styles.rowLeft}>
             <VolumeX size={18} color={colors.gray600} />
             <Text style={styles.rowLabel}>Muted Accounts</Text>
@@ -712,6 +767,90 @@ export default function SettingsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Blocked Accounts Modal */}
+      <Modal visible={showBlockedModal} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeaderRow}>
+              <Ban size={20} color="#ef4444" />
+              <Text style={[styles.modalTitleRed, { color: colors.gray900 }]}>Blocked Accounts</Text>
+            </View>
+
+            {loadingSafetyLists ? (
+              <ActivityIndicator color={colors.brand} style={{ marginVertical: 16 }} />
+            ) : blockedUsers.length === 0 ? (
+              <Text style={styles.modalBodyText}>You haven't blocked any accounts.</Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 240 }}>
+                {blockedUsers.map((item) => (
+                  <View key={item.blocked_id} style={styles.listUserRow}>
+                    <View>
+                      <Text style={styles.listUserName}>{item.profile?.display_name || 'User'}</Text>
+                      <Text style={styles.listUserHandle}>@{item.profile?.username || 'user'}</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.unblockBtn}
+                      onPress={() => handleUnblock(item.blocked_id)}
+                    >
+                      <Text style={styles.unblockBtnText}>Unblock</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+
+            <TouchableOpacity
+              style={[styles.modalCancelBtn, { alignSelf: 'flex-end' }]}
+              onPress={() => setShowBlockedModal(false)}
+            >
+              <Text style={styles.modalCancelText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Muted Accounts Modal */}
+      <Modal visible={showMutedModal} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeaderRow}>
+              <VolumeX size={20} color="#d97706" />
+              <Text style={[styles.modalTitleRed, { color: colors.gray900 }]}>Muted Accounts</Text>
+            </View>
+
+            {loadingSafetyLists ? (
+              <ActivityIndicator color={colors.brand} style={{ marginVertical: 16 }} />
+            ) : mutedUsers.length === 0 ? (
+              <Text style={styles.modalBodyText}>You haven't muted any accounts.</Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 240 }}>
+                {mutedUsers.map((item) => (
+                  <View key={item.muted_id} style={styles.listUserRow}>
+                    <View>
+                      <Text style={styles.listUserName}>{item.profile?.display_name || 'User'}</Text>
+                      <Text style={styles.listUserHandle}>@{item.profile?.username || 'user'}</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.unmuteBtn}
+                      onPress={() => handleUnmute(item.muted_id)}
+                    >
+                      <Text style={styles.unmuteBtnText}>Unmute</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+
+            <TouchableOpacity
+              style={[styles.modalCancelBtn, { alignSelf: 'flex-end' }]}
+              onPress={() => setShowMutedModal(false)}
+            >
+              <Text style={styles.modalCancelText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   )
 }
@@ -913,5 +1052,12 @@ const styles = StyleSheet.create({
   bugTextArea: { borderWidth: 1, borderColor: colors.gray300, borderRadius: 12, padding: 12, fontSize: 13, minHeight: 90, textAlignVertical: 'top' },
   bugSubmitBtn: { backgroundColor: colors.brand, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 10 },
   bugSubmitText: { fontSize: 13, fontWeight: '700', color: '#ffffff' },
+  listUserRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.gray100 },
+  listUserName: { fontSize: 13, fontWeight: '700', color: colors.gray900 },
+  listUserHandle: { fontSize: 11, color: colors.brand, fontFamily: 'monospace' },
+  unblockBtn: { backgroundColor: '#fef2f2', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: '#fca5a5' },
+  unblockBtnText: { fontSize: 12, fontWeight: '700', color: '#ef4444' },
+  unmuteBtn: { backgroundColor: '#fffbe6', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: '#fef08a' },
+  unmuteBtnText: { fontSize: 12, fontWeight: '700', color: '#d97706' },
 })
 
