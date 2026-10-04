@@ -162,8 +162,8 @@ export default function StoryViewerModal({
           <ChevronRight size={24} />
         </button>
 
-        {/* Bottom Bar / Viewer Count */}
-        {isOwner && (
+        {/* Bottom Bar / Viewer Count / Reactions */}
+        {isOwner ? (
           <div className="pt-3 border-t border-white/10 flex items-center justify-between text-xs z-10">
             <button
               onClick={() => setShowViewers(!showViewers)}
@@ -172,6 +172,52 @@ export default function StoryViewerModal({
               <Eye size={16} />
               <span>{viewers.length} views</span>
             </button>
+          </div>
+        ) : (
+          <div className="pt-3 border-t border-white/10 space-y-2 z-10">
+            {/* Quick Emoji Reaction Buttons */}
+            <div className="flex items-center justify-around bg-black/40 backdrop-blur-md py-1.5 px-3 rounded-full border border-white/10">
+              {['❤️', '🔥', '👏', '😂', '😮', '😍'].map((emoji) => (
+                <button
+                  key={emoji}
+                  onClick={async () => {
+                    if (!currentUserId || !author.id) return
+                    // Send reaction directly to author conversation
+                    const userA = currentUserId < author.id ? currentUserId : author.id
+                    const userB = currentUserId < author.id ? author.id : currentUserId
+
+                    const { data: conv } = await supabase
+                      .from('conversations')
+                      .select('id')
+                      .eq('user_a_id', userA)
+                      .eq('user_b_id', userB)
+                      .maybeSingle()
+
+                    let targetConvId = conv?.id
+                    if (!targetConvId) {
+                      const { data: newC } = await supabase
+                        .from('conversations')
+                        .insert({ user_a_id: userA, user_b_id: userB, last_message: `Reacted ${emoji} to story` })
+                        .select('id')
+                        .single()
+                      targetConvId = newC?.id
+                    }
+
+                    if (targetConvId) {
+                      await supabase.from('messages').insert({
+                        conversation_id: targetConvId,
+                        sender_id: currentUserId,
+                        content: `Reacted ${emoji} to your story`,
+                      })
+                      alert(`Sent ${emoji} reaction to @${author.username}!`)
+                    }
+                  }}
+                  className="text-lg hover:scale-125 transition-transform"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>

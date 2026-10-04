@@ -71,7 +71,45 @@ export function StoriesTray() {
     setCurrentIndex(0)
   }
 
+  async function sendReaction(emoji: string) {
+    if (!currentUserId || !activeStoryGroup) return
+    const authorId = activeStoryGroup.author.id
+    if (currentUserId === authorId) return
+
+    try {
+      // Find or create conversation
+      let { data: conv } = await supabase
+        .from('conversations')
+        .select('id')
+        .or(`and(user_a_id.eq.${currentUserId},user_b_id.eq.${authorId}),and(user_a_id.eq.${authorId},user_b_id.eq.${currentUserId})`)
+        .maybeSingle()
+
+      if (!conv) {
+        const sorted = [currentUserId, authorId].sort()
+        const { data: newConv, error: convErr } = await supabase
+          .from('conversations')
+          .insert({ user_a_id: sorted[0], user_b_id: sorted[1] })
+          .select('id')
+          .single()
+        if (convErr) throw convErr
+        conv = newConv
+      }
+
+      if (conv) {
+        await supabase.from('messages').insert({
+          conversation_id: conv.id,
+          sender_id: currentUserId,
+          content: `Reacted ${emoji} to your story`,
+        })
+        Alert.alert('Sent', `Reacted ${emoji} to ${activeStoryGroup.author.displayName}`)
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to send reaction')
+    }
+  }
+
   const currentStory = activeStoryGroup?.stories[currentIndex]
+  const isOwner = currentUserId && activeStoryGroup?.author.id === currentUserId
 
   return (
     <View style={styles.container}>
@@ -132,6 +170,28 @@ export function StoriesTray() {
                   </Text>
                 )}
               </View>
+
+              {/* Reaction Bar & Footer */}
+              <View style={styles.viewerFooter}>
+                {!isOwner ? (
+                  <View style={styles.reactionBar}>
+                    {['❤️', '🔥', '👏', '😂', '😮', '😍'].map((emoji) => (
+                      <TouchableOpacity
+                        key={emoji}
+                        style={styles.reactionBtn}
+                        onPress={() => sendReaction(emoji)}
+                      >
+                        <Text style={styles.reactionEmoji}>{emoji}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.ownerViewsRow}>
+                    <Eye size={16} color="#94a3b8" />
+                    <Text style={styles.ownerViewsText}>Story active (Views tracked)</Text>
+                  </View>
+                )}
+              </View>
             </View>
           </View>
         </Modal>
@@ -158,4 +218,10 @@ const styles = StyleSheet.create({
   storyBody: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16, marginVertical: 12 },
   storyImage: { width: '100%', height: 260, borderRadius: 16, marginBottom: 12 },
   storyText: { color: '#ffffff', fontSize: 16, fontWeight: '600', textAlign: 'center', lineHeight: 24, backgroundColor: 'rgba(0,0,0,0.5)', padding: 10, borderRadius: 12 },
+  viewerFooter: { marginTop: 8, alignItems: 'center' },
+  reactionBar: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', paddingHorizontal: 12, paddingVertical: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 24 },
+  reactionBtn: { padding: 6 },
+  reactionEmoji: { fontSize: 22 },
+  ownerViewsRow: { flexDirection: 'row', alignItems: 'center', gap: 6, opacity: 0.8 },
+  ownerViewsText: { color: '#94a3b8', fontSize: 12, fontWeight: '500' },
 })
