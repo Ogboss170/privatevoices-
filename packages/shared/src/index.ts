@@ -395,8 +395,54 @@ export interface FeedInteraction {
   createdAt: string;
 }
 
-export interface CursorPaginatedFeedResponse<T> {
-  items: T[];
-  nextCursor?: string | null;
-  hasMore: boolean;
+// ─── Gamification & XP System ──────────────────────────────────────────────────
+
+export interface UserBadge {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  icon: string;
+  unlockedAt: string;
+}
+
+export interface UserGamificationStats {
+  userId: string;
+  xp: number;
+  level: number;
+  levelTitle: string;
+  nextLevelXp: number;
+  progressPercent: number;
+  badges: UserBadge[];
+}
+
+export function calculateUserGamification(xp: number, userBadges: UserBadge[] = []): UserGamificationStats {
+  const safeXp = Math.max(0, xp || 0);
+
+  // Level formula: Level = Math.floor(Math.sqrt(xp / 100)) + 1
+  const level = Math.floor(Math.sqrt(safeXp / 100)) + 1;
+  const currentLevelMinXp = Math.pow(level - 1, 2) * 100;
+  const nextLevelXp = Math.pow(level, 2) * 100;
+  
+  const xpInCurrentLevel = safeXp - currentLevelMinXp;
+  const xpNeededForNext = nextLevelXp - currentLevelMinXp;
+  const progressPercent = Math.min(100, Math.round((xpInCurrentLevel / xpNeededForNext) * 100));
+
+  let levelTitle = 'Novice Voice';
+  if (level >= 25) levelTitle = 'Grand Master Voice 👑';
+  else if (level >= 20) levelTitle = 'Legendary Voice ⭐';
+  else if (level >= 15) levelTitle = 'Master Speaker 💎';
+  else if (level >= 10) levelTitle = 'Influential Voice 🔥';
+  else if (level >= 5) levelTitle = 'Rising Speaker 🚀';
+  else if (level >= 2) levelTitle = 'Active Contributor 🌱';
+
+  return {
+    userId: '',
+    xp: safeXp,
+    level,
+    levelTitle,
+    nextLevelXp,
+    progressPercent,
+    badges: userBadges,
+  };
 }

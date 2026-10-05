@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { X, Lock, UserPlus, UserCheck, MessageSquare, Send } from 'lucide-react-native'
+import { X, Lock, UserPlus, UserCheck, MessageSquare, Send, Award, Zap, ShieldAlert } from 'lucide-react-native'
 import { Image } from 'expo-image'
 import { supabase } from '../lib/supabase'
 import { colors } from '../constants/colors'
@@ -18,7 +18,7 @@ import { FollowListModal } from './FollowListModal'
 import { SendWhisperModal } from './SendWhisperModal'
 import { ChatModal } from './ChatModal'
 import { MobilePostCard } from './MobilePostCard'
-import type { Post } from '@private-voices/shared'
+import { Post, calculateUserGamification, UserGamificationStats } from '@private-voices/shared'
 
 interface PublicProfileModalProps {
   visible: boolean
@@ -37,6 +37,7 @@ export function PublicProfileModal({
 }: PublicProfileModalProps) {
   const [profile, setProfile] = useState<any | null>(null)
   const [stats, setStats] = useState({ followerCount: 0, followingCount: 0, postCount: 0 })
+  const [gamification, setGamification] = useState<UserGamificationStats | null>(null)
   const [isFollowing, setIsFollowing] = useState(false)
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
@@ -81,12 +82,14 @@ export function PublicProfileModal({
         setProfile(prof)
         const targetId = prof.id
 
-        // 2. Fetch stats & follow status
+        // 2. Fetch stats, follow status, and gamification XP / badges
         const [
           { count: followerCount },
           { count: followingCount },
           { count: postCount },
           { count: isFollowingCount },
+          { data: userXpData },
+          { data: userBadgesData },
         ] = await Promise.all([
           supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', targetId),
           supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', targetId),
@@ -97,7 +100,13 @@ export function PublicProfileModal({
                 .select('*', { count: 'exact', head: true })
                 .match({ follower_id: currentUserId, following_id: targetId })
             : Promise.resolve({ count: 0 }),
+          supabase.from('profiles').select('xp').eq('id', targetId).maybeSingle(),
+          supabase.from('user_badges').select('*').eq('user_id', targetId),
         ])
+
+        const rawXp = userXpData?.xp || (postCount || 0) * 50 + (followerCount || 0) * 20
+        const gStats = calculateUserGamification(rawXp, userBadgesData || [])
+        setGamification(gStats)
 
         const followingStatus = (isFollowingCount ?? 0) > 0
         setIsFollowing(followingStatus)
@@ -289,8 +298,20 @@ export function PublicProfileModal({
                 </View>
 
                 <View style={styles.nameBlock}>
-                  <Text style={styles.displayName}>{profile.display_name || profile.username}</Text>
+                  <View style={styles.nameLevelRow}>
+                    <Text style={styles.displayName}>{profile.display_name || profile.username}</Text>
+                    {gamification && (
+                      <View style={styles.levelBadgePill}>
+                        <Award size={12} color="#ffffff" />
+                        <Text style={styles.levelBadgePillText}>Lv.{gamification.level}</Text>
+                      </View>
+                    )}
+                  </View>
                   <Text style={styles.username}>@{profile.username}</Text>
+
+                  {gamification && (
+                    <Text style={styles.levelTitleText}>{gamification.levelTitle}</Text>
+                  )}
 
                   {profile.is_private && (
                     <View style={styles.privateTag}>
@@ -300,6 +321,23 @@ export function PublicProfileModal({
                   )}
                 </View>
               </View>
+
+              {/* Gamification XP Progress Bar */}
+              {gamification && (
+                <View style={styles.xpCard}>
+                  <View style={styles.xpHeader}>
+                    <View style={styles.xpTitleRow}>
+                      <Zap size={14} color={colors.brand} />
+                      <Text style={styles.xpLabel}>Level Progress</Text>
+                    </View>
+                    <Text style={styles.xpValText}>{gamification.xp} XP</Text>
+                  </View>
+
+                  <View style={styles.xpBarTrack}>
+                    <View style={[styles.xpBarFill, { width: `${gamification.progressPercent}%` }]} />
+                  </View>
+                </View>
+              )}
 
               {!!profile.bio && <Text style={styles.bioText}>{profile.bio}</Text>}
 
@@ -530,6 +568,70 @@ const styles = StyleSheet.create({
   nameBlock: {
     flex: 1,
     gap: 2,
+  },
+  nameLevelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  levelBadgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.brand,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  levelBadgePillText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  levelTitleText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.brand,
+    marginTop: 2,
+  },
+  xpCard: {
+    backgroundColor: colors.gray50,
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    gap: 6,
+  },
+  xpHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  xpTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  xpLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.gray900,
+  },
+  xpValText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.brand,
+  },
+  xpBarTrack: {
+    height: 6,
+    backgroundColor: colors.gray200,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  xpBarFill: {
+    height: 6,
+    backgroundColor: colors.brand,
+    borderRadius: 3,
   },
   displayName: {
     fontSize: 18,
