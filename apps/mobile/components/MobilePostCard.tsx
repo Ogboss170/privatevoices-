@@ -367,6 +367,18 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
           <View>
             <Text style={styles.displayName}>{post.author.displayName}</Text>
             <Text style={styles.username}>@{post.author.username}</Text>
+            {post.community && (
+              <TouchableOpacity
+                onPress={() => router.push(`/community/${post.community?.slug}` as any)}
+                activeOpacity={0.7}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2 }}
+              >
+                <Text style={{ fontSize: 11 }}>📌</Text>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: colors.brand }}>
+                  {post.community.name}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </TouchableOpacity>
 

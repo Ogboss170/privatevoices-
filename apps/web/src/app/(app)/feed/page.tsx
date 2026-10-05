@@ -37,10 +37,10 @@ export default function FeedPage() {
     }
 
     try {
-      // 1. Fetch raw candidate posts
+      // 1. Fetch raw candidate posts with community relations
       let query = supabase
         .from('posts')
-        .select('*, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url)')
+        .select('*, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url), community:communities(id, name, slug, avatar_url, privacy)')
         .order('created_at', { ascending: false })
 
       if (activeTab === 'following' && currentUserId) {
@@ -61,29 +61,32 @@ export default function FeedPage() {
       if (error || !rawPosts) {
         const fallbackRes = await supabase
           .from('posts')
-          .select('*')
+          .select('*, community:communities(id, name, slug, avatar_url, privacy)')
           .order('created_at', { ascending: false })
         rawPosts = fallbackRes.data
       }
 
-      // 2. Fetch User Safety Filters (Blocks, Mutes, Interaction Logs)
+      // 2. Fetch User Safety Filters & Joined Communities
       let userBlocks: string[] = []
       let userMutes: string[] = []
       let userInteractions: any[] = []
+      let userJoinedCommunityIds: string[] = []
 
       if (currentUserId) {
-        const [{ data: blocks }, { data: mutes }, { data: inters }] = await Promise.all([
+        const [{ data: blocks }, { data: mutes }, { data: inters }, { data: memberships }] = await Promise.all([
           supabase.from('user_blocks').select('blocked_id').eq('blocker_id', currentUserId),
           supabase.from('user_mutes').select('muted_id').eq('muter_id', currentUserId),
           supabase.from('feed_interactions').select('*').eq('user_id', currentUserId).limit(100),
+          supabase.from('community_members').select('community_id').eq('user_id', currentUserId),
         ])
 
         userBlocks = (blocks || []).map((b) => b.blocked_id)
         userMutes = (mutes || []).map((m) => m.muted_id)
         userInteractions = inters || []
+        userJoinedCommunityIds = (memberships || []).map((m) => m.community_id)
       }
 
-      // 3. Process candidates through Moderation-First Feed Algorithm Engine
+      // 3. Process candidates through Moderation-First Feed Algorithm Engine with Community Signals
       const engineResult = FeedAlgorithmEngine.processAndRankFeed({
         rawPosts: rawPosts || [],
         userId: currentUserId || '',
@@ -92,6 +95,7 @@ export default function FeedPage() {
         userMutes,
         hiddenPostIds: [],
         userInteractions,
+        userJoinedCommunityIds,
         limit: 20,
       })
 
@@ -117,24 +121,28 @@ export default function FeedPage() {
             let isRepostedByMe = false
 
             try {
-              const [{ count: lCount }, { count: cCount }] = await Promise.all([
+              const [{ count: lCount }, { count: cCount }, { count: rCount }] = await Promise.all([
                 supabase.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
                 supabase.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
+                supabase.from('reposts').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
               ])
               likeCount = lCount ?? 0
               commentCount = cCount ?? 0
+              repostCount = rCount ?? 0
             } catch {
               // ignore count error
             }
 
             if (currentUserId) {
               try {
-                const [{ data: like }, { data: save }] = await Promise.all([
+                const [{ data: like }, { data: save }, { data: repost }] = await Promise.all([
                   supabase.from('likes').select('user_id').match({ user_id: currentUserId, post_id: p.id }).maybeSingle(),
                   supabase.from('saved_posts').select('user_id').match({ user_id: currentUserId, post_id: p.id }).maybeSingle(),
+                  supabase.from('reposts').select('user_id').match({ user_id: currentUserId, post_id: p.id }).maybeSingle(),
                 ])
                 isLikedByMe = !!like
                 isSavedByMe = !!save
+                isRepostedByMe = !!repost
               } catch {
                 // ignore
               }
@@ -152,6 +160,16 @@ export default function FeedPage() {
                 displayName: authorData?.display_name || 'User',
                 avatarUrl: authorData?.avatar_url || null,
               },
+              communityId: p.community_id || null,
+              community: p.community
+                ? {
+                    id: p.community.id,
+                    name: p.community.name,
+                    slug: p.community.slug,
+                    avatarUrl: p.community.avatar_url,
+                    privacy: p.community.privacy,
+                  }
+                : null,
               content: cleanContent,
               imageUrls,
               hashtags: [],

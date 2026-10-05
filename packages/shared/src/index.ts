@@ -74,11 +74,21 @@ export interface Poll {
   hasVoted?: boolean;
 }
 
+export interface PostCommunity {
+  id: string;
+  name: string;
+  slug: string;
+  avatarUrl?: string | null;
+  privacy?: 'public' | 'private';
+}
+
 export interface Post {
   id: string;
   authorId: string;
   author: PostAuthor;
   content: string;
+  communityId?: string | null;
+  community?: PostCommunity | null;
   imageUrls: string[];
   hashtags: string[];
   likeCount: number;
@@ -363,6 +373,9 @@ export type FeedInteractionType =
   | 'SHARE_POST'
   | 'FOLLOW_USER'
   | 'OPEN_PROFILE'
+  | 'OPEN_COMMUNITY'
+  | 'JOIN_COMMUNITY'
+  | 'FOLLOW_COMMUNITY'
   | 'HIDE_POST'
   | 'NOT_INTERESTED'
   | 'REPORT_POST'

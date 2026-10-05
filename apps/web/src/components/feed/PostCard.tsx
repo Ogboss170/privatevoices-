@@ -283,6 +283,16 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
               {post.author.displayName}
             </h3>
             <p className="text-xs text-gray-500">@{post.author.username}</p>
+            {post.community && (
+              <Link
+                href={`/community/${post.community.slug}`}
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-600 hover:underline mt-0.5"
+              >
+                <span>📌</span>
+                <span>{post.community.name}</span>
+              </Link>
+            )}
           </div>
         </Link>
 
