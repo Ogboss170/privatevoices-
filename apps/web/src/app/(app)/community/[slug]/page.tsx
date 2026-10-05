@@ -235,70 +235,92 @@ export default function CommunityDetailPage(): React.JSX.Element {
 
       {/* Community Header Banner Card */}
       <div className="card overflow-hidden">
-        <div className="h-32 bg-gradient-to-r from-brand-600 to-indigo-600 relative" />
+        <div className="h-44 bg-gradient-to-r from-brand-600 via-indigo-600 to-purple-600 relative">
+          {community.cover_url ? (
+            <img src={community.cover_url} alt={community.name} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-white/30 text-4xl font-black tracking-widest uppercase select-none">
+              {community.name}
+            </div>
+          )}
+        </div>
+
         <div className="p-6 relative pt-0">
-          <div className="flex items-end justify-between -mt-10 mb-4">
-            <div className="w-20 h-20 rounded-2xl bg-white p-1 shadow-md">
-              <div className="w-full h-full rounded-xl bg-brand-100 flex items-center justify-center text-brand-700 font-bold text-2xl">
-                {community.name.charAt(0).toUpperCase()}
-              </div>
+          <div className="flex items-end justify-between -mt-12 mb-4">
+            <div className="w-24 h-24 rounded-2xl bg-white p-1.5 shadow-lg relative z-10">
+              {community.avatar_url ? (
+                <img src={community.avatar_url} alt={community.name} className="w-full h-full rounded-xl object-cover" />
+              ) : (
+                <div className="w-full h-full rounded-xl bg-brand-100 flex items-center justify-center text-brand-700 font-bold text-3xl">
+                  {community.name.charAt(0).toUpperCase()}
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-2">
               <button
                 onClick={handleJoinLeave}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${
+                className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 ${
                   membershipStatus === 'member'
-                    ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
                     : membershipStatus === 'pending'
                     ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                    : 'bg-brand-600 text-white hover:bg-brand-700'
+                    : 'bg-brand-600 text-white hover:bg-brand-700 shadow-brand-500/25'
                 }`}
               >
-                {membershipStatus === 'member'
-                  ? 'Joined'
-                  : membershipStatus === 'pending'
-                  ? 'Requested'
-                  : 'Join Community'}
+                {membershipStatus === 'member' ? (
+                  <>
+                    <Check size={15} />
+                    <span>Joined</span>
+                  </>
+                ) : membershipStatus === 'pending' ? (
+                  <span>Requested</span>
+                ) : (
+                  <>
+                    <Plus size={15} />
+                    <span>Join Group</span>
+                  </>
+                )}
               </button>
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(window.location.href)
-                  alert('Community link copied!')
+                  alert('Community link copied to clipboard!')
                 }}
-                className="p-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl transition-colors"
+                className="px-4 py-2.5 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl font-bold text-xs transition-colors flex items-center gap-1.5 border border-gray-200"
                 title="Share Community"
               >
-                <Share2 size={16} />
+                <Share2 size={15} />
+                <span>+ Invite</span>
               </button>
             </div>
           </div>
 
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold text-gray-900">{community.name}</h2>
+              <h2 className="text-2xl font-bold text-gray-900">{community.name}</h2>
               {community.privacy === 'private' ? (
-                <span className="flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                <span className="flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
                   <Lock size={12} />
-                  <span>Private</span>
+                  <span>Private Group</span>
                 </span>
               ) : (
-                <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
                   <Globe size={12} />
-                  <span>Public</span>
+                  <span>Public Group</span>
                 </span>
               )}
             </div>
-            <p className="text-xs text-gray-500 font-mono">@{community.slug}</p>
-            {community.description && <p className="text-sm text-gray-700">{community.description}</p>}
+            <p className="text-xs text-brand-600 font-semibold font-mono">c/{community.slug}</p>
+            {community.description && <p className="text-sm text-gray-700 leading-relaxed">{community.description}</p>}
 
-            <div className="flex items-center gap-4 text-xs text-gray-500 pt-2 border-t border-gray-100">
+            <div className="flex items-center gap-4 text-xs text-gray-500 pt-3 border-t border-gray-100">
               <span className="flex items-center gap-1">
                 <Users size={14} className="text-gray-400" />
                 <strong className="text-gray-900">{members.length}</strong> members
               </span>
               <span>•</span>
-              <span className="capitalize">{community.category || 'General Topic'}</span>
+              <span className="capitalize font-medium text-gray-600">{community.category || 'General Topic'}</span>
             </div>
           </div>
         </div>
