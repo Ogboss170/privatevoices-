@@ -15,9 +15,11 @@ import { Users, Plus, Hash, Check, X } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import { supabase } from '../lib/supabase'
 import { colors } from '../constants/colors'
+import { useTheme } from '../context/ThemeContext'
 
 export default function CommunitiesScreen() {
   const router = useRouter()
+  const { colors: themeColors } = useTheme()
   const [communities, setCommunities] = useState<any[]>([])
   const [joinedIds, setJoinedIds] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -121,12 +123,12 @@ export default function CommunitiesScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
       {/* Top Action Bar */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.surfaceBorder }]}>
         <View style={styles.headerInfo}>
-          <Text style={styles.title}>Communities</Text>
-          <Text style={styles.subtitle}>Discover & join topic groups</Text>
+          <Text style={[styles.title, { color: themeColors.textPrimary }]}>Communities</Text>
+          <Text style={[styles.subtitle, { color: themeColors.textMuted }]}>Discover & join topic groups</Text>
         </View>
 
         <TouchableOpacity
@@ -146,8 +148,8 @@ export default function CommunitiesScreen() {
       ) : communities.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyEmoji}>👥</Text>
-          <Text style={styles.emptyTitle}>No Communities Yet</Text>
-          <Text style={styles.emptyBody}>
+          <Text style={[styles.emptyTitle, { color: themeColors.textPrimary }]}>No Communities Yet</Text>
+          <Text style={[styles.emptyBody, { color: themeColors.textMuted }]}>
             Be the first to create a topic community for Photography, Programming, Anime, or Campus Life!
           </Text>
         </View>
@@ -162,7 +164,7 @@ export default function CommunitiesScreen() {
           renderItem={({ item }) => {
             const isJoined = joinedIds.includes(item.id)
             return (
-              <View style={styles.card}>
+              <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }]}>
                 <TouchableOpacity
                   style={styles.cardHeader}
                   onPress={() => router.push(`/community/${item.slug}` as any)}
@@ -172,8 +174,8 @@ export default function CommunitiesScreen() {
                     <Hash size={20} color={colors.brand} />
                   </View>
                   <View style={styles.cardInfo}>
-                    <Text style={styles.commName}>{item.name}</Text>
-                    <Text style={styles.commDesc} numberOfLines={2}>
+                    <Text style={[styles.commName, { color: themeColors.textPrimary }]}>{item.name}</Text>
+                    <Text style={[styles.commDesc, { color: themeColors.textSecondary }]} numberOfLines={2}>
                       {item.description || 'Topic community'}
                     </Text>
                   </View>

@@ -17,8 +17,10 @@ import { Image } from 'expo-image'
 import { supabase } from '../../lib/supabase'
 import { colors } from '../../constants/colors'
 import { ChatModal } from '../../components/ChatModal'
+import { useTheme } from '../../context/ThemeContext'
 
 export default function InboxScreen() {
+  const { colors: themeColors } = useTheme()
   const [activeTab, setActiveTab] = useState<'whispers' | 'messages'>('whispers')
   const [whispers, setWhispers] = useState<any[]>([])
   const [conversations, setConversations] = useState<any[]>([])
@@ -248,14 +250,20 @@ export default function InboxScreen() {
   const totalUnreadDirect = Object.values(unreadCounts).reduce((a, b) => a + b, 0)
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
       {/* Tab Switcher */}
-      <View style={styles.tabRow}>
+      <View style={[styles.tabRow, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.surfaceBorder }]}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'whispers' && styles.tabActive]}
           onPress={() => setActiveTab('whispers')}
         >
-          <Text style={[styles.tabText, activeTab === 'whispers' && styles.tabTextActive]}>
+          <Text
+            style={[
+              styles.tabText,
+              { color: activeTab === 'whispers' ? colors.brand : themeColors.textSecondary },
+              activeTab === 'whispers' && styles.tabTextActive,
+            ]}
+          >
             Whispers ({whispers.length})
           </Text>
         </TouchableOpacity>
@@ -265,7 +273,13 @@ export default function InboxScreen() {
           onPress={() => setActiveTab('messages')}
         >
           <View style={styles.tabBadgeRow}>
-            <Text style={[styles.tabText, activeTab === 'messages' && styles.tabTextActive]}>
+            <Text
+              style={[
+                styles.tabText,
+                { color: activeTab === 'messages' ? colors.brand : themeColors.textSecondary },
+                activeTab === 'messages' && styles.tabTextActive,
+              ]}
+            >
               Direct Messages
             </Text>
             {totalUnreadDirect > 0 && (

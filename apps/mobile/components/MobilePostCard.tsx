@@ -39,6 +39,7 @@ import { FormattedText } from './FormattedText'
 import { MentionSuggestions } from './MentionSuggestions'
 import { MobileInteractivePoll } from './MobileInteractivePoll'
 import { PostInsightsModal } from './PostInsightsModal'
+import { useTheme } from '../context/ThemeContext'
 
 interface MobilePostCardProps {
   post: Post
@@ -52,6 +53,7 @@ interface MobilePostCardProps {
 
 export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, onPressMention, onPressHashtag, onToggleSave }: MobilePostCardProps) {
   const router = useRouter()
+  const { colors: themeColors, isDark } = useTheme()
   const [isLiked, setIsLiked] = useState(post.isLikedByMe)
   const [likeCount, setLikeCount] = useState(post.likeCount)
   const [likeBusy, setLikeBusy] = useState(false)
@@ -416,7 +418,7 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
   }
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -435,8 +437,8 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
             )}
           </View>
           <View>
-            <Text style={styles.displayName}>{post.author.displayName}</Text>
-            <Text style={styles.username}>@{post.author.username}</Text>
+            <Text style={[styles.displayName, { color: themeColors.textPrimary }]}>{post.author.displayName}</Text>
+            <Text style={[styles.username, { color: themeColors.textMuted }]}>@{post.author.username}</Text>
             {post.community && (
               <TouchableOpacity
                 onPress={() => router.push(`/community/${post.community?.slug}` as any)}
@@ -464,7 +466,7 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
       >
         <FormattedText
           text={post.content}
-          style={styles.content}
+          style={[styles.content, { color: themeColors.textPrimary }]}
           onPressMention={onPressMention}
           onPressHashtag={(tag) => {
             if (onPressHashtag) {

@@ -16,6 +16,7 @@ import { StoriesTray } from '../../components/StoriesTray'
 import { PublicProfileModal } from '../../components/PublicProfileModal'
 import type { Post } from '@private-voices/shared'
 import { extractPostMediaAndCleanContent } from '@private-voices/shared'
+import { useTheme } from '../../context/ThemeContext'
 
 const TABS = [
   { id: 'for-you', label: 'For You' },
@@ -26,6 +27,7 @@ const TABS = [
 ]
 
 export default function HomeScreen() {
+  const { colors: themeColors } = useTheme()
   const [activeTab, setActiveTab] = useState('for-you')
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
@@ -215,19 +217,25 @@ export default function HomeScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
       {/* 24-Hour Stories Tray */}
       <StoriesTray />
 
       {/* Tab filter bar */}
-      <View style={styles.tabRow}>
+      <View style={[styles.tabRow, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.surfaceBorder }]}>
         {TABS.map((tab) => (
           <TouchableOpacity
             key={tab.id}
             onPress={() => setActiveTab(tab.id)}
             style={[styles.tab, activeTab === tab.id && styles.tabActive]}
           >
-            <Text style={[styles.tabText, activeTab === tab.id && styles.tabTextActive]}>
+            <Text
+              style={[
+                styles.tabText,
+                { color: activeTab === tab.id ? colors.brand : themeColors.textSecondary },
+                activeTab === tab.id && styles.tabTextActive,
+              ]}
+            >
               {tab.label}
             </Text>
           </TouchableOpacity>
@@ -242,8 +250,8 @@ export default function HomeScreen() {
       ) : posts.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyEmoji}>✨</Text>
-          <Text style={styles.emptyTitle}>No posts yet</Text>
-          <Text style={styles.emptyBody}>
+          <Text style={[styles.emptyTitle, { color: themeColors.textPrimary }]}>No posts yet</Text>
+          <Text style={[styles.emptyBody, { color: themeColors.textSecondary }]}>
             Be the first to share your thoughts, or follow more people to fill your feed.
           </Text>
         </View>

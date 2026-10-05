@@ -27,11 +27,13 @@ import { PublicProfileModal } from '../../components/PublicProfileModal'
 import { MobilePostCard } from '../../components/MobilePostCard'
 import type { Post } from '@private-voices/shared'
 import { extractPostMediaAndCleanContent } from '@private-voices/shared'
+import { useTheme } from '../../context/ThemeContext'
 
 type SearchTab = 'all' | 'voices' | 'people' | 'communities'
 
 export default function ExploreScreen() {
   const router = useRouter()
+  const { colors: themeColors } = useTheme()
   const params = useLocalSearchParams<{ q?: string; tab?: string }>()
 
   const [searchTerm, setSearchTerm] = useState(params.q || '')
@@ -240,14 +242,14 @@ export default function ExploreScreen() {
   const normalizedSearch = searchTerm.trim().toLowerCase()
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+    <ScrollView style={[styles.container, { backgroundColor: themeColors.background }]} contentContainerStyle={styles.scrollContent}>
       {/* ── Search Bar ── */}
-      <View style={styles.searchBar}>
-        <Search size={18} color={colors.gray400} />
+      <View style={[styles.searchBar, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }]}>
+        <Search size={18} color={themeColors.textMuted} />
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { color: themeColors.textPrimary }]}
           placeholder="Search people, voices, #hashtags, communities..."
-          placeholderTextColor={colors.gray400}
+          placeholderTextColor={themeColors.textMuted}
           value={searchTerm}
           onChangeText={(val) => {
             setSearchTerm(val)
@@ -258,17 +260,17 @@ export default function ExploreScreen() {
         />
         {searchTerm.length > 0 && (
           <TouchableOpacity onPress={handleClearSearch} style={styles.clearBtn}>
-            <X size={16} color={colors.gray500} />
+            <X size={16} color={themeColors.textMuted} />
           </TouchableOpacity>
         )}
       </View>
 
       {/* ── Trending Hashtags ── */}
-      <View style={styles.hashtagsCard}>
+      <View style={[styles.hashtagsCard, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }]}>
         <View style={styles.hashtagsHeader}>
           <View style={styles.hashtagsTitleGroup}>
             <Flame size={16} color={colors.brand} />
-            <Text style={styles.hashtagsTitle}>TRENDING HASHTAGS</Text>
+            <Text style={[styles.hashtagsTitle, { color: themeColors.textPrimary }]}>TRENDING HASHTAGS</Text>
           </View>
           {isSearching && normalizedSearch.startsWith('#') && (
             <TouchableOpacity onPress={handleClearSearch}>

@@ -20,9 +20,11 @@ import { PublicProfileModal } from '../../components/PublicProfileModal'
 import type { Post } from '@private-voices/shared'
 import { extractPostMediaAndCleanContent } from '@private-voices/shared'
 import type { User } from '@supabase/supabase-js'
+import { useTheme } from '../../context/ThemeContext'
 
 export default function ProfileScreen() {
   const router = useRouter()
+  const { colors: themeColors } = useTheme()
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<{
     display_name: string
@@ -225,17 +227,17 @@ export default function ProfileScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+    <ScrollView style={[styles.container, { backgroundColor: themeColors.background }]} contentContainerStyle={styles.scrollContent}>
       {/* Top Header Bar with Settings Gear Icon */}
       <View style={styles.topHeaderBar}>
-        <Text style={styles.headerTitle}>Profile</Text>
+        <Text style={[styles.headerTitle, { color: themeColors.textPrimary }]}>Profile</Text>
         <TouchableOpacity
-          style={styles.settingsBtn}
+          style={[styles.settingsBtn, { backgroundColor: themeColors.surfaceBorder }]}
           onPress={() => router.push('/settings' as any)}
           accessibilityLabel="Settings"
           accessibilityRole="button"
         >
-          <Settings size={22} color={colors.gray800} />
+          <Settings size={22} color={themeColors.textPrimary} />
         </TouchableOpacity>
       </View>
       {/* Avatar */}
@@ -248,20 +250,20 @@ export default function ProfileScreen() {
       {/* Name & Username */}
       <View style={styles.nameGroup}>
         <View style={styles.row}>
-          <Text style={styles.displayName}>{profile?.display_name}</Text>
+          <Text style={[styles.displayName, { color: themeColors.textPrimary }]}>{profile?.display_name}</Text>
           {profile?.is_private && <Lock size={16} color={colors.brand} />}
         </View>
-        <Text style={styles.username}>@{profile?.username}</Text>
+        <Text style={[styles.username, { color: themeColors.textMuted }]}>@{profile?.username}</Text>
       </View>
 
       {/* Bio */}
-      {profile?.bio && <Text style={styles.bio}>{profile.bio}</Text>}
+      {profile?.bio && <Text style={[styles.bio, { color: themeColors.textSecondary }]}>{profile.bio}</Text>}
 
       {/* Stats */}
-      <View style={styles.statsRow}>
+      <View style={[styles.statsRow, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }]}>
         <View style={styles.stat}>
-          <Text style={styles.statNumber}>{stats.postCount}</Text>
-          <Text style={styles.statLabel}>posts</Text>
+          <Text style={[styles.statNumber, { color: themeColors.textPrimary }]}>{stats.postCount}</Text>
+          <Text style={[styles.statLabel, { color: themeColors.textMuted }]}>posts</Text>
         </View>
         <TouchableOpacity
           style={styles.stat}
@@ -270,8 +272,8 @@ export default function ProfileScreen() {
             setFollowModalVisible(true)
           }}
         >
-          <Text style={styles.statNumber}>{stats.followerCount}</Text>
-          <Text style={styles.statLabel}>followers</Text>
+          <Text style={[styles.statNumber, { color: themeColors.textPrimary }]}>{stats.followerCount}</Text>
+          <Text style={[styles.statLabel, { color: themeColors.textMuted }]}>followers</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.stat}
@@ -280,8 +282,8 @@ export default function ProfileScreen() {
             setFollowModalVisible(true)
           }}
         >
-          <Text style={styles.statNumber}>{stats.followingCount}</Text>
-          <Text style={styles.statLabel}>following</Text>
+          <Text style={[styles.statNumber, { color: themeColors.textPrimary }]}>{stats.followingCount}</Text>
+          <Text style={[styles.statLabel, { color: themeColors.textMuted }]}>following</Text>
         </TouchableOpacity>
       </View>
 
@@ -317,7 +319,7 @@ export default function ProfileScreen() {
       )}
 
       {/* Segmented Tabs: My Voices vs Saved */}
-      <View style={styles.tabBar}>
+      <View style={[styles.tabBar, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }]}>
         <TouchableOpacity
           style={[styles.tabButton, activeTab === 'posts' && styles.tabButtonActive]}
           onPress={() => setActiveTab('posts')}
