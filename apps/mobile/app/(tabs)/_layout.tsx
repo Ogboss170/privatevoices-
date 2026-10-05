@@ -249,7 +249,7 @@ export default function TabLayout() {
     <View style={[styles.customHeader, { paddingTop: insets.top }]}>
       {/* Absolutely centered title — ignores left/right button widths */}
       <View style={styles.headerTitleAbs} pointerEvents="none">
-        <Text style={styles.headerTitleText}>Private Voices</Text>
+        <Text style={styles.headerTitleText}>PRIVATE VOICES</Text>
       </View>
 
       {/* Left: + */}
@@ -344,10 +344,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitleText: {
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
     color: '#111827',
-    letterSpacing: 0.2,
+    letterSpacing: 1.6,
   },
   // Left + button
   headerSideBtn: {
