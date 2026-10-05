@@ -13,8 +13,8 @@ import {
 } from 'react-native'
 import { Users, Plus, Hash, Check, X } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
-import { supabase } from '../../lib/supabase'
-import { colors } from '../../constants/colors'
+import { supabase } from '../lib/supabase'
+import { colors } from '../constants/colors'
 
 export default function CommunitiesScreen() {
   const router = useRouter()
@@ -29,8 +29,8 @@ export default function CommunitiesScreen() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) setCurrentUserId(data.user.id)
+    supabase.auth.getUser().then(({ data }: any) => {
+      if (data?.user) setCurrentUserId(data.user.id)
     })
   }, [])
 
@@ -49,7 +49,7 @@ export default function CommunitiesScreen() {
         .select('community_id')
         .eq('user_id', currentUserId)
 
-      setJoinedIds((memberships ?? []).map((m) => m.community_id))
+      setJoinedIds((memberships ?? []).map((m: any) => m.community_id))
     }
     setLoading(false)
     setRefreshing(false)
