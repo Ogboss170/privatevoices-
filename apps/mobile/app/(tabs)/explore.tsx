@@ -442,16 +442,22 @@ export default function ExploreScreen() {
                         onPress={() => router.push(`/community/${comm.slug}` as any)}
                         activeOpacity={0.7}
                       >
-                        <View style={styles.commIconBox}>
-                          <Hash size={18} color="#7c3aed" />
+                        <View style={[styles.avatarCircle, { backgroundColor: '#f3e8ff' }]}>
+                          {comm.avatar_url ? (
+                            <Image source={{ uri: comm.avatar_url }} style={styles.avatarImg} contentFit="cover" />
+                          ) : (
+                            <Text style={[styles.avatarText, { color: '#7c3aed' }]}>
+                              {comm.name.charAt(0).toUpperCase()}
+                            </Text>
+                          )}
                         </View>
                         <View style={styles.userInfo}>
                           <Text style={styles.displayName}>{comm.name}</Text>
                           <Text style={styles.username} numberOfLines={1}>
-                            {comm.description || 'Private Voices Community'}
+                            c/{comm.slug} • {comm.privacy || 'public'}
                           </Text>
                         </View>
-                        <Text style={[styles.cardActionText, { color: '#7c3aed' }]}>Join</Text>
+                        <Text style={[styles.cardActionText, { color: '#7c3aed' }]}>View</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -609,16 +615,25 @@ export default function ExploreScreen() {
                       onPress={() => router.push(`/community/${comm.slug}` as any)}
                       activeOpacity={0.7}
                     >
-                      <View style={styles.commIconBox}>
-                        <Hash size={18} color="#7c3aed" />
+                      <View style={[styles.avatarCircle, { backgroundColor: '#f3e8ff' }]}>
+                        {comm.avatar_url ? (
+                          <Image source={{ uri: comm.avatar_url }} style={styles.avatarImg} contentFit="cover" />
+                        ) : (
+                          <Text style={[styles.avatarText, { color: '#7c3aed' }]}>
+                            {comm.name.charAt(0).toUpperCase()}
+                          </Text>
+                        )}
                       </View>
                       <View style={styles.userInfo}>
                         <Text style={styles.displayName}>{comm.name}</Text>
-                        <Text style={styles.username} numberOfLines={2}>
-                          {comm.description || 'Private Voices Community'}
-                        </Text>
+                        <Text style={styles.username}>c/{comm.slug} • {comm.privacy || 'public'}</Text>
+                        {comm.description && (
+                          <Text style={styles.bioText} numberOfLines={2}>
+                            {comm.description}
+                          </Text>
+                        )}
                       </View>
-                      <Text style={[styles.cardActionText, { color: '#7c3aed' }]}>Join</Text>
+                      <Text style={[styles.cardActionText, { color: '#7c3aed' }]}>View</Text>
                     </TouchableOpacity>
                   ))}
                 </View>

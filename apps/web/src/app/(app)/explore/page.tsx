@@ -436,18 +436,36 @@ function ExploreContent(): React.JSX.Element {
                         className="card p-3.5 flex items-center justify-between hover:border-gray-300 transition-colors group"
                       >
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold flex-shrink-0">
-                            <Hash size={18} />
+                          <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold flex-shrink-0 overflow-hidden">
+                            {comm.avatar_url ? (
+                              <Image src={comm.avatar_url} alt={comm.name} width={40} height={40} className="object-cover w-full h-full" />
+                            ) : (
+                              comm.name.charAt(0).toUpperCase()
+                            )}
                           </div>
                           <div className="min-w-0">
-                            <h4 className="font-bold text-sm text-gray-900 truncate group-hover:text-purple-600 transition-colors">
-                              {comm.name}
-                            </h4>
+                            <div className="flex items-center gap-1.5">
+                              <h4 className="font-bold text-sm text-gray-900 truncate group-hover:text-purple-600 transition-colors">
+                                {comm.name}
+                              </h4>
+                              {comm.privacy === 'private' ? (
+                                <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                                  Private
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                                  Public
+                                </span>
+                              )}
+                            </div>
                             <p className="text-xs text-gray-500 truncate">
-                              {comm.description || 'Private Voices Community'}
+                              c/{comm.slug} • {comm.category || 'General'}
                             </p>
                           </div>
                         </div>
+                        <span className="text-xs font-semibold text-purple-600 group-hover:underline flex-shrink-0">
+                          View
+                        </span>
                       </Link>
                     ))}
                   </div>
@@ -615,20 +633,36 @@ function ExploreContent(): React.JSX.Element {
                       className="card p-4 flex items-center justify-between hover:border-gray-300 transition-colors group"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-11 h-11 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold flex-shrink-0">
-                          <Hash size={20} />
+                        <div className="w-12 h-12 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold flex-shrink-0 text-lg overflow-hidden">
+                          {comm.avatar_url ? (
+                            <Image src={comm.avatar_url} alt={comm.name} width={48} height={48} className="object-cover w-full h-full" />
+                          ) : (
+                            comm.name.charAt(0).toUpperCase()
+                          )}
                         </div>
                         <div className="min-w-0">
-                          <h4 className="font-bold text-sm text-gray-900 truncate group-hover:text-purple-600 transition-colors">
-                            {comm.name}
-                          </h4>
-                          <p className="text-xs text-gray-500 truncate">
+                          <div className="flex items-center gap-1.5">
+                            <h4 className="font-bold text-sm text-gray-900 truncate group-hover:text-purple-600 transition-colors">
+                              {comm.name}
+                            </h4>
+                            {comm.privacy === 'private' ? (
+                              <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                                Private
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                                Public
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-400 font-mono">c/{comm.slug}</p>
+                          <p className="text-xs text-gray-600 truncate mt-0.5">
                             {comm.description || 'Private Voices Community'}
                           </p>
                         </div>
                       </div>
                       <span className="text-xs font-semibold text-purple-600 group-hover:underline flex-shrink-0">
-                        Join
+                        View
                       </span>
                     </Link>
                   ))}
