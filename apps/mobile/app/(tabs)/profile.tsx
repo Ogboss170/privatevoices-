@@ -241,11 +241,15 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
       {/* Avatar */}
-      <View style={styles.avatarCircle}>
-        <Text style={styles.avatarLetter}>
-          {profile?.display_name?.charAt(0)?.toUpperCase() ?? '?'}
-        </Text>
-      </View>
+      <TouchableOpacity style={styles.avatarCircle} onPress={() => setEditModalVisible(true)} activeOpacity={0.85}>
+        {profile?.avatar_url ? (
+          <Image source={{ uri: profile.avatar_url }} style={styles.avatarImg} />
+        ) : (
+          <Text style={styles.avatarLetter}>
+            {profile?.display_name?.charAt(0)?.toUpperCase() ?? '?'}
+          </Text>
+        )}
+      </TouchableOpacity>
 
       {/* Name & Username */}
       <View style={styles.nameGroup}>
@@ -413,6 +417,7 @@ export default function ProfileScreen() {
             displayName: profile.display_name,
             bio: profile.bio,
             isPrivate: profile.is_private,
+            avatarUrl: profile.avatar_url,
           }}
           onClose={() => setEditModalVisible(false)}
           onUpdated={() => user && fetchProfileData(user.id)}
@@ -472,6 +477,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
+    overflow: 'hidden',
+  },
+  avatarImg: {
+    width: 88,
+    height: 88,
   },
   avatarLetter: { fontSize: 36, fontWeight: '700', color: colors.brand },
   nameGroup: { alignItems: 'center', marginBottom: 6 },
