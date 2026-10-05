@@ -244,19 +244,18 @@ export default function TabLayout() {
     ]).start(() => setCreateVisible(true))
   }
 
-  // ── Shared header options ────────────────────────────────────────────────────
-  const headerOptions = {
-    headerStyle: styles.headerStyle,
-    headerShadowVisible: false,
-    // The title is rendered absolutely centred via headerTitle
-    headerTitle: () => (
-      <Text style={styles.headerTitleText}>Private Voices</Text>
-    ),
-    // Left: + icon
-    headerLeft: () => (
+  // ── Custom header — true screen-centre title ─────────────────────────────
+  const renderHeader = () => (
+    <View style={[styles.customHeader, { paddingTop: insets.top }]}>
+      {/* Absolutely centered title — ignores left/right button widths */}
+      <View style={styles.headerTitleAbs} pointerEvents="none">
+        <Text style={styles.headerTitleText}>Private Voices</Text>
+      </View>
+
+      {/* Left: + */}
       <RNAnimated.View style={{ transform: [{ scale: createBtnScale }] }}>
         <TouchableOpacity
-          style={styles.headerLeftBtn}
+          style={styles.headerSideBtn}
           onPress={handleCreatePress}
           activeOpacity={0.7}
           accessible
@@ -266,19 +265,19 @@ export default function TabLayout() {
           <Plus size={22} color={ACCENT} strokeWidth={2.2} />
         </TouchableOpacity>
       </RNAnimated.View>
-    ),
-    // Right: Bell with badge
-    headerRight: () => (
-      <NotificationBell
-        count={unreadCount}
-        onPress={() => router.push('/notifications' as any)}
-      />
-    ),
-    // Extra left inset so the centred title isn't displaced
-    headerLeftContainerStyle: { paddingLeft: 12 },
-    headerRightContainerStyle: { paddingRight: 12 },
-    // Center title absolutely (works on both iOS and Android)
-    headerTitleAlign: 'center' as const,
+
+      {/* Right: Bell */}
+      <View style={styles.headerRightSlot}>
+        <NotificationBell
+          count={unreadCount}
+          onPress={() => router.push('/notifications' as any)}
+        />
+      </View>
+    </View>
+  )
+
+  const headerOptions = {
+    header: renderHeader,
   }
 
   return (
@@ -327,9 +326,22 @@ export default function TabLayout() {
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  headerStyle: {
+  // ── Custom header layout ───────────────────────────────────────────────────
+  customHeader: {
     backgroundColor: '#ffffff',
-    elevation: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 44,            // standard iOS/Android nav bar height
+    paddingHorizontal: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#e5e7eb',
+  },
+  // Absolute overlay — always centred on the full screen width
+  headerTitleAbs: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
   },
   headerTitleText: {
     fontSize: 17,
@@ -337,15 +349,13 @@ const styles = StyleSheet.create({
     color: '#111827',
     letterSpacing: 0.2,
   },
-  // ── Left: + icon only ──────────────────────────────────────────────────────
-  headerLeftBtn: {
-    padding: 6,
+  // Left + button
+  headerSideBtn: {
+    padding: 8,
   },
-  headerLeftText: {
-    // unused — kept to avoid TS errors if referenced elsewhere
-    fontSize: 13,
-    fontWeight: '700',
-    color: ACCENT,
+  // Right Bell — pushed to the far right with marginLeft: 'auto'
+  headerRightSlot: {
+    marginLeft: 'auto' as any,
   },
   // ── Right: Bell ────────────────────────────────────────────────────────────
   headerRightBtn: {
