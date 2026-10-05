@@ -17,6 +17,7 @@ import {
   Bell,
   Trash2,
   Lock,
+  Repeat,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import type { AppNotification, NotificationType } from '@private-voices/shared'
@@ -181,9 +182,12 @@ export default function NotificationsPage(): React.JSX.Element {
         return <UserPlus size={18} className="text-blue-500" />
       case 'post_like':
         return <Heart size={18} className="text-rose-500 fill-rose-500" />
+      case 'post_repost':
+        return <Repeat size={18} className="text-emerald-500" />
       case 'post_comment':
+        return <MessageCircle size={18} className="text-indigo-500" />
       case 'comment_reply':
-        return <MessageCircle size={18} className="text-emerald-500" />
+        return <MessageCircle size={18} className="text-purple-500 font-bold" />
       case 'whisper':
       case 'whisper_reply':
         return <MessageSquareQuote size={18} className="text-purple-500" />
@@ -191,7 +195,8 @@ export default function NotificationsPage(): React.JSX.Element {
       case 'story_mention':
         return <AtSign size={18} className="text-amber-500" />
       case 'community':
-        return <Users size={18} className="text-indigo-500" />
+      case 'community_join':
+        return <Users size={18} className="text-indigo-600" />
       case 'system':
         return <ShieldAlert size={18} className="text-amber-600" />
       default:

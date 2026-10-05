@@ -189,6 +189,17 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
         if (error && error.code === '23505') {
           setIsReposted(true)
           setRepostCount(prevCount)
+        } else if (!error && post.authorId !== currentUserId) {
+          await supabase.from('notifications').insert({
+            recipient_id: post.authorId,
+            actor_id: currentUserId,
+            type: 'post_repost',
+            title: 'Voice Reposted 🔄',
+            message: 'reposted your Voice.',
+            entity_type: 'post',
+            entity_id: post.id,
+            is_read: false,
+          })
         }
       }
     } catch {
@@ -248,6 +259,8 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
     setShowComments(!showComments)
   }
 
+  const [replyToComment, setReplyToComment] = useState<{ id: string; username: string } | null>(null)
+
   async function handleAddComment() {
     if (!commentText.trim()) return
     if (!currentUserId) {
@@ -262,6 +275,7 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
         post_id: post.id,
         author_id: currentUserId,
         content: commentText.trim(),
+        parent_id: replyToComment?.id || null,
       })
       .select('*, author:profiles!comments_author_id_fkey(id, username, display_name, avatar_url)')
       .maybeSingle()
@@ -271,6 +285,40 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
     } else if (newComment) {
       setComments((prev) => [...prev, newComment])
       setCommentText('')
+
+      if (replyToComment) {
+        const { data: parentComm } = await supabase
+          .from('comments')
+          .select('author_id')
+          .eq('id', replyToComment.id)
+          .maybeSingle()
+
+        if (parentComm && parentComm.author_id !== currentUserId) {
+          await supabase.from('notifications').insert({
+            recipient_id: parentComm.author_id,
+            actor_id: currentUserId,
+            type: 'comment_reply',
+            title: 'New Reply 💬',
+            message: 'replied to your comment.',
+            entity_type: 'post',
+            entity_id: post.id,
+            is_read: false,
+          })
+        }
+      } else if (post.authorId !== currentUserId) {
+        await supabase.from('notifications').insert({
+          recipient_id: post.authorId,
+          actor_id: currentUserId,
+          type: 'post_comment',
+          title: 'New Comment 💬',
+          message: 'commented on your Voice.',
+          entity_type: 'post',
+          entity_id: post.id,
+          is_read: false,
+        })
+      }
+
+      setReplyToComment(null)
       setCommentCount((prev) => prev + 1)
     }
     setSubmittingComment(false)

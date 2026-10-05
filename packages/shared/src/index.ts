@@ -204,6 +204,7 @@ export type NotificationType =
   | 'follow'
   | 'follow_accept'
   | 'post_like'
+  | 'post_repost'
   | 'post_comment'
   | 'comment_reply'
   | 'mention'
@@ -212,6 +213,7 @@ export type NotificationType =
   | 'message'
   | 'story_mention'
   | 'community'
+  | 'community_join'
   | 'system';
 
 export interface NotificationActor {

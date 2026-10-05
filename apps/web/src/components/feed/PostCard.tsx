@@ -205,6 +205,18 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
         if (error && error.code === '23505') {
           setIsReposted(true)
           setRepostCount(prevCount)
+        } else if (!error && post.authorId !== currentUserId) {
+          // Send notification to post author when someone reposts their voice
+          await supabase.from('notifications').insert({
+            recipient_id: post.authorId,
+            actor_id: currentUserId,
+            type: 'post_repost',
+            title: 'Voice Reposted 🔄',
+            message: 'reposted your Voice.',
+            entity_type: 'post',
+            entity_id: post.id,
+            is_read: false,
+          })
         }
       }
     } catch {
@@ -290,6 +302,41 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
     } else if (newComment) {
       setComments((prev) => [...prev, newComment])
       setCommentText('')
+
+      // Send notification to parent comment author or post author
+      if (replyToComment) {
+        // Fetch parent comment author to notify
+        const { data: parentComm } = await supabase
+          .from('comments')
+          .select('author_id')
+          .eq('id', replyToComment.id)
+          .maybeSingle()
+
+        if (parentComm && parentComm.author_id !== userRes.user.id) {
+          await supabase.from('notifications').insert({
+            recipient_id: parentComm.author_id,
+            actor_id: userRes.user.id,
+            type: 'comment_reply',
+            title: 'New Reply 💬',
+            message: 'replied to your comment.',
+            entity_type: 'post',
+            entity_id: post.id,
+            is_read: false,
+          })
+        }
+      } else if (post.authorId !== userRes.user.id) {
+        await supabase.from('notifications').insert({
+          recipient_id: post.authorId,
+          actor_id: userRes.user.id,
+          type: 'post_comment',
+          title: 'New Comment 💬',
+          message: 'commented on your Voice.',
+          entity_type: 'post',
+          entity_id: post.id,
+          is_read: false,
+        })
+      }
+
       setReplyToComment(null)
       post.commentCount = (post.commentCount || 0) + 1
     }

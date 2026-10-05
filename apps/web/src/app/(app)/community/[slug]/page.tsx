@@ -158,9 +158,22 @@ export default function CommunityDetailPage(): React.JSX.Element {
     } else {
       // Join
       const status = community.privacy === 'private' ? 'pending' : 'member'
-      await supabase
+      const { error } = await supabase
         .from('community_members')
         .insert({ community_id: community.id, user_id: currentUserId, role: 'member', status })
+
+      if (!error && community.creator_id && community.creator_id !== currentUserId) {
+        await supabase.from('notifications').insert({
+          recipient_id: community.creator_id,
+          actor_id: currentUserId,
+          type: 'community_join',
+          title: 'New Community Member 📌',
+          message: `joined ${community.name}.`,
+          entity_type: 'community',
+          entity_id: community.id,
+          is_read: false,
+        })
+      }
 
       setMembershipStatus(status === 'pending' ? 'pending' : 'member')
       if (status === 'member') setUserRole('member')
