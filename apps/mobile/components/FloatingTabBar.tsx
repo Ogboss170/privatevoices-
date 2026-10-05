@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useRef } from 'react'
 import {
   View,
   Text,
@@ -8,41 +8,62 @@ import {
 } from 'react-native'
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Home, Compass, Plus, MessageSquare, User } from 'lucide-react-native'
+import { Home, Compass, Users, MessageSquare, User } from 'lucide-react-native'
 import { BlurView } from 'expo-blur'
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   Easing,
-  interpolateColor,
 } from 'react-native-reanimated'
 
 // ─── Brand colours ──────────────────────────────────────────────────────────
-const ACCENT = '#3b82f6'
-const ACCENT_BG = 'rgba(59, 130, 246, 0.18)'
+const ACCENT        = '#3b82f6'
+const ACCENT_BG     = 'rgba(59, 130, 246, 0.18)'
 const ACCENT_BORDER = 'rgba(59, 130, 246, 0.4)'
-const INACTIVE_COLOR = 'rgba(255, 255, 255, 0.65)'
+const INACTIVE      = 'rgba(255, 255, 255, 0.55)'
 
 // ─── Animation config ────────────────────────────────────────────────────────
 const ANIM_DURATION = 200
-const easing = Easing.out(Easing.cubic)
+const easing        = Easing.out(Easing.cubic)
 
-// ─── Ordered visible tabs (create is always the centre + button) ─────────────
-const LEFT_TABS = ['index', 'explore']
-const RIGHT_TABS = ['inbox', 'profile']
+// ─── Tab meta ────────────────────────────────────────────────────────────────
+const TAB_ORDER = ['index', 'explore', 'communities', 'inbox', 'profile'] as const
+type TabName = (typeof TAB_ORDER)[number]
 
-function getLabel(routeName: string) {
-  switch (routeName) {
-    case 'index': return 'Home'
-    case 'explore': return 'Explore'
-    case 'inbox': return 'Chat'
-    case 'profile': return 'Profile'
-    default: return routeName
+function getLabel(name: string): string {
+  switch (name) {
+    case 'index':       return 'Home'
+    case 'explore':     return 'Explore'
+    case 'communities': return 'Community'
+    case 'inbox':       return 'Chat'
+    case 'profile':     return 'Profile'
+    default:            return name
   }
 }
 
-// ─── Animated tab item ───────────────────────────────────────────────────────
+function TabIcon({
+  name,
+  color,
+  size,
+  strokeWidth,
+}: {
+  name: string
+  color: string
+  size: number
+  strokeWidth: number
+}) {
+  switch (name) {
+    case 'index':       return <Home          color={color} size={size} strokeWidth={strokeWidth} />
+    case 'explore':     return <Compass       color={color} size={size} strokeWidth={strokeWidth} />
+    case 'communities': return <Users         color={color} size={size} strokeWidth={strokeWidth} />
+    case 'inbox':       return <MessageSquare color={color} size={size} strokeWidth={strokeWidth} />
+    case 'profile':     return <User          color={color} size={size} strokeWidth={strokeWidth} />
+    default:            return <Home          color={color} size={size} strokeWidth={strokeWidth} />
+  }
+}
+
+// ─── Single animated tab item ─────────────────────────────────────────────────
 function AnimatedTabItem({
   routeName,
   isFocused,
@@ -60,54 +81,43 @@ function AnimatedTabItem({
     progress.value = withTiming(isFocused ? 1 : 0, { duration: ANIM_DURATION, easing })
   }, [isFocused])
 
-  // Animated pill background & border opacity
   const pillStyle = useAnimatedStyle(() => ({
-    backgroundColor: isFocused ? ACCENT_BG : 'transparent',
-    borderColor: isFocused ? ACCENT_BORDER : 'transparent',
-    borderWidth: isFocused ? 1 : 0,
+    backgroundColor: isFocused ? ACCENT_BG     : 'transparent',
+    borderColor:     isFocused ? ACCENT_BORDER : 'transparent',
+    borderWidth:     isFocused ? 1             : 0,
   }))
 
-  // Icon scale pops slightly when focused
-  const iconStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: withTiming(isFocused ? 1.08 : 1, { duration: ANIM_DURATION, easing }) }],
+  const iconScaleStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: withTiming(isFocused ? 1.08 : 1, { duration: ANIM_DURATION, easing }) },
+    ],
   }))
 
-  // Label colour interpolation
   const labelStyle = useAnimatedStyle(() => ({
-    color: isFocused ? ACCENT : INACTIVE_COLOR,
-    fontWeight: isFocused ? '600' : '500',
+    color:      isFocused ? ACCENT   : INACTIVE,
+    fontWeight: isFocused ? '600'    : '500',
+    opacity:    isFocused ? 1        : 0.8,
   }))
 
-  const iconColor = isFocused ? ACCENT : INACTIVE_COLOR
-  const iconSize = 20
-  const strokeWidth = isFocused ? 2.3 : 1.8
-
-  const Icon = (() => {
-    switch (routeName) {
-      case 'index':   return <Home color={iconColor} size={iconSize} strokeWidth={strokeWidth} />
-      case 'explore': return <Compass color={iconColor} size={iconSize} strokeWidth={strokeWidth} />
-      case 'inbox':   return <MessageSquare color={iconColor} size={iconSize} strokeWidth={strokeWidth} />
-      case 'profile': return <User color={iconColor} size={iconSize} strokeWidth={strokeWidth} />
-      default:        return <Home color={iconColor} size={iconSize} strokeWidth={strokeWidth} />
-    }
-  })()
+  const iconColor   = isFocused ? ACCENT : INACTIVE
+  const strokeWidth = isFocused ? 2.3    : 1.8
 
   return (
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.7}
-      style={styles.tabItemOuter}
+      style={styles.tabOuter}
       accessible
       accessibilityRole="button"
       accessibilityLabel={getLabel(routeName)}
       accessibilityState={{ selected: isFocused }}
     >
-      <Animated.View style={[styles.tabItemInner, pillStyle]}>
-        <Animated.View style={[styles.iconWrapper, iconStyle]}>
-          {Icon}
-          {hasBadge && <View style={styles.badge} />}
+      <Animated.View style={[styles.tabInner, pillStyle]}>
+        <Animated.View style={[styles.iconWrap, iconScaleStyle]}>
+          <TabIcon name={routeName} color={iconColor} size={20} strokeWidth={strokeWidth} />
+          {hasBadge && <View style={styles.dot} />}
         </Animated.View>
-        <Animated.Text style={[styles.tabLabel, labelStyle]}>
+        <Animated.Text style={[styles.label, labelStyle]}>
           {getLabel(routeName)}
         </Animated.Text>
       </Animated.View>
@@ -115,18 +125,13 @@ function AnimatedTabItem({
   )
 }
 
-// ─── Main FloatingTabBar ─────────────────────────────────────────────────────
+// ─── FloatingTabBar ───────────────────────────────────────────────────────────
 export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets()
 
-  // Hide entirely when the Create composer is active
+  // Never render during the create tab (full-screen modal behaviour)
   const activeRouteName = state.routes[state.index]?.name
   if (activeRouteName === 'create') return null
-
-  const getRoute = (name: string) => state.routes.find((r) => r.name === name)
-
-  const leftRoutes  = LEFT_TABS.map(getRoute).filter(Boolean) as typeof state.routes
-  const rightRoutes = RIGHT_TABS.map(getRoute).filter(Boolean) as typeof state.routes
 
   const handlePress = (route: (typeof state.routes)[0]) => {
     const isFocused = state.routes[state.index].key === route.key
@@ -140,10 +145,10 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
     }
   }
 
-  const handleCreatePress = () => {
-    const createRoute = state.routes.find((r) => r.name === 'create')
-    navigation.navigate(createRoute ? createRoute.name : 'create')
-  }
+  // Render tabs in the canonical order, skipping any route not in TAB_ORDER
+  const orderedRoutes = TAB_ORDER
+    .map((name) => state.routes.find((r) => r.name === name))
+    .filter(Boolean) as typeof state.routes
 
   return (
     <View
@@ -153,6 +158,7 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
       ]}
       pointerEvents="box-none"
     >
+      {/* Shadow lives outside overflow:hidden so it renders on iOS */}
       <View style={styles.shadow}>
         <View style={styles.floatingBarWrapper}>
           <BlurView
@@ -161,42 +167,19 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
             style={styles.blurContainer}
           >
             <View style={styles.tabsRow}>
-              {/* ── Left: Home | Explore ─────────────────────────── */}
-              <View style={styles.tabGroup}>
-                {leftRoutes.map((route) => (
+              {orderedRoutes.map((route) => {
+                const isFocused = state.routes[state.index].key === route.key
+                const hasBadge  = route.name === 'inbox'
+                return (
                   <AnimatedTabItem
                     key={route.key}
                     routeName={route.name}
-                    isFocused={state.routes[state.index].key === route.key}
+                    isFocused={isFocused}
+                    hasBadge={hasBadge}
                     onPress={() => handlePress(route)}
                   />
-                ))}
-              </View>
-
-              {/* ── Centre: + Create ─────────────────────────────── */}
-              <TouchableOpacity
-                onPress={handleCreatePress}
-                activeOpacity={0.82}
-                style={styles.createButton}
-                accessible
-                accessibilityRole="button"
-                accessibilityLabel="Create Voice"
-              >
-                <Plus color="#ffffff" size={24} strokeWidth={2.5} />
-              </TouchableOpacity>
-
-              {/* ── Right: Chat | Profile ─────────────────────────── */}
-              <View style={styles.tabGroup}>
-                {rightRoutes.map((route) => (
-                  <AnimatedTabItem
-                    key={route.key}
-                    routeName={route.name}
-                    isFocused={state.routes[state.index].key === route.key}
-                    hasBadge={route.name === 'inbox'}
-                    onPress={() => handlePress(route)}
-                  />
-                ))}
-              </View>
+                )
+              })}
             </View>
           </BlurView>
         </View>
@@ -214,10 +197,9 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
   },
-  // Shadow sits outside the overflow:hidden clip so it renders on iOS
   shadow: {
-    width: '90%',
-    maxWidth: 420,
+    width: '92%',
+    maxWidth: 440,
     borderRadius: 28,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
@@ -232,9 +214,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.16)',
   },
   blurContainer: {
-    height: 72,
+    height: 68,
     justifyContent: 'center',
-    paddingHorizontal: 10,
+    paddingHorizontal: 4,
     backgroundColor:
       Platform.OS === 'android'
         ? 'rgba(10, 18, 36, 0.96)'
@@ -245,34 +227,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  tabGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  // Outer touchable — gives a generous tap target
-  tabItemOuter: {
+  // Outer touchable — generous tap target
+  tabOuter: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 58,
   },
-  // Inner animated pill
-  tabItemInner: {
-    flexDirection: 'column',
+  // Animated pill
+  tabInner: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 5,
-    paddingHorizontal: 11,
-    borderRadius: 20,
+    paddingHorizontal: 8,
+    borderRadius: 18,
   },
-  iconWrapper: {
+  iconWrap: {
     position: 'relative',
   },
-  tabLabel: {
-    fontSize: 10,
+  label: {
+    fontSize: 9.5,
     marginTop: 3,
+    letterSpacing: 0.1,
   },
-  badge: {
+  dot: {
     position: 'absolute',
     top: -2,
     right: -4,
@@ -282,18 +259,5 @@ const styles = StyleSheet.create({
     backgroundColor: '#ef4444',
     borderWidth: 1,
     borderColor: 'rgba(10, 18, 36, 0.9)',
-  },
-  createButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: ACCENT,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: ACCENT,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.55,
-    shadowRadius: 10,
-    elevation: 8,
   },
 })

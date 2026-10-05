@@ -18,11 +18,11 @@ const DESKTOP_NAV_ITEMS = [
 ]
 
 const MOBILE_BOTTOM_NAV_ITEMS = [
-  { href: '/feed',    label: 'Home',    Icon: Home },
-  { href: '/explore', label: 'Explore', Icon: Search },
-  { href: '/create',  label: 'Create',  Icon: PlusSquare },
-  { href: '/inbox',   label: 'Inbox',   Icon: Inbox },
-  { href: '/profile', label: 'Profile', Icon: User },
+  { href: '/feed',        label: 'Home',      Icon: Home },
+  { href: '/explore',     label: 'Explore',   Icon: Search },
+  { href: '/communities', label: 'Community', Icon: Users },
+  { href: '/inbox',       label: 'Chat',      Icon: Inbox },
+  { href: '/profile',     label: 'Profile',   Icon: User },
 ]
 
 export default function AppShell({ children }: { children: React.ReactNode }): React.JSX.Element {
