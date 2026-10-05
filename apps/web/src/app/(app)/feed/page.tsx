@@ -122,19 +122,22 @@ export default function FeedPage() {
             let likeCount = 0
             let commentCount = 0
             let repostCount = 0
+            let viewCount = 0
             let isLikedByMe = false
             let isSavedByMe = false
             let isRepostedByMe = false
 
             try {
-              const [{ count: lCount }, { count: cCount }, { count: rCount }] = await Promise.all([
+              const [{ count: lCount }, { count: cCount }, { count: rCount }, { data: vCount }] = await Promise.all([
                 supabase.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
                 supabase.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
                 supabase.from('reposts').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
+                supabase.rpc('get_post_view_count', { p_post_id: p.id }),
               ])
               likeCount = lCount ?? 0
               commentCount = cCount ?? 0
               repostCount = rCount ?? 0
+              viewCount = typeof vCount === 'number' ? vCount : 0
             } catch {
               // ignore count error
             }
@@ -182,6 +185,7 @@ export default function FeedPage() {
               likeCount,
               commentCount,
               repostCount,
+              viewCount,
               isLikedByMe,
               isSavedByMe,
               isRepostedByMe,

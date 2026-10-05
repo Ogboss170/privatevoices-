@@ -94,6 +94,7 @@ export interface Post {
   likeCount: number;
   commentCount: number;
   repostCount: number;
+  viewCount?: number;
   isLikedByMe: boolean;
   isSavedByMe: boolean;
   isRepostedByMe: boolean;

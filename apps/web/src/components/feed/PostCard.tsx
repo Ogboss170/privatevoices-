@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { Heart, MessageCircle, Repeat, Bookmark, Share2, Trash2, MoreVertical, Flag, ShieldOff, ChevronLeft, ChevronRight, X, TrendingUp, BarChart2 } from 'lucide-react'
@@ -20,12 +20,14 @@ interface PostCardProps {
 
 export default function PostCard({ post, currentUserId, onDelete, onToggleSave }: PostCardProps): React.JSX.Element {
   const supabase = createSupabaseBrowserClient()
+  const cardRef = useRef<HTMLDivElement>(null)
   const [isLiked, setIsLiked] = useState(post.isLikedByMe)
   const [likeCount, setLikeCount] = useState(post.likeCount)
   const [likeBusy, setLikeBusy] = useState(false)
   const [isReposted, setIsReposted] = useState(post.isRepostedByMe || false)
   const [repostCount, setRepostCount] = useState(post.repostCount || 0)
   const [repostBusy, setRepostBusy] = useState(false)
+  const [viewCount, setViewCount] = useState(post.viewCount || 0)
   const [isSaved, setIsSaved] = useState(post.isSavedByMe)
   const [showComments, setShowComments] = useState(false)
   const [comments, setComments] = useState<any[]>([])
@@ -37,6 +39,48 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
   const [showInsightsModal, setShowInsightsModal] = useState(false)
 
   const isOwner = currentUserId === post.authorId
+
+  // Meaningful View Recording (1-second visibility threshold, excludes author, 24h dedup)
+  useEffect(() => {
+    if (!currentUserId || isOwner || !cardRef.current) return
+
+    let timer: NodeJS.Timeout | null = null
+    let hasRecorded = false
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !hasRecorded) {
+          timer = setTimeout(async () => {
+            hasRecorded = true
+            try {
+              const { data: recorded } = await supabase.rpc('record_post_view', {
+                p_post_id: post.id,
+                p_viewer_id: currentUserId,
+              })
+              if (recorded) {
+                setViewCount((prev) => prev + 1)
+              }
+            } catch {
+              // ignore
+            }
+          }, 1000) // 1 second meaningful visibility threshold
+        } else {
+          if (timer) {
+            clearTimeout(timer)
+            timer = null
+          }
+        }
+      },
+      { threshold: 0.6 } // At least 60% of post must be visible
+    )
+
+    observer.observe(cardRef.current)
+
+    return () => {
+      if (timer) clearTimeout(timer)
+      observer.disconnect()
+    }
+  }, [post.id, currentUserId, isOwner, supabase])
 
   const mentionMatch = commentText.match(/(?:^|\s)@([a-zA-Z0-9_]*)$/)
   const mentionQuery = mentionMatch ? mentionMatch[1] : null
@@ -261,7 +305,7 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
   }
 
   return (
-    <article className="card p-5 space-y-4 hover:border-gray-300 transition-colors">
+    <article ref={cardRef} className="card p-5 space-y-4 hover:border-gray-300 transition-colors">
       {/* Header */}
       <div className="flex items-center justify-between">
         <Link href={`/@${post.author.username}`} className="flex items-center gap-3 group">
@@ -584,12 +628,12 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
             e.stopPropagation()
             setShowInsightsModal(true)
           }}
-          aria-label="View post metrics and progression"
+          aria-label={`Views. ${viewCount} views`}
           title="Views & Progression"
           className="flex items-center gap-1.5 p-2 -m-2 rounded-full hover:text-purple-600 hover:bg-purple-50/50 transition-colors cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 min-w-[44px] min-h-[44px] justify-center"
         >
           <BarChart2 size={18} className="transition-transform group-active:scale-90" />
-          <span className="text-xs font-medium">{post.likeCount + post.commentCount + 12}</span>
+          <span className="text-xs font-medium">{viewCount}</span>
         </button>
 
         {/* 5. Bookmark */}

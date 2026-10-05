@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   View,
   Text,
@@ -60,6 +60,30 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
   const [repostBusy, setRepostBusy] = useState(false)
   const [isSaved, setIsSaved] = useState(post.isSavedByMe)
   const [commentCount, setCommentCount] = useState(post.commentCount)
+  const [viewCount, setViewCount] = useState(post.viewCount || 0)
+
+  const isOwner = currentUserId === post.authorId
+
+  // Meaningful View Recording (1-second visibility threshold, excludes author, 24h dedup)
+  useEffect(() => {
+    if (!currentUserId || isOwner) return
+
+    const timer = setTimeout(async () => {
+      try {
+        const { data: recorded } = await supabase.rpc('record_post_view', {
+          p_post_id: post.id,
+          p_viewer_id: currentUserId,
+        })
+        if (recorded) {
+          setViewCount((prev) => prev + 1)
+        }
+      } catch {
+        // ignore
+      }
+    }, 1000)
+
+    return () => clearTimeout(timer)
+  }, [post.id, currentUserId, isOwner])
 
   // Reanimated heart scale value
   const heartScale = useSharedValue(1)
@@ -89,8 +113,6 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
       })
     })
   }
-
-  const isOwner = currentUserId === post.authorId
 
   async function handleToggleLike() {
     if (likeBusy) return
@@ -597,11 +619,11 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
           onPress={() => setShowInsightsModal(true)}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           accessibilityRole="button"
-          accessibilityLabel="View post progression and metrics"
+          accessibilityLabel={`Views. ${viewCount} views`}
         >
           <BarChart2 size={18} color={colors.gray500} />
           <Text style={styles.actionText}>
-            {post.likeCount + post.commentCount + 12}
+            {viewCount}
           </Text>
         </TouchableOpacity>
 
