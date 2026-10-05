@@ -14,7 +14,7 @@ import {
   Image,
   Modal,
 } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Image as ImageIcon,
   Camera,
@@ -29,6 +29,7 @@ import {
 import * as ImagePicker from 'expo-image-picker'
 import { supabase } from '../../lib/supabase'
 import { colors } from '../../constants/colors'
+import { useTheme } from '../../context/ThemeContext'
 
 const AUDIENCE_OPTIONS = [
   { id: 'everyone', label: 'Everyone', icon: Globe },
@@ -38,6 +39,10 @@ const AUDIENCE_OPTIONS = [
 
 export default function CreateScreen() {
   const router = useRouter()
+  const params = useLocalSearchParams<{ type?: string }>()
+  const isStory = params.type === 'story'
+  const { colors: themeColors } = useTheme()
+
   const [content, setContent] = useState('')
   const [loading, setLoading] = useState(false)
   const [selectedAudience, setSelectedAudience] = useState('everyone')
@@ -171,6 +176,26 @@ export default function CreateScreen() {
       }
     }
 
+    if (isStory) {
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+      const { error } = await supabase.from('stories').insert({
+        author_id: user.user.id,
+        content: content.trim() || null,
+        media_url: uploadedUrls[0] || null,
+        expires_at: expiresAt,
+      })
+
+      setLoading(false)
+      if (error) {
+        Alert.alert('Story post failed', error.message)
+      } else {
+        setContent('')
+        setMediaItems([])
+        router.back()
+      }
+      return
+    }
+
     const { data: newPost, error } = await supabase
       .from('posts')
       .insert({
@@ -229,11 +254,14 @@ export default function CreateScreen() {
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
 
-          <Text style={styles.headerTitle}>New Voice</Text>
+          <Text style={[styles.headerTitle, { color: themeColors.textPrimary }]}>
+            {isStory ? 'New 24h Story 📸' : 'New Voice'}
+          </Text>
 
           <TouchableOpacity
             style={[
               styles.postBtn,
+              isStory ? { backgroundColor: '#ec4899' } : null,
               (!content.trim() && mediaItems.length === 0) || loading ? styles.disabledBtn : null,
             ]}
             onPress={handlePublish}
@@ -242,7 +270,7 @@ export default function CreateScreen() {
             {loading ? (
               <ActivityIndicator color="#ffffff" size="small" />
             ) : (
-              <Text style={styles.postBtnText}>Post</Text>
+              <Text style={styles.postBtnText}>{isStory ? 'Share Story' : 'Post'}</Text>
             )}
           </TouchableOpacity>
         </View>
