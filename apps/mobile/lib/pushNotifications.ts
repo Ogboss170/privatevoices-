@@ -37,13 +37,16 @@ export async function registerForPushNotificationsAsync(userId: string): Promise
       return null
     }
 
-    // Android notification channel
+    // Android high priority notification channel with vibration pattern
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
         name: 'default',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#6366f1',
+        lightColor: '#3b82f6',
+        enableVibrate: true,
+        showBadge: true,
+        playSound: true,
       })
     }
 

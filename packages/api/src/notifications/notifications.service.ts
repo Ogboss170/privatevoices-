@@ -43,7 +43,7 @@ export class NotificationsService {
     if (error) throw new InternalServerErrorException('Failed to create notification');
 
     // Trigger Expo Push Notification if user registered a mobile push token
-    this.sendExpoPushNotification(opts.userId, opts.title, opts.body).catch(() => {});
+    this.sendExpoPushNotification(opts.userId, opts.title, opts.body, opts.targetUrl).catch(() => {});
 
     return notification;
   }
@@ -88,7 +88,12 @@ export class NotificationsService {
     return { message: 'Push token registered successfully' };
   }
 
-  private async sendExpoPushNotification(userId: string, title: string, body: string) {
+  private async sendExpoPushNotification(
+    userId: string,
+    title: string,
+    body: string,
+    targetUrl?: string
+  ) {
     const { data: tokens } = await this.supabase.admin
       .from('user_push_tokens')
       .select('expo_push_token')
@@ -101,6 +106,10 @@ export class NotificationsService {
       sound: 'default',
       title,
       body,
+      badge: 1,
+      priority: 'high',
+      channelId: 'default',
+      data: { targetUrl: targetUrl || '/notifications' },
     }));
 
     try {
