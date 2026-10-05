@@ -179,22 +179,31 @@ export default function CommunitiesScreen() {
                   </View>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={[styles.joinBtn, isJoined && styles.joinedBtn]}
-                  onPress={() => handleToggleJoin(item.id)}
-                >
-                  {isJoined ? (
-                    <View style={styles.btnRow}>
-                      <Check size={14} color={colors.gray700} />
-                      <Text style={styles.joinedText}>Joined</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.btnRow}>
-                      <Plus size={14} color="#fff" />
-                      <Text style={styles.joinText}>Join</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
+                <View style={styles.cardActions}>
+                  <TouchableOpacity
+                    style={[styles.joinBtn, isJoined && styles.joinedBtn, { flex: 1 }]}
+                    onPress={() => handleToggleJoin(item.id)}
+                  >
+                    {isJoined ? (
+                      <View style={styles.btnRow}>
+                        <Check size={14} color={colors.gray700} />
+                        <Text style={styles.joinedText}>Joined</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.btnRow}>
+                        <Plus size={14} color="#fff" />
+                        <Text style={styles.joinText}>Join</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.viewBtn}
+                    onPress={() => router.push(`/community/${item.slug}` as any)}
+                  >
+                    <Text style={styles.viewBtnText}>View</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             )
           }}
@@ -321,13 +330,33 @@ const styles = StyleSheet.create({
   cardInfo: { flex: 1 },
   commName: { fontSize: 16, fontWeight: '700', color: colors.gray900 },
   commDesc: { fontSize: 13, color: colors.gray500, marginTop: 2 },
+  cardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 4,
+  },
   joinBtn: {
     backgroundColor: colors.brand,
     paddingVertical: 10,
     borderRadius: 10,
     alignItems: 'center',
   },
-  joinedBtn: { backgroundColor: colors.gray100 },
+  joinedBtn: { backgroundColor: colors.gray100, borderWidth: 1, borderColor: colors.gray300 },
+  viewBtn: {
+    backgroundColor: colors.brandLight,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.brand,
+  },
+  viewBtnText: {
+    color: colors.brand,
+    fontWeight: '700',
+    fontSize: 13,
+  },
   btnRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   joinText: { color: '#ffffff', fontWeight: '700', fontSize: 13 },
   joinedText: { color: colors.gray700, fontWeight: '600', fontSize: 13 },

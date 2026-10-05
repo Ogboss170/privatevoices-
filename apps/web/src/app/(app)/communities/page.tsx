@@ -144,26 +144,35 @@ export default function CommunitiesPage(): React.JSX.Element {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => handleToggleJoin(comm.id)}
-                  className={`w-full text-xs font-bold py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
-                    isJoined
-                      ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      : 'bg-brand-600 text-white hover:bg-brand-700'
-                  }`}
-                >
-                  {isJoined ? (
-                    <>
-                      <Check size={14} />
-                      <span>Joined</span>
-                    </>
-                  ) : (
-                    <>
-                      <Plus size={14} />
-                      <span>Join Community</span>
-                    </>
-                  )}
-                </button>
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    onClick={() => handleToggleJoin(comm.id)}
+                    className={`flex-1 text-xs font-bold py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
+                      isJoined
+                        ? 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+                        : 'bg-brand-600 text-white hover:bg-brand-700'
+                    }`}
+                  >
+                    {isJoined ? (
+                      <>
+                        <Check size={14} />
+                        <span>Joined</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={14} />
+                        <span>Join Community</span>
+                      </>
+                    )}
+                  </button>
+
+                  <a
+                    href={`/community/${comm.slug}`}
+                    className="px-4 text-xs font-bold py-2 rounded-lg bg-brand-50 text-brand-700 hover:bg-brand-100 border border-brand-200 transition-colors flex items-center justify-center"
+                  >
+                    View
+                  </a>
+                </div>
               </div>
             )
           })}
