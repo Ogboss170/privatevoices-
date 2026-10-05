@@ -284,17 +284,26 @@ export default function CommunityDetailScreen() {
           <Text style={styles.topBarTitle} numberOfLines={1}>{community.name}</Text>
         </View>
 
-        {/* Community Info Banner */}
-        <View style={styles.banner}>
-          <View style={styles.avatarCircle}>
-            {community.avatar_url ? (
-              <Image source={{ uri: community.avatar_url }} style={styles.avatarImg} />
+        {/* 1. Facebook Group Cover Image & Header */}
+        <View style={styles.fbHeaderCard}>
+          <View style={styles.coverWrapper}>
+            {community.cover_url ? (
+              <Image source={{ uri: community.cover_url }} style={styles.coverImg} contentFit="cover" />
             ) : (
-              <Text style={styles.avatarText}>{community.name.charAt(0).toUpperCase()}</Text>
+              <View style={styles.defaultCoverBanner}>
+                <Text style={styles.defaultCoverText}>{community.name}</Text>
+              </View>
             )}
+            <View style={styles.avatarOverlapping}>
+              {community.avatar_url ? (
+                <Image source={{ uri: community.avatar_url }} style={styles.avatarImg} />
+              ) : (
+                <Text style={styles.avatarText}>{community.name.charAt(0).toUpperCase()}</Text>
+              )}
+            </View>
           </View>
 
-          <View style={styles.infoGroup}>
+          <View style={styles.fbHeaderBody}>
             <View style={styles.row}>
               <Text style={styles.name}>{community.name}</Text>
               {community.privacy === 'private' ? (
@@ -303,31 +312,41 @@ export default function CommunityDetailScreen() {
                 <Globe size={16} color="#059669" />
               )}
             </View>
-            <Text style={styles.slug}>c/{community.slug}</Text>
-            {community.description && <Text style={styles.desc}>{community.description}</Text>}
+            <Text style={styles.slug}>
+              {community.privacy === 'private' ? 'Private Group' : 'Public Group'} • {members.length} members
+            </Text>
 
-            <View style={styles.metaRow}>
-              <Users size={14} color={colors.gray500} />
-              <Text style={styles.metaText}>{members.length} Members</Text>
+            {community.description && (
+              <Text style={styles.desc}>{community.description}</Text>
+            )}
+
+            {/* Action Bar */}
+            <View style={styles.fbActionGroup}>
+              <TouchableOpacity
+                style={[styles.joinBtn, membershipStatus === 'member' && styles.joinedBtn, { flex: 1 }]}
+                onPress={handleJoinLeave}
+              >
+                {membershipStatus === 'member' ? (
+                  <View style={styles.btnRow}>
+                    <Check size={16} color={colors.gray700} />
+                    <Text style={styles.joinedBtnText}>Joined</Text>
+                  </View>
+                ) : (
+                  <View style={styles.btnRow}>
+                    <Plus size={16} color="#ffffff" />
+                    <Text style={styles.joinBtnText}>+ Join Group</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.inviteBtn}
+                onPress={() => Alert.alert('Share Community', `Share c/${community.slug} link with friends!`)}
+              >
+                <Text style={styles.inviteBtnText}>+ Invite</Text>
+              </TouchableOpacity>
             </View>
           </View>
-
-          <TouchableOpacity
-            style={[styles.joinBtn, membershipStatus === 'member' && styles.joinedBtn]}
-            onPress={handleJoinLeave}
-          >
-            {membershipStatus === 'member' ? (
-              <View style={styles.btnRow}>
-                <Check size={16} color={colors.gray700} />
-                <Text style={styles.joinedBtnText}>Joined</Text>
-              </View>
-            ) : (
-              <View style={styles.btnRow}>
-                <Plus size={16} color="#ffffff" />
-                <Text style={styles.joinBtnText}>Join Community</Text>
-              </View>
-            )}
-          </TouchableOpacity>
         </View>
 
         {/* Tabs Row */}
@@ -679,13 +698,77 @@ const styles = StyleSheet.create({
     color: colors.gray900,
     flex: 1,
   },
-  banner: {
+  fbHeaderCard: {
     backgroundColor: '#ffffff',
     borderRadius: 16,
-    padding: 16,
     borderWidth: 1,
     borderColor: colors.gray200,
-    gap: 12,
+    overflow: 'hidden',
+  },
+  coverWrapper: {
+    height: 120,
+    backgroundColor: colors.brandLight,
+    position: 'relative',
+  },
+  coverImg: {
+    width: '100%',
+    height: 120,
+  },
+  defaultCoverBanner: {
+    width: '100%',
+    height: 120,
+    backgroundColor: colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  defaultCoverText: {
+    color: '#ffffff',
+    fontSize: 22,
+    fontWeight: '800',
+    opacity: 0.9,
+  },
+  avatarOverlapping: {
+    position: 'absolute',
+    bottom: -24,
+    left: 16,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#ffffff',
+    borderWidth: 3,
+    borderColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+  },
+  fbHeaderBody: {
+    padding: 16,
+    paddingTop: 32,
+    gap: 6,
+  },
+  fbActionGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 10,
+  },
+  inviteBtn: {
+    backgroundColor: colors.gray100,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.gray300,
+  },
+  inviteBtnText: {
+    color: colors.gray800,
+    fontWeight: '700',
+    fontSize: 14,
   },
   avatarCircle: {
     width: 60,
