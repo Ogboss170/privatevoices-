@@ -457,22 +457,27 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
         </TouchableOpacity>
       </View>
 
-      {/* Body */}
-      <FormattedText
-        text={post.content}
-        style={styles.content}
-        onPressMention={onPressMention}
-        onPressHashtag={(tag) => {
-          if (onPressHashtag) {
-            onPressHashtag(tag)
-          } else {
-            router.push({
-              pathname: '/(tabs)/explore',
-              params: { q: tag, tab: 'voices' },
-            } as any)
-          }
-        }}
-      />
+      {/* Body — Tapping opens full Post Detail Thread */}
+      <TouchableOpacity
+        activeOpacity={0.95}
+        onPress={() => router.push(`/post/${post.id}` as any)}
+      >
+        <FormattedText
+          text={post.content}
+          style={styles.content}
+          onPressMention={onPressMention}
+          onPressHashtag={(tag) => {
+            if (onPressHashtag) {
+              onPressHashtag(tag)
+            } else {
+              router.push({
+                pathname: '/(tabs)/explore',
+                params: { q: tag, tab: 'voices' },
+              } as any)
+            }
+          }}
+        />
+      </TouchableOpacity>
 
       {/* Interactive Poll */}
       <MobileInteractivePoll
