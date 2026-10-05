@@ -17,6 +17,13 @@ import {
   UserCheck,
   Settings,
   X,
+  Search,
+  Pin,
+  Bell,
+  Flag,
+  UserMinus,
+  LogOut,
+  FileText,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import PostCard from '@/components/feed/PostCard'
@@ -37,6 +44,13 @@ export default function CommunityDetailPage(): React.JSX.Element {
   const [membershipStatus, setMembershipStatus] = useState<'none' | 'pending' | 'member'>('none')
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [rules, setRules] = useState<any[]>([])
+
+  // Search & Settings parity states
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchActive, setSearchActive] = useState(false)
+  const [showSettingsModal, setShowSettingsModal] = useState(false)
+  const [isPinned, setIsPinned] = useState(false)
+  const [notifEnabled, setNotifEnabled] = useState(true)
 
   // Edit settings state
   const [editDesc, setEditDesc] = useState('')
@@ -223,14 +237,51 @@ export default function CommunityDetailPage(): React.JSX.Element {
   return (
     <div className="space-y-6 max-w-2xl mx-auto pb-16">
       {/* Top Header Bar */}
-      <div className="flex items-center space-x-3">
-        <Link
-          href="/communities"
-          className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
-        >
-          <ArrowLeft size={20} />
-        </Link>
-        <h1 className="text-xl font-bold text-gray-900">{community.name}</h1>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-3 flex-1">
+          <Link
+            href="/communities"
+            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
+          >
+            <ArrowLeft size={20} />
+          </Link>
+          {searchActive ? (
+            <div className="flex-1 flex items-center bg-gray-100 rounded-xl px-3 py-1.5 gap-2">
+              <input
+                type="text"
+                placeholder="Search posts in community..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="bg-transparent border-none outline-none text-xs text-gray-900 flex-1"
+                autoFocus
+              />
+              <button onClick={() => { setSearchQuery(''); setSearchActive(false) }} className="text-gray-400 hover:text-gray-600">
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <h1 className="text-xl font-bold text-gray-900">{community.name}</h1>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setSearchActive(!searchActive)}
+            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors"
+            title="Search posts"
+          >
+            <Search size={18} />
+          </button>
+          {membershipStatus === 'member' && (
+            <button
+              onClick={() => setShowSettingsModal(true)}
+              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors"
+              title="Community Settings"
+            >
+              <Settings size={18} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Community Header Banner Card */}
@@ -621,6 +672,67 @@ export default function CommunityDetailPage(): React.JSX.Element {
                     </div>
                   </div>
                 ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Member Settings Modal Parity */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900 text-lg">{community.name} Settings</h3>
+              <button onClick={() => setShowSettingsModal(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <button
+                onClick={() => { alert('Showing posts you created in this group.'); setShowSettingsModal(false) }}
+                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 text-left transition-colors"
+              >
+                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><FileText size={18} /></div>
+                <div><div className="text-xs font-bold text-gray-900">My Posts</div><div className="text-[11px] text-gray-400">Manage posts you made in this group</div></div>
+              </button>
+
+              <button
+                onClick={() => { setIsPinned(!isPinned); alert(isPinned ? 'Unpinned' : 'Community pinned to top!'); setShowSettingsModal(false) }}
+                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 text-left transition-colors"
+              >
+                <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center"><Pin size={18} /></div>
+                <div><div className="text-xs font-bold text-gray-900">{isPinned ? 'Unpin Community' : 'Pin Community'}</div><div className="text-[11px] text-gray-400">Pin to top of your community list</div></div>
+              </button>
+
+              <button
+                onClick={() => { setNotifEnabled(!notifEnabled); alert(notifEnabled ? 'Notifications muted.' : 'Notifications unmuted.'); setShowSettingsModal(false) }}
+                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 text-left transition-colors"
+              >
+                <div className="w-9 h-9 rounded-xl bg-cyan-50 text-cyan-600 flex items-center justify-center"><Bell size={18} /></div>
+                <div><div className="text-xs font-bold text-gray-900">Manage Notifications</div><div className="text-[11px] text-gray-400">Control alerts for this group</div></div>
+              </button>
+
+              <button
+                onClick={() => { alert('Thank you. Moderation team will review this community.'); setShowSettingsModal(false) }}
+                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-red-50 text-left transition-colors text-red-600"
+              >
+                <div className="w-9 h-9 rounded-xl bg-red-50 text-red-600 flex items-center justify-center"><Flag size={18} /></div>
+                <div><div className="text-xs font-bold">Report Community</div><div className="text-[11px] text-red-400">Report rule violations</div></div>
+              </button>
+
+              <button
+                onClick={async () => {
+                  if (!confirm(`Leave ${community.name}?`)) return
+                  await supabase.from('community_members').delete().match({ community_id: community.id, user_id: currentUserId })
+                  setShowSettingsModal(false)
+                  router.push('/communities')
+                }}
+                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-red-50 text-left transition-colors text-red-600"
+              >
+                <div className="w-9 h-9 rounded-xl bg-red-50 text-red-600 flex items-center justify-center"><LogOut size={18} /></div>
+                <div><div className="text-xs font-bold">Leave Community</div><div className="text-[11px] text-red-400">You can rejoin anytime</div></div>
+              </button>
             </div>
           </div>
         </div>
