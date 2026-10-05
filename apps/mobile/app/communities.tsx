@@ -25,6 +25,7 @@ export default function CommunitiesScreen() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [coverUrl, setCoverUrl] = useState('')
   const [creating, setCreating] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
@@ -94,6 +95,7 @@ export default function CommunitiesScreen() {
         name: name.trim(),
         slug,
         description: description.trim() || null,
+        cover_url: coverUrl.trim() || null,
         creator_id: currentUserId,
       })
       .select()
@@ -112,6 +114,7 @@ export default function CommunitiesScreen() {
 
       setName('')
       setDescription('')
+      setCoverUrl('')
       setShowCreateModal(false)
       fetchCommunities()
     }
@@ -227,6 +230,15 @@ export default function CommunitiesScreen() {
                 placeholderTextColor={colors.gray400}
                 value={description}
                 onChangeText={setDescription}
+              />
+
+              <Text style={styles.label}>Cover Image URL (Optional)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="https://images.unsplash.com/..."
+                placeholderTextColor={colors.gray400}
+                value={coverUrl}
+                onChangeText={setCoverUrl}
               />
 
               <View style={styles.modalFooter}>
