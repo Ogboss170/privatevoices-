@@ -1,7 +1,8 @@
 'use client'
 
-import React, { useState } from 'react'
-import { X, Lock, Globe } from 'lucide-react'
+import React, { useState, useRef } from 'react'
+import Image from 'next/image'
+import { X, Lock, Globe, Camera } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 interface EditProfileModalProps {
@@ -9,6 +10,7 @@ interface EditProfileModalProps {
     displayName: string
     bio: string | null
     isPrivate: boolean
+    avatarUrl?: string | null
   }
   onClose: () => void
   onUpdated: () => void
@@ -23,8 +25,28 @@ export default function EditProfileModal({
   const [displayName, setDisplayName] = useState(initialProfile.displayName)
   const [bio, setBio] = useState(initialProfile.bio ?? '')
   const [isPrivate, setIsPrivate] = useState(initialProfile.isPrivate)
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(initialProfile.avatarUrl || null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      setError('Please select an image file.')
+      return
+    }
+
+    setAvatarFile(file)
+    const reader = new FileReader()
+    reader.onload = () => {
+      setAvatarPreview(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -38,10 +60,37 @@ export default function EditProfileModal({
       return
     }
 
+    let uploadedAvatarUrl = initialProfile.avatarUrl || null
+
+    if (avatarFile) {
+      const fileExt = avatarFile.name.split('.').pop() || 'jpg'
+      const fileName = `${user.user.id}/avatar_${Date.now()}.${fileExt}`
+
+      let uploadRes = await supabase.storage
+        .from('avatars')
+        .upload(fileName, avatarFile, { upsert: true })
+
+      if (uploadRes.error) {
+        uploadRes = await supabase.storage
+          .from('post-media')
+          .upload(`avatars/${fileName}`, avatarFile, { upsert: true })
+      }
+
+      if (uploadRes.data) {
+        const bucket = uploadRes.data.path.startsWith('avatars/') ? 'post-media' : 'avatars'
+        const { data: publicUrlData } = supabase.storage
+          .from(bucket)
+          .getPublicUrl(uploadRes.data.path)
+
+        uploadedAvatarUrl = publicUrlData.publicUrl
+      }
+    }
+
     const { error: updateError } = await supabase
       .from('profiles')
       .update({
         display_name: displayName.trim(),
+        avatar_url: uploadedAvatarUrl,
         bio: bio.trim() || null,
         is_private: isPrivate,
       })
@@ -72,6 +121,44 @@ export default function EditProfileModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleAvatarChange}
+            accept="image/*"
+            className="hidden"
+          />
+
+          {/* Avatar Photo Picker */}
+          <div className="flex flex-col items-center gap-2 py-1">
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="w-20 h-20 rounded-full bg-brand-100 flex items-center justify-center font-bold text-brand-700 text-2xl relative overflow-hidden cursor-pointer group border-2 border-white shadow-md"
+            >
+              {avatarPreview ? (
+                <Image
+                  src={avatarPreview}
+                  alt={displayName}
+                  fill
+                  unoptimized
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                displayName.charAt(0).toUpperCase() || 'U'
+              )}
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                <Camera size={18} className="text-white drop-shadow-md" />
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="text-xs font-semibold text-brand-600 hover:text-brand-700"
+            >
+              Change Profile Photo
+            </button>
+          </div>
+
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1">Display Name</label>
             <input
