@@ -668,19 +668,16 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
           <Text style={[styles.actionText, isLiked && styles.likedText]}>{likeCount}</Text>
         </TouchableOpacity>
 
-        {/* 4. Views */}
-        <TouchableOpacity
+        {/* 4. Views (Display only) */}
+        <View
           style={styles.actionBtn}
-          onPress={() => setShowInsightsModal(true)}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityRole="button"
           accessibilityLabel={`Views. ${viewCount} views`}
         >
           <BarChart2 size={18} color={colors.gray500} />
           <Text style={styles.actionText}>
             {viewCount}
           </Text>
-        </TouchableOpacity>
+        </View>
 
         {/* 5. Bookmark */}
         <TouchableOpacity
