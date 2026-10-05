@@ -38,7 +38,13 @@ export default function CommunityDetailPage(): React.JSX.Element {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [rules, setRules] = useState<any[]>([])
 
-  // Post creation inside community
+  // Edit settings state
+  const [editDesc, setEditDesc] = useState('')
+  const [editCoverUrl, setEditCoverUrl] = useState('')
+  const [editPrivacy, setEditPrivacy] = useState<'public' | 'private'>('public')
+  const [savingSettings, setSavingSettings] = useState(false)
+
+  // Post creation state
   const [newPostContent, setNewPostContent] = useState('')
   const [posting, setPosting] = useState(false)
 
@@ -61,6 +67,9 @@ export default function CommunityDetailPage(): React.JSX.Element {
     }
 
     setCommunity(comm)
+    setEditDesc(comm.description || '')
+    setEditCoverUrl(comm.avatar_url || '')
+    setEditPrivacy(comm.privacy || 'public')
 
     // Default rules if none defined
     setRules([
@@ -417,8 +426,90 @@ export default function CommunityDetailPage(): React.JSX.Element {
       )}
 
       {activeTab === 'manage' && isOwnerOrMod && (
-        <div className="space-y-4">
-          {/* Role Assignment Panel */}
+        <div className="space-y-6">
+          {/* 1. Community Settings & Customization Card */}
+          <div className="card p-6 space-y-4">
+            <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+              <Settings size={18} className="text-brand-600" />
+              <h3 className="font-bold text-gray-900 text-base">Community Settings</h3>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault()
+                if (!community) return
+                setSavingSettings(true)
+
+                const { error } = await supabase
+                  .from('communities')
+                  .update({
+                    description: editDesc.trim(),
+                    avatar_url: editCoverUrl.trim() || null,
+                    privacy: editPrivacy,
+                  })
+                  .eq('id', community.id)
+
+                setSavingSettings(false)
+                if (error) {
+                  alert(`Failed to update settings: ${error.message}`)
+                } else {
+                  alert('Community settings updated successfully!')
+                  fetchCommunityData()
+                }
+              }}
+              className="space-y-4 text-sm"
+            >
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Description & Purpose
+                </label>
+                <textarea
+                  rows={3}
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  placeholder="Describe what this community is about..."
+                  className="input-field text-xs resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Avatar / Cover Image URL
+                </label>
+                <input
+                  type="text"
+                  value={editCoverUrl}
+                  onChange={(e) => setEditCoverUrl(e.target.value)}
+                  placeholder="https://images.unsplash.com/..."
+                  className="input-field text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Privacy Level
+                </label>
+                <select
+                  value={editPrivacy}
+                  onChange={(e) => setEditPrivacy(e.target.value as 'public' | 'private')}
+                  className="input-field text-xs w-full"
+                >
+                  <option value="public">🌐 Public (Anyone can view and join)</option>
+                  <option value="private">🔒 Private (Members-only, join by request)</option>
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                disabled={savingSettings}
+                className="btn-primary py-2 px-4 text-xs font-bold w-full"
+              >
+                {savingSettings ? 'Saving Settings...' : 'Save Community Settings'}
+              </button>
+            </form>
+          </div>
+
+          {/* 2. Role Assignment & Moderation Panel */}
           <div className="card p-6 space-y-4">
             <div className="flex items-center gap-2">
               <Shield size={18} className="text-brand-600" />

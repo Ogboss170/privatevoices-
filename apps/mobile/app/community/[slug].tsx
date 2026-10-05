@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  TextInput,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -17,6 +18,11 @@ import {
   Globe,
   Check,
   Plus,
+  Settings,
+  Shield,
+  UserCheck,
+  X,
+  Send,
 } from 'lucide-react-native'
 import { Image } from 'expo-image'
 import { supabase } from '../../lib/supabase'
@@ -31,13 +37,23 @@ export default function CommunityDetailScreen() {
   const router = useRouter()
 
   const [community, setCommunity] = useState<any | null>(null)
-  const [activeTab, setActiveTab] = useState<'posts' | 'about' | 'members'>('posts')
+  const [activeTab, setActiveTab] = useState<'posts' | 'about' | 'members' | 'manage'>('posts')
   const [members, setMembers] = useState<any[]>([])
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [membershipStatus, setMembershipStatus] = useState<'none' | 'pending' | 'member'>('none')
   const [userRole, setUserRole] = useState<'owner' | 'moderator' | 'member' | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+
+  // Post composer state inside community
+  const [newPostContent, setNewPostContent] = useState('')
+  const [posting, setPosting] = useState(false)
+
+  // Edit settings state
+  const [editDesc, setEditDesc] = useState('')
+  const [editCoverUrl, setEditCoverUrl] = useState('')
+  const [editPrivacy, setEditPrivacy] = useState<'public' | 'private'>('public')
+  const [savingSettings, setSavingSettings] = useState(false)
 
   // Public Profile Modal State
   const [selectedProfileTarget, setSelectedProfileTarget] = useState<{ userId?: string; username?: string } | null>(null)
@@ -62,6 +78,9 @@ export default function CommunityDetailScreen() {
     }
 
     setCommunity(comm)
+    setEditDesc(comm.description || '')
+    setEditCoverUrl(comm.avatar_url || '')
+    setEditPrivacy(comm.privacy || 'public')
 
     // 2. Fetch User Membership
     if (uId) {
@@ -320,18 +339,70 @@ export default function CommunityDetailScreen() {
               Members ({members.length})
             </Text>
           </TouchableOpacity>
+          {(userRole === 'owner' || userRole === 'moderator') && (
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'manage' && styles.tabActive]}
+              onPress={() => setActiveTab('manage')}
+            >
+              <Text style={[styles.tabText, activeTab === 'manage' && styles.tabTextActive]}>
+                Manage
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Tab 1: Posts */}
         {activeTab === 'posts' && (
-          posts.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyTitle}>No community voices yet</Text>
-              <Text style={styles.emptyBody}>Be the first to share a post in this community.</Text>
-            </View>
-          ) : (
-            <View style={{ gap: 12 }}>
-              {posts.map((post) => (
+          <View style={{ gap: 12 }}>
+            {/* Inline Community Post Composer */}
+            {membershipStatus === 'member' && (
+              <View style={styles.card}>
+                <TextInput
+                  style={[styles.descText, { backgroundColor: colors.gray50, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: colors.gray200, minHeight: 70, textAlignVertical: 'top' }]}
+                  multiline
+                  placeholder={`Share something with c/${community.slug}...`}
+                  placeholderTextColor={colors.gray400}
+                  value={newPostContent}
+                  onChangeText={setNewPostContent}
+                />
+                <View style={{ alignItems: 'flex-end', marginTop: 10 }}>
+                  <TouchableOpacity
+                    style={[styles.joinBtn, (!newPostContent.trim() || posting) && { opacity: 0.5 }]}
+                    disabled={!newPostContent.trim() || posting}
+                    onPress={async () => {
+                      if (!newPostContent.trim() || !currentUserId || !community) return
+                      setPosting(true)
+                      const { error } = await supabase.from('posts').insert({
+                        author_id: currentUserId,
+                        community_id: community.id,
+                        content: newPostContent.trim(),
+                      })
+
+                      if (!error) {
+                        setNewPostContent('')
+                        fetchCommunityData()
+                      } else {
+                        Alert.alert('Post Failed', error.message)
+                      }
+                      setPosting(false)
+                    }}
+                  >
+                    <View style={styles.btnRow}>
+                      <Send size={14} color="#ffffff" />
+                      <Text style={styles.joinBtnText}>{posting ? 'Posting...' : 'Post to Community'}</Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {posts.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyTitle}>No community voices yet</Text>
+                <Text style={styles.emptyBody}>Be the first to share a post in this community.</Text>
+              </View>
+            ) : (
+              posts.map((post) => (
                 <MobilePostCard
                   key={post.id}
                   post={post}
@@ -339,9 +410,9 @@ export default function CommunityDetailScreen() {
                   onPressAuthor={handleOpenAuthorProfile}
                   onPressMention={handleOpenMentionProfile}
                 />
-              ))}
-            </View>
-          )
+              ))
+            )}
+          </View>
         )}
 
         {/* Tab 2: About */}
@@ -397,6 +468,149 @@ export default function CommunityDetailScreen() {
                 )
               })
             )}
+          </View>
+        )}
+
+        {/* Tab 4: Manage (Owner / Moderator Only) */}
+        {activeTab === 'manage' && (userRole === 'owner' || userRole === 'moderator') && (
+          <View style={{ gap: 14 }}>
+            {/* 1. Settings Card */}
+            <View style={styles.card}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <Settings size={18} color={colors.brand} />
+                <Text style={styles.cardTitle}>Community Settings</Text>
+              </View>
+
+              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.gray700, marginBottom: 4 }}>Description</Text>
+              <TextInput
+                style={[styles.descText, { backgroundColor: colors.gray50, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: colors.gray200, minHeight: 60, marginBottom: 12 }]}
+                multiline
+                value={editDesc}
+                onChangeText={setEditDesc}
+                placeholder="Describe your community..."
+              />
+
+              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.gray700, marginBottom: 4 }}>Cover / Avatar Image URL</Text>
+              <TextInput
+                style={[styles.descText, { backgroundColor: colors.gray50, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: colors.gray200, marginBottom: 12 }]}
+                value={editCoverUrl}
+                onChangeText={setEditCoverUrl}
+                placeholder="https://..."
+              />
+
+              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.gray700, marginBottom: 4 }}>Privacy</Text>
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+                <TouchableOpacity
+                  style={[styles.joinBtn, editPrivacy === 'public' ? styles.joinedBtn : { backgroundColor: colors.gray100 }]}
+                  onPress={() => setEditPrivacy('public')}
+                >
+                  <Text style={[styles.joinBtnText, editPrivacy === 'public' ? { color: colors.brand } : { color: colors.gray700 }]}>🌐 Public</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.joinBtn, editPrivacy === 'private' ? styles.joinedBtn : { backgroundColor: colors.gray100 }]}
+                  onPress={() => setEditPrivacy('private')}
+                >
+                  <Text style={[styles.joinBtnText, editPrivacy === 'private' ? { color: colors.brand } : { color: colors.gray700 }]}>🔒 Private</Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.joinBtn, savingSettings && { opacity: 0.5 }]}
+                disabled={savingSettings}
+                onPress={async () => {
+                  if (!community) return
+                  setSavingSettings(true)
+                  const { error } = await supabase
+                    .from('communities')
+                    .update({
+                      description: editDesc.trim(),
+                      avatar_url: editCoverUrl.trim() || null,
+                      privacy: editPrivacy,
+                    })
+                    .eq('id', community.id)
+
+                  setSavingSettings(false)
+                  if (error) {
+                    Alert.alert('Update Failed', error.message)
+                  } else {
+                    Alert.alert('Success', 'Community settings updated successfully!')
+                    fetchCommunityData()
+                  }
+                }}
+              >
+                <Text style={styles.joinBtnText}>{savingSettings ? 'Saving...' : 'Save Settings'}</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* 2. Role Management & Moderation Panel */}
+            <View style={styles.card}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <Shield size={18} color={colors.brand} />
+                <Text style={styles.cardTitle}>Member Roles & Moderation</Text>
+              </View>
+              <Text style={[styles.descText, { marginBottom: 12 }]}>Promote members to Moderator or remove them.</Text>
+
+              {members
+                .filter((m) => m.role !== 'owner')
+                .map((m) => {
+                  const u = m.user
+                  const displayName = u?.display_name || u?.username || 'Member'
+                  const username = u?.username || 'user'
+
+                  return (
+                    <View key={m.id || m.user_id} style={[styles.memberRow, { paddingVertical: 8 }]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.memberName}>{displayName}</Text>
+                        <Text style={styles.memberHandle}>@{username} • {m.role}</Text>
+                      </View>
+
+                      <View style={{ flexDirection: 'row', gap: 6 }}>
+                        {userRole === 'owner' && (
+                          <TouchableOpacity
+                            style={[styles.joinBtn, { paddingHorizontal: 10, paddingVertical: 6, backgroundColor: m.role === 'moderator' ? colors.gray200 : '#f3e8ff' }]}
+                            onPress={async () => {
+                              const newRole = m.role === 'moderator' ? 'member' : 'moderator'
+                              await supabase
+                                .from('community_members')
+                                .update({ role: newRole })
+                                .match({ community_id: community.id, user_id: m.user_id })
+                              fetchCommunityData()
+                            }}
+                          >
+                            <Text style={[styles.joinBtnText, { fontSize: 11, color: m.role === 'moderator' ? colors.gray800 : '#7e22ce' }]}>
+                              {m.role === 'moderator' ? 'Demote' : 'Make Mod'}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+
+                        {(userRole === 'owner' || (userRole === 'moderator' && m.role === 'member')) && (
+                          <TouchableOpacity
+                            style={{ padding: 6, backgroundColor: '#fef2f2', borderRadius: 8 }}
+                            onPress={async () => {
+                              Alert.alert('Remove Member', `Remove @${username} from this community?`, [
+                                { text: 'Cancel', style: 'cancel' },
+                                {
+                                  text: 'Remove',
+                                  style: 'destructive',
+                                  onPress: async () => {
+                                    await supabase
+                                      .from('community_members')
+                                      .delete()
+                                      .match({ community_id: community.id, user_id: m.user_id })
+                                    fetchCommunityData()
+                                  },
+                                },
+                              ])
+                            }}
+                          >
+                            <X size={14} color="#ef4444" />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+                  )
+                })}
+            </View>
           </View>
         )}
       </ScrollView>
