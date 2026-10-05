@@ -173,7 +173,7 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
 
         {/* ── Main Feed Content ── */}
         <div className="flex-1 min-w-0 min-h-screen border-r border-gray-200/60 bg-white/40">
-          <main className="max-w-2xl w-full mx-auto px-4 py-6">
+          <main className="max-w-2xl w-full mx-auto px-4 py-6 pt-14 md:pt-6 pb-16 md:pb-6">
             {children}
           </main>
         </div>
@@ -182,7 +182,43 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
         <RightSidebar />
       </div>
 
-      {/* ── Bottom tab bar (mobile view on web) ── */}
+        {/* ── Mobile Top Header (visible only on mobile web) ── */}
+        <header className="md:hidden fixed top-0 inset-x-0 bg-white/95 backdrop-blur-md border-b border-gray-200 z-20 shadow-sm">
+          <div className="flex items-center justify-between h-11 px-3">
+            {/* Left: + Create */}
+            <Link
+              href="/create"
+              className="p-2 rounded-xl text-brand-600 hover:bg-brand-50 transition-colors"
+              aria-label="Create"
+            >
+              <PlusSquare size={22} strokeWidth={2.2} />
+            </Link>
+
+            {/* Center: PRIVATE VOICES — absolutely centred */}
+            <span
+              className="absolute inset-x-0 text-center text-xs font-extrabold text-gray-900 tracking-[0.18em] pointer-events-none select-none uppercase"
+              style={{ letterSpacing: '1.6px' }}
+            >
+              Private Voices
+            </span>
+
+            {/* Right: Bell with unread badge */}
+            <Link
+              href="/notifications"
+              className="relative p-2 rounded-xl text-gray-700 hover:bg-gray-100 transition-colors"
+              aria-label={unreadNotifications > 0 ? `${unreadNotifications} unread notifications` : 'Notifications'}
+            >
+              <Bell size={22} strokeWidth={2} />
+              {unreadNotifications > 0 && (
+                <span className="absolute top-1 right-1 min-w-[16px] h-4 flex items-center justify-center bg-red-500 text-white text-[9px] font-bold rounded-full px-1 ring-2 ring-white">
+                  {unreadNotifications > 99 ? '99+' : unreadNotifications}
+                </span>
+              )}
+            </Link>
+          </div>
+        </header>
+
+        {/* ── Bottom tab bar (mobile view on web) ── */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-gray-200 flex items-center justify-around px-2 py-2 z-20 shadow-lg">
         {MOBILE_BOTTOM_NAV_ITEMS.map(({ href, label, Icon }) => {
           const isActive = pathname === href || pathname.startsWith(href + '/')
