@@ -250,21 +250,20 @@ export default function TabLayout() {
     headerShadowVisible: false,
     // The title is rendered absolutely centred via headerTitle
     headerTitle: () => (
-      <Text style={styles.headerTitleText}>PRIVATE VOICES</Text>
+      <Text style={styles.headerTitleText}>Private Voices</Text>
     ),
-    // Left: + Create
+    // Left: + icon
     headerLeft: () => (
       <RNAnimated.View style={{ transform: [{ scale: createBtnScale }] }}>
         <TouchableOpacity
           style={styles.headerLeftBtn}
           onPress={handleCreatePress}
-          activeOpacity={0.8}
+          activeOpacity={0.7}
           accessible
           accessibilityRole="button"
           accessibilityLabel="Create"
         >
-          <Plus size={16} color={ACCENT} strokeWidth={2.5} />
-          <Text style={styles.headerLeftText}>Create</Text>
+          <Plus size={22} color={ACCENT} strokeWidth={2.2} />
         </TouchableOpacity>
       </RNAnimated.View>
     ),
@@ -333,29 +332,20 @@ const styles = StyleSheet.create({
     elevation: 0,
   },
   headerTitleText: {
-    fontSize: 15,
-    fontWeight: '800',
+    fontSize: 17,
+    fontWeight: '700',
     color: '#111827',
-    letterSpacing: 1.8,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
   },
-  // ── Left: + Create button ──────────────────────────────────────────────────
+  // ── Left: + icon only ──────────────────────────────────────────────────────
   headerLeftBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: ACCENT,
-    backgroundColor: 'rgba(59, 130, 246, 0.06)',
+    padding: 6,
   },
   headerLeftText: {
+    // unused — kept to avoid TS errors if referenced elsewhere
     fontSize: 13,
     fontWeight: '700',
     color: ACCENT,
-    letterSpacing: 0.2,
   },
   // ── Right: Bell ────────────────────────────────────────────────────────────
   headerRightBtn: {
