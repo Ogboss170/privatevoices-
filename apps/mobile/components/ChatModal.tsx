@@ -13,7 +13,7 @@ import {
   Alert,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { X, Send, Check, CheckCheck, Image as ImageIcon } from 'lucide-react-native'
+import { X, Send, Check, CheckCheck, Image as ImageIcon, Trash2 } from 'lucide-react-native'
 import { Image } from 'expo-image'
 import * as ImagePicker from 'expo-image-picker'
 import { supabase } from '../lib/supabase'
@@ -366,6 +366,36 @@ export function ChatModal({
     }
   }
 
+  function handleDeleteMessage(msgId: string) {
+    Alert.alert(
+      'Delete Message',
+      'Delete this message for everyone?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            // Optimistic removal
+            setMessages((prev) => prev.filter((m) => m.id !== msgId))
+            const { error } = await supabase.from('messages').delete().eq('id', msgId)
+            if (error) {
+              // Restore on failure by re-fetching
+              const { data } = await supabase
+                .from('messages')
+                .select('*')
+                .eq('conversation_id', conversationId)
+                .order('created_at', { ascending: true })
+              setMessages(data ?? [])
+              Alert.alert('Error', 'Failed to delete message. Please try again.')
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    )
+  }
+
   function formatTime(isoString: string) {
     try {
       const date = new Date(isoString)
@@ -459,41 +489,47 @@ export function ChatModal({
                         isMe ? styles.messageRowMe : styles.messageRowThem,
                       ]}
                     >
-                      <View
-                        style={[
-                          styles.bubble,
-                          isMe ? styles.bubbleMe : styles.bubbleThem,
-                          isTemp && styles.bubblePending,
-                          hasImage && styles.bubbleWithImage,
-                        ]}
+                      <TouchableOpacity
+                        activeOpacity={isMe && !isTemp ? 0.85 : 1}
+                        onLongPress={isMe && !isTemp ? () => handleDeleteMessage(item.id) : undefined}
+                        delayLongPress={400}
                       >
-                        {/* Media image */}
-                        {hasImage && (
-                          <TouchableOpacity
-                            onPress={() => setFullscreenImageUrl(item.image_url)}
-                            activeOpacity={0.9}
-                          >
-                            <Image
-                              source={{ uri: item.image_url }}
-                              style={styles.chatImage}
-                              contentFit="cover"
-                            />
-                          </TouchableOpacity>
-                        )}
+                        <View
+                          style={[
+                            styles.bubble,
+                            isMe ? styles.bubbleMe : styles.bubbleThem,
+                            isTemp && styles.bubblePending,
+                            hasImage && styles.bubbleWithImage,
+                          ]}
+                        >
+                          {/* Media image */}
+                          {hasImage && (
+                            <TouchableOpacity
+                              onPress={() => setFullscreenImageUrl(item.image_url)}
+                              activeOpacity={0.9}
+                            >
+                              <Image
+                                source={{ uri: item.image_url }}
+                                style={styles.chatImage}
+                                contentFit="cover"
+                              />
+                            </TouchableOpacity>
+                          )}
 
-                        {/* Text Caption */}
-                        {showText && (
-                          <Text
-                            style={[
-                              styles.messageText,
-                              isMe ? styles.messageTextMe : styles.messageTextThem,
-                              hasImage && styles.captionText,
-                            ]}
-                          >
-                            {item.content}
-                          </Text>
-                        )}
-                      </View>
+                          {/* Text Caption */}
+                          {showText && (
+                            <Text
+                              style={[
+                                styles.messageText,
+                                isMe ? styles.messageTextMe : styles.messageTextThem,
+                                hasImage && styles.captionText,
+                              ]}
+                            >
+                              {item.content}
+                            </Text>
+                          )}
+                        </View>
+                      </TouchableOpacity>
 
                       <View
                         style={[

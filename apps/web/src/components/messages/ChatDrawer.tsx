@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
-import { X, Send, Loader2, Image as ImageIcon, ExternalLink } from 'lucide-react'
+import { X, Send, Loader2, Image as ImageIcon, ExternalLink, Trash2 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 interface ChatDrawerProps {
@@ -113,6 +113,18 @@ export default function ChatDrawer({
           setMessages((prev) =>
             prev.map((m) => (m.id === payload.new.id ? { ...m, is_read: payload.new.is_read } : m))
           )
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          setMessages((prev) => prev.filter((m) => m.id !== payload.old.id))
         }
       )
       .on('broadcast', { event: 'typing' }, ({ payload }) => {
@@ -307,6 +319,22 @@ export default function ChatDrawer({
     }
   }
 
+  async function handleDeleteMessage(msgId: string) {
+    // Optimistic removal
+    setMessages((prev) => prev.filter((m) => m.id !== msgId))
+    const { error } = await supabase.from('messages').delete().eq('id', msgId)
+    if (error) {
+      console.error('Delete failed, reloading messages:', error)
+      // Re-fetch to restore state
+      const { data } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true })
+      setMessages(data ?? [])
+    }
+  }
+
   return (
     <>
       {/* Backdrop for closing */}
@@ -391,38 +419,51 @@ export default function ChatDrawer({
               return (
                 <div
                   key={msg.id}
-                  className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                  className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} group`}
                 >
-                  <div
-                    className={`max-w-[82%] rounded-2xl text-xs leading-relaxed overflow-hidden ${
-                      isMe
-                        ? 'bg-brand-600 text-white rounded-br-xs shadow-xs'
-                        : 'bg-white text-gray-900 border border-gray-200/80 rounded-bl-xs shadow-xs'
-                    } ${isTemp ? 'opacity-70' : ''}`}
-                  >
-                    {/* Media Image */}
-                    {hasImage && (
-                      <div
-                        className="cursor-pointer group relative overflow-hidden max-w-sm"
-                        onClick={() => setPreviewModalUrl(msg.image_url)}
+                  <div className={`flex items-end gap-1.5 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                    {/* Delete button — only visible on own messages on hover */}
+                    {isMe && !isTemp && (
+                      <button
+                        onClick={() => handleDeleteMessage(msg.id)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 flex-shrink-0"
+                        title="Delete message"
                       >
-                        <img
-                          src={msg.image_url}
-                          alt="Shared media"
-                          className="w-full max-h-64 object-cover hover:scale-102 transition-transform duration-200"
-                        />
-                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                          <ExternalLink size={18} className="text-white drop-shadow-md" />
-                        </div>
-                      </div>
+                        <Trash2 size={13} />
+                      </button>
                     )}
 
-                    {/* Text Content */}
-                    {showText && (
-                      <div className="p-3">
-                        {msg.content}
-                      </div>
-                    )}
+                    <div
+                      className={`max-w-[82%] rounded-2xl text-xs leading-relaxed overflow-hidden ${
+                        isMe
+                          ? 'bg-brand-600 text-white rounded-br-xs shadow-xs'
+                          : 'bg-white text-gray-900 border border-gray-200/80 rounded-bl-xs shadow-xs'
+                      } ${isTemp ? 'opacity-70' : ''}`}
+                    >
+                      {/* Media Image */}
+                      {hasImage && (
+                        <div
+                          className="cursor-pointer group/img relative overflow-hidden max-w-sm"
+                          onClick={() => setPreviewModalUrl(msg.image_url)}
+                        >
+                          <img
+                            src={msg.image_url}
+                            alt="Shared media"
+                            className="w-full max-h-64 object-cover hover:scale-102 transition-transform duration-200"
+                          />
+                          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 flex items-center justify-center transition-opacity">
+                            <ExternalLink size={18} className="text-white drop-shadow-md" />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Text Content */}
+                      {showText && (
+                        <div className="p-3">
+                          {msg.content}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <span className="text-[10px] text-gray-400 mt-1 px-1 flex items-center gap-1">
