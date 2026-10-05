@@ -13,6 +13,7 @@ import { supabase } from '../../lib/supabase'
 import { colors } from '../../constants/colors'
 import { MobilePostCard } from '../../components/MobilePostCard'
 import { StoriesTray } from '../../components/StoriesTray'
+import { SkeletonCard } from '../../components/SkeletonCard'
 import { PublicProfileModal } from '../../components/PublicProfileModal'
 import type { Post } from '@private-voices/shared'
 import { extractPostMediaAndCleanContent } from '@private-voices/shared'
@@ -244,8 +245,10 @@ export default function HomeScreen() {
 
       {/* Feed List */}
       {loading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator color={colors.brand} size="large" />
+        <View style={styles.listContent}>
+          <SkeletonCard type="post" />
+          <SkeletonCard type="post" />
+          <SkeletonCard type="post" />
         </View>
       ) : posts.length === 0 ? (
         <View style={styles.emptyContainer}>
