@@ -7,7 +7,7 @@ import { Home, Search, PlusSquare, Inbox, Users, User, Bell } from 'lucide-react
 import RightSidebar from '@/components/layout/RightSidebar'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
-const NAV_ITEMS = [
+const DESKTOP_NAV_ITEMS = [
   { href: '/feed',        label: 'Home',        Icon: Home },
   { href: '/explore',     label: 'Explore',     Icon: Search },
   { href: '/create',      label: 'Create',      Icon: PlusSquare },
@@ -15,6 +15,14 @@ const NAV_ITEMS = [
   { href: '/communities', label: 'Communities', Icon: Users },
   { href: '/notifications', label: 'Notifications', Icon: Bell },
   { href: '/profile',     label: 'Profile',     Icon: User },
+]
+
+const MOBILE_BOTTOM_NAV_ITEMS = [
+  { href: '/feed',    label: 'Home',    Icon: Home },
+  { href: '/explore', label: 'Explore', Icon: Search },
+  { href: '/create',  label: 'Create',  Icon: PlusSquare },
+  { href: '/inbox',   label: 'Inbox',   Icon: Inbox },
+  { href: '/profile', label: 'Profile', Icon: User },
 ]
 
 export default function AppShell({ children }: { children: React.ReactNode }): React.JSX.Element {
@@ -115,7 +123,7 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
 
           {/* Nav links */}
           <nav className="flex-1 space-y-1.5">
-            {NAV_ITEMS.map(({ href, label, Icon }) => {
+            {DESKTOP_NAV_ITEMS.map(({ href, label, Icon }) => {
               const isActive = pathname === href || pathname.startsWith(href + '/')
               const badgeCount =
                 href === '/notifications' ? unreadNotifications : href === '/inbox' ? unreadMessages : 0
@@ -174,9 +182,9 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
         <RightSidebar />
       </div>
 
-      {/* ── Bottom tab bar (mobile) ── */}
+      {/* ── Bottom tab bar (mobile view on web) ── */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-gray-200 flex items-center justify-around px-2 py-2 z-20 shadow-lg">
-        {NAV_ITEMS.slice(0, 5).map(({ href, label, Icon }) => {
+        {MOBILE_BOTTOM_NAV_ITEMS.map(({ href, label, Icon }) => {
           const isActive = pathname === href || pathname.startsWith(href + '/')
           const badgeCount =
             href === '/notifications' ? unreadNotifications : href === '/inbox' ? unreadMessages : 0
