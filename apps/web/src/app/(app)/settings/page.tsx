@@ -408,6 +408,42 @@ export default function SettingsPage(): React.JSX.Element {
         </div>
       </section>
 
+      {/* ── 2.5 SOCIAL ── */}
+      <section className="card p-6 space-y-4">
+        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 pb-2">
+          Social
+        </h2>
+        <div className="space-y-1 text-sm">
+          <Link
+            href="/communities"
+            className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
+          >
+            <div className="flex items-center space-x-3">
+              <Users size={18} className="text-brand-600" />
+              <div>
+                <span className="font-semibold text-gray-800 block">Communities</span>
+                <span className="text-xs text-gray-400">Discover, join, create, and manage communities</span>
+              </div>
+            </div>
+            <ChevronRight size={16} className="text-gray-400" />
+          </Link>
+
+          <Link
+            href="/invite"
+            className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
+          >
+            <div className="flex items-center space-x-3">
+              <UserPlus size={18} className="text-gray-500" />
+              <div>
+                <span className="font-semibold text-gray-800 block">Invite Friends</span>
+                <span className="text-xs text-gray-400">Share your invite code with friends</span>
+              </div>
+            </div>
+            <ChevronRight size={16} className="text-gray-400" />
+          </Link>
+        </div>
+      </section>
+
       {/* ── 3. CONTENT & SAFETY ── */}
       <section className="card p-6 space-y-4">
         <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 pb-2">

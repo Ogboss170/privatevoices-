@@ -348,6 +348,35 @@ export default function SettingsScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* ── 2.5 SOCIAL ── */}
+      <View style={styles.sectionCard}>
+        <Text style={styles.sectionCategoryTitle}>SOCIAL</Text>
+
+        <TouchableOpacity
+          style={styles.rowItem}
+          activeOpacity={0.7}
+          onPress={() => router.push('/communities' as any)}
+        >
+          <View style={styles.rowLeft}>
+            <Users size={18} color={colors.brand} />
+            <Text style={styles.rowLabel}>Communities</Text>
+          </View>
+          <ChevronRight size={18} color={colors.gray400} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.rowItem}
+          activeOpacity={0.7}
+          onPress={() => router.push('/invite' as any)}
+        >
+          <View style={styles.rowLeft}>
+            <UserPlus size={18} color={colors.gray600} />
+            <Text style={styles.rowLabel}>Invite Friends</Text>
+          </View>
+          <ChevronRight size={18} color={colors.gray400} />
+        </TouchableOpacity>
+      </View>
+
       {/* ── 3. CONTENT & SAFETY ── */}
       <View style={styles.sectionCard}>
         <Text style={styles.sectionCategoryTitle}>CONTENT & SAFETY</Text>
