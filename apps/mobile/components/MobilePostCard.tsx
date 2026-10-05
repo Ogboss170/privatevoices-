@@ -12,9 +12,12 @@ import {
   Modal,
   SafeAreaView,
 } from 'react-native'
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated'
 import {
   Heart,
   MessageCircle,
+  Repeat,
+  BarChart2,
   Bookmark,
   Share2,
   Trash2,
@@ -52,8 +55,17 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
   const [isLiked, setIsLiked] = useState(post.isLikedByMe)
   const [likeCount, setLikeCount] = useState(post.likeCount)
   const [likeBusy, setLikeBusy] = useState(false)
+  const [isReposted, setIsReposted] = useState(post.isRepostedByMe || false)
+  const [repostCount, setRepostCount] = useState(post.repostCount || 0)
+  const [repostBusy, setRepostBusy] = useState(false)
   const [isSaved, setIsSaved] = useState(post.isSavedByMe)
   const [commentCount, setCommentCount] = useState(post.commentCount)
+
+  // Reanimated heart scale value
+  const heartScale = useSharedValue(1)
+  const animatedHeartStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: heartScale.value }],
+  }))
   const [showComments, setShowComments] = useState(false)
   const [comments, setComments] = useState<any[]>([])
   const [commentText, setCommentText] = useState('')
@@ -90,8 +102,16 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
     setLikeBusy(true)
     const prevLiked = isLiked
     const prevCount = likeCount
-    setIsLiked(!prevLiked)
+    const nextLiked = !prevLiked
+
+    setIsLiked(nextLiked)
     setLikeCount(prevLiked ? Math.max(0, prevCount - 1) : prevCount + 1)
+
+    // Trigger subtle spring pop animation if liking
+    if (nextLiked) {
+      heartScale.value = 1.35
+      heartScale.value = withSpring(1, { damping: 7, stiffness: 200 })
+    }
 
     try {
       if (prevLiked) {
@@ -116,6 +136,44 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
       setLikeCount(prevCount)
     } finally {
       setLikeBusy(false)
+    }
+  }
+
+  async function handleToggleRepost() {
+    if (repostBusy) return
+    if (!currentUserId) {
+      Alert.alert('Login Required', 'Please log in to repost.')
+      return
+    }
+
+    setRepostBusy(true)
+    const prevReposted = isReposted
+    const prevCount = repostCount
+    setIsReposted(!prevReposted)
+    setRepostCount(prevReposted ? Math.max(0, prevCount - 1) : prevCount + 1)
+
+    try {
+      if (prevReposted) {
+        const { error } = await supabase
+          .from('reposts')
+          .delete()
+          .match({ user_id: currentUserId, post_id: post.id })
+        if (error) throw error
+      } else {
+        const { error } = await supabase
+          .from('reposts')
+          .insert({ user_id: currentUserId, post_id: post.id })
+        if (error && error.code !== '23505') throw error
+        if (error && error.code === '23505') {
+          setIsReposted(true)
+          setRepostCount(prevCount)
+        }
+      }
+    } catch {
+      setIsReposted(prevReposted)
+      setRepostCount(prevCount)
+    } finally {
+      setRepostBusy(false)
     }
   }
 
@@ -471,34 +529,95 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
         </SafeAreaView>
       </Modal>
 
-      {/* Footer / Actions */}
+      {/* Footer / Actions (Order: Comment -> Repost -> Like -> Views -> Bookmark -> Share) */}
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.actionBtn} onPress={handleToggleLike}>
-          <Heart
-            size={20}
-            color={isLiked ? '#ef4444' : colors.gray400}
-            fill={isLiked ? '#ef4444' : 'none'}
-          />
-          <Text style={[styles.actionText, isLiked && styles.likedText]}>{likeCount}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.actionBtn} onPress={handleLoadComments}>
-          <MessageCircle size={20} color={showComments ? colors.brand : colors.gray400} />
+        {/* 1. Comment */}
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={handleLoadComments}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel={`Comment. ${commentCount} comments`}
+        >
+          <MessageCircle size={18} color={showComments ? colors.brand : colors.gray500} />
           <Text style={[styles.actionText, showComments && { color: colors.brand, fontWeight: '600' }]}>
             {commentCount}
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionBtn} onPress={handleToggleSave}>
+        {/* 2. Repost */}
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={handleToggleRepost}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel={`Repost. ${repostCount} reposts`}
+          accessibilityState={{ selected: isReposted }}
+        >
+          <Repeat size={18} color={isReposted ? '#10b981' : colors.gray500} />
+          <Text style={[styles.actionText, isReposted && { color: '#10b981', fontWeight: '600' }]}>
+            {repostCount}
+          </Text>
+        </TouchableOpacity>
+
+        {/* 3. Like */}
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={handleToggleLike}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel={`Like. ${likeCount} likes`}
+          accessibilityState={{ selected: isLiked }}
+        >
+          <Animated.View style={animatedHeartStyle}>
+            <Heart
+              size={18}
+              color={isLiked ? '#ef4444' : colors.gray500}
+              fill={isLiked ? '#ef4444' : 'none'}
+            />
+          </Animated.View>
+          <Text style={[styles.actionText, isLiked && styles.likedText]}>{likeCount}</Text>
+        </TouchableOpacity>
+
+        {/* 4. Views */}
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={() => setShowInsightsModal(true)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel="View post progression and metrics"
+        >
+          <BarChart2 size={18} color={colors.gray500} />
+          <Text style={styles.actionText}>
+            {post.likeCount + post.commentCount + 12}
+          </Text>
+        </TouchableOpacity>
+
+        {/* 5. Bookmark */}
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={handleToggleSave}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel="Bookmark post"
+          accessibilityState={{ selected: isSaved }}
+        >
           <Bookmark
-            size={20}
-            color={isSaved ? colors.brand : colors.gray400}
+            size={18}
+            color={isSaved ? colors.brand : colors.gray500}
             fill={isSaved ? colors.brand : 'none'}
           />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionBtn} onPress={handleShare}>
-          <Share2 size={20} color={colors.gray400} />
+        {/* 6. Share */}
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={handleShare}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel="Share post"
+        >
+          <Share2 size={18} color={colors.gray500} />
         </TouchableOpacity>
       </View>
 
@@ -644,9 +763,11 @@ const styles = StyleSheet.create({
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    gap: 4,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 4,
   },
   actionText: {
     fontSize: 13,

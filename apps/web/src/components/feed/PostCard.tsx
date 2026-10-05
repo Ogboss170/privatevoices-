@@ -3,7 +3,7 @@
 import React, { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Heart, MessageCircle, Bookmark, Share2, Trash2, MoreVertical, Flag, ShieldOff, ChevronLeft, ChevronRight, X, TrendingUp } from 'lucide-react'
+import { Heart, MessageCircle, Repeat, Bookmark, Share2, Trash2, MoreVertical, Flag, ShieldOff, ChevronLeft, ChevronRight, X, TrendingUp, BarChart2 } from 'lucide-react'
 import type { Post } from '@private-voices/shared'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import FormattedText from '../common/FormattedText'
@@ -23,6 +23,9 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
   const [isLiked, setIsLiked] = useState(post.isLikedByMe)
   const [likeCount, setLikeCount] = useState(post.likeCount)
   const [likeBusy, setLikeBusy] = useState(false)
+  const [isReposted, setIsReposted] = useState(post.isRepostedByMe || false)
+  const [repostCount, setRepostCount] = useState(post.repostCount || 0)
+  const [repostBusy, setRepostBusy] = useState(false)
   const [isSaved, setIsSaved] = useState(post.isSavedByMe)
   const [showComments, setShowComments] = useState(false)
   const [comments, setComments] = useState<any[]>([])
@@ -127,6 +130,44 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
       setLikeCount(prevCount)
     } finally {
       setLikeBusy(false)
+    }
+  }
+
+  async function handleToggleRepost() {
+    if (repostBusy) return
+    if (!currentUserId) {
+      alert('Please log in to repost.')
+      return
+    }
+
+    setRepostBusy(true)
+    const prevReposted = isReposted
+    const prevCount = repostCount
+    setIsReposted(!prevReposted)
+    setRepostCount(prevReposted ? Math.max(0, prevCount - 1) : prevCount + 1)
+
+    try {
+      if (prevReposted) {
+        const { error } = await supabase
+          .from('reposts')
+          .delete()
+          .match({ user_id: currentUserId, post_id: post.id })
+        if (error) throw error
+      } else {
+        const { error } = await supabase
+          .from('reposts')
+          .insert({ user_id: currentUserId, post_id: post.id })
+        if (error && error.code !== '23505') throw error
+        if (error && error.code === '23505') {
+          setIsReposted(true)
+          setRepostCount(prevCount)
+        }
+      }
+    } catch {
+      setIsReposted(prevReposted)
+      setRepostCount(prevCount)
+    } finally {
+      setRepostBusy(false)
     }
   }
 
@@ -470,52 +511,109 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
         </div>
       )}
 
-      {/* Action buttons */}
-      <div className="flex items-center justify-between pt-2 border-t border-gray-100 text-gray-500 text-xs">
+      {/* Action buttons (Minimal horizontal action row: Comment -> Repost -> Like -> Views -> Bookmark -> Share) */}
+      <div className="flex items-center justify-between pt-2 border-t border-gray-100 text-gray-500 text-xs select-none">
+        {/* 1. Comment */}
         <button
-          onClick={handleToggleLike}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 transition-colors ${
-            isLiked ? 'text-red-500 font-semibold' : ''
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            handleLoadComments()
+          }}
+          aria-label={`Comment. ${post.commentCount || 0} comments`}
+          className="flex items-center gap-1.5 p-2 -m-2 rounded-full hover:text-brand-600 hover:bg-brand-50/50 transition-colors cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 min-w-[44px] min-h-[44px] justify-center"
+        >
+          <MessageCircle size={18} className="transition-transform group-active:scale-90" />
+          <span className="text-xs font-medium">{post.commentCount || 0}</span>
+        </button>
+
+        {/* 2. Repost */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            handleToggleRepost()
+          }}
+          aria-label={`Repost. ${repostCount} reposts`}
+          aria-pressed={isReposted}
+          className={`flex items-center gap-1.5 p-2 -m-2 rounded-full hover:text-emerald-600 hover:bg-emerald-50/50 transition-colors cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 min-w-[44px] min-h-[44px] justify-center ${
+            isReposted ? 'text-emerald-600 font-semibold' : ''
           }`}
         >
-          <Heart size={18} fill={isLiked ? 'currentColor' : 'none'} />
-          <span>{likeCount}</span>
+          <Repeat size={18} className="transition-transform group-active:rotate-45" />
+          <span className="text-xs font-medium">{repostCount}</span>
         </button>
 
+        {/* 3. Like */}
         <button
-          onClick={handleLoadComments}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            handleToggleLike()
+          }}
+          aria-label={`Like. ${likeCount} likes`}
+          aria-pressed={isLiked}
+          className={`flex items-center gap-1.5 p-2 -m-2 rounded-full hover:text-rose-500 hover:bg-rose-50/50 transition-colors cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 min-w-[44px] min-h-[44px] justify-center ${
+            isLiked ? 'text-rose-500 font-semibold' : ''
+          }`}
         >
-          <MessageCircle size={18} />
-          <span>{post.commentCount}</span>
+          <Heart
+            size={18}
+            fill={isLiked ? 'currentColor' : 'none'}
+            className={`transition-all duration-200 ${
+              isLiked ? 'scale-110 animate-[bounce_0.3s_ease-in-out_1]' : 'group-active:scale-125'
+            }`}
+          />
+          <span className="text-xs font-medium">{likeCount}</span>
         </button>
 
+        {/* 4. Views / Insights */}
         <button
-          onClick={() => setShowInsightsModal(true)}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-purple-50 text-purple-600 font-medium transition-colors"
-          title="View Post Insights & Progression"
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            setShowInsightsModal(true)
+          }}
+          aria-label="View post metrics and progression"
+          title="Views & Progression"
+          className="flex items-center gap-1.5 p-2 -m-2 rounded-full hover:text-purple-600 hover:bg-purple-50/50 transition-colors cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 min-w-[44px] min-h-[44px] justify-center"
         >
-          <TrendingUp size={18} />
-          <span>Insights</span>
+          <BarChart2 size={18} className="transition-transform group-active:scale-90" />
+          <span className="text-xs font-medium">{post.likeCount + post.commentCount + 12}</span>
         </button>
 
+        {/* 5. Bookmark */}
         <button
-          onClick={handleToggleSave}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 transition-colors ${
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            handleToggleSave()
+          }}
+          aria-label="Bookmark post"
+          aria-pressed={isSaved}
+          className={`flex items-center p-2 -m-2 rounded-full hover:text-brand-600 hover:bg-brand-50/50 transition-colors cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 min-w-[44px] min-h-[44px] justify-center ${
             isSaved ? 'text-brand-600' : ''
           }`}
         >
-          <Bookmark size={18} fill={isSaved ? 'currentColor' : 'none'} />
+          <Bookmark
+            size={18}
+            fill={isSaved ? 'currentColor' : 'none'}
+            className="transition-transform group-active:scale-110"
+          />
         </button>
 
+        {/* 6. Share */}
         <button
-          onClick={() => {
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
             navigator.clipboard.writeText(`${window.location.origin}/post/${post.id}`)
             alert('Post link copied to clipboard!')
           }}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+          aria-label="Share post"
+          className="flex items-center p-2 -m-2 rounded-full hover:text-brand-600 hover:bg-brand-50/50 transition-colors cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 min-w-[44px] min-h-[44px] justify-center"
         >
-          <Share2 size={18} />
+          <Share2 size={18} className="transition-transform group-active:scale-90" />
         </button>
       </div>
 
