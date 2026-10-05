@@ -18,9 +18,9 @@ import Animated, {
 } from 'react-native-reanimated'
 
 // ─── Brand colours ──────────────────────────────────────────────────────────
-const ACCENT        = '#3b82f6'
-const ACCENT_BG     = 'rgba(59, 130, 246, 0.18)'
-const ACCENT_BORDER = 'rgba(59, 130, 246, 0.4)'
+const ACCENT        = '#7c3aed'
+const ACCENT_BG     = 'rgba(124, 58, 237, 0.18)'
+const ACCENT_BORDER = 'rgba(124, 58, 237, 0.4)'
 const INACTIVE      = 'rgba(255, 255, 255, 0.55)'
 
 // ─── Animation config ────────────────────────────────────────────────────────

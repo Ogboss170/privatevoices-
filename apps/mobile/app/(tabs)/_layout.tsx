@@ -25,7 +25,7 @@ import { FloatingTabBar } from '../../components/FloatingTabBar'
 import { supabase } from '../../lib/supabase'
 
 // ─── Brand ───────────────────────────────────────────────────────────────────
-const ACCENT = '#3b82f6'
+const ACCENT = '#7c3aed'
 
 // ─── Creation menu options ────────────────────────────────────────────────────
 const CREATE_OPTIONS = [
@@ -216,7 +216,7 @@ export default function TabLayout() {
       const { count } = await supabase
         .from('notifications')
         .select('*', { count: 'exact', head: true })
-        .eq('user_id', currentUserId)
+        .eq('recipient_id', currentUserId)
         .eq('is_read', false)
       setUnreadCount(count ?? 0)
     } catch (err) {
