@@ -45,9 +45,11 @@ import {
 import { useRouter } from 'expo-router'
 import { supabase } from '../lib/supabase'
 import { colors } from '../constants/colors'
+import { useTheme } from '../context/ThemeContext'
 
 export default function SettingsScreen() {
   const router = useRouter()
+  const { themeMode, setThemeMode } = useTheme()
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<any>(null)
   const [privacy, setPrivacy] = useState<any>(null)
@@ -531,10 +533,10 @@ export default function SettingsScreen() {
           {(['system', 'light', 'dark'] as const).map((t) => (
             <TouchableOpacity
               key={t}
-              style={[styles.optionBtn, theme === t && styles.optionBtnActive]}
-              onPress={() => setTheme(t)}
+              style={[styles.optionBtn, themeMode === t && styles.optionBtnActive]}
+              onPress={() => setThemeMode(t)}
             >
-              <Text style={[styles.optionText, theme === t && styles.optionTextActive]}>
+              <Text style={[styles.optionText, themeMode === t && styles.optionTextActive]}>
                 {t.charAt(0).toUpperCase() + t.slice(1)}
               </Text>
             </TouchableOpacity>

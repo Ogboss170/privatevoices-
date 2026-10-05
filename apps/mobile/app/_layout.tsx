@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '../lib/supabase'
 import { registerForPushNotificationsAsync, setupNotificationListeners } from '../lib/pushNotifications'
 import { ONBOARDING_STORAGE_KEY } from './onboarding'
+import { ThemeProvider } from '../context/ThemeContext'
 
 // Keep splash screen visible while initializing app state
 SplashScreen.preventAutoHideAsync()
@@ -97,5 +98,9 @@ export default function RootLayout() {
     return null
   }
 
-  return <Slot />
+  return (
+    <ThemeProvider>
+      <Slot />
+    </ThemeProvider>
+  )
 }
