@@ -37,10 +37,10 @@ export default function FeedPage() {
     }
 
     try {
-      // 1. Fetch raw candidate posts with community relations
+      // 1. Fetch raw candidate posts with author and community relations
       let query = supabase
         .from('posts')
-        .select('*, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url), community:communities(id, name, slug, avatar_url, privacy)')
+        .select('*, author:profiles(id, username, display_name, avatar_url), community:communities(id, name, slug, avatar_url, privacy)')
         .order('created_at', { ascending: false })
 
       if (activeTab === 'following' && currentUserId) {
@@ -59,10 +59,16 @@ export default function FeedPage() {
       let { data: rawPosts, error } = await query
 
       if (error || !rawPosts) {
-        const fallbackRes = await supabase
+        console.warn('Feed query join notice, using fallback select:', error?.message)
+        let fallbackQuery = supabase
           .from('posts')
-          .select('*, community:communities(id, name, slug, avatar_url, privacy)')
+          .select('*')
           .order('created_at', { ascending: false })
+
+        if (activeTab === 'community') {
+          fallbackQuery = fallbackQuery.not('community_id', 'is', null)
+        }
+        const fallbackRes = await fallbackQuery
         rawPosts = fallbackRes.data
       }
 
@@ -161,7 +167,7 @@ export default function FeedPage() {
                 avatarUrl: authorData?.avatar_url || null,
               },
               communityId: p.community_id || null,
-              community: p.community
+              community: p.community && !Array.isArray(p.community) && p.community.id
                 ? {
                     id: p.community.id,
                     name: p.community.name,
