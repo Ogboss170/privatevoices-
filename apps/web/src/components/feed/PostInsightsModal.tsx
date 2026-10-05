@@ -1,33 +1,84 @@
 'use client'
 
-import React from 'react'
-import { X, TrendingUp, Heart, MessageCircle, Bookmark, Award, Zap, Clock } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import Image from 'next/image'
+import { X, TrendingUp, Heart, MessageCircle, Repeat, Bookmark, Award, Zap, Clock, Eye, Users, Shield, Lock } from 'lucide-react'
 import type { Post } from '@private-voices/shared'
+import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 interface PostInsightsModalProps {
   post: Post
+  currentUserId?: string
   onClose: () => void
 }
 
-export default function PostInsightsModal({ post, onClose }: PostInsightsModalProps): React.JSX.Element {
+export default function PostInsightsModal({ post, currentUserId, onClose }: PostInsightsModalProps): React.JSX.Element {
+  const supabase = createSupabaseBrowserClient()
+  const isAuthor = currentUserId === post.authorId
+
+  const [viewCount, setViewCount] = useState<number>(post.viewCount || 0)
+  const [viewers, setViewers] = useState<any[]>([])
+  const [loadingViewers, setLoadingViewers] = useState<boolean>(isAuthor)
+
   const likeCount = post.likeCount || 0
   const commentCount = post.commentCount || 0
-  const totalEngagement = likeCount + commentCount
+  const repostCount = post.repostCount || 0
   const pollVotes = post.poll?.totalVotes || 0
+  const totalEngagement = likeCount + commentCount + repostCount
+
+  // Calculate Engagement Rate: Total Interactions / Unique Views
+  const engagementRate = viewCount > 0 ? Math.min(100, Math.round((totalEngagement / viewCount) * 100)) : 0
+
+  useEffect(() => {
+    async function fetchInsights() {
+      // 1. Fetch total 24h unique view count
+      try {
+        const { data: vCount } = await supabase.rpc('get_post_view_count', { p_post_id: post.id })
+        if (typeof vCount === 'number') {
+          setViewCount(vCount)
+        }
+      } catch {
+        // ignore
+      }
+
+      // 2. Author-Only Viewer Profile List (strictly prohibited for non-authors)
+      if (isAuthor) {
+        setLoadingViewers(true)
+        try {
+          const { data, error } = await supabase
+            .from('post_views')
+            .select('viewed_at, viewer:profiles!post_views_viewer_id_fkey(id, username, display_name, avatar_url)')
+            .eq('post_id', post.id)
+            .order('viewed_at', { ascending: false })
+            .limit(50)
+
+          if (!error && data) {
+            setViewers(data)
+          }
+        } catch {
+          // ignore
+        } finally {
+          setLoadingViewers(false)
+        }
+      }
+    }
+
+    fetchInsights()
+  }, [post.id, isAuthor, supabase])
 
   let statusText = 'Fresh Voice'
   let statusBadgeColor = 'bg-blue-500/10 text-blue-500 border-blue-500/30'
   let progressPercent = 20
 
-  if (totalEngagement > 25) {
+  if (totalEngagement > 25 || viewCount > 100) {
     statusText = '🔥 Trending & Viral'
     statusBadgeColor = 'bg-red-500/10 text-red-500 border-red-500/30'
     progressPercent = 95
-  } else if (totalEngagement > 10) {
+  } else if (totalEngagement > 10 || viewCount > 40) {
     statusText = '🚀 High Engagement'
     statusBadgeColor = 'bg-purple-500/10 text-purple-500 border-purple-500/30'
     progressPercent = 75
-  } else if (totalEngagement > 3) {
+  } else if (totalEngagement > 3 || viewCount > 10) {
     statusText = '📈 Rising Voice'
     statusBadgeColor = 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
     progressPercent = 50
@@ -37,13 +88,13 @@ export default function PostInsightsModal({ post, onClose }: PostInsightsModalPr
   const hoursAgo = Math.max(1, Math.floor((Date.now() - createdDate.getTime()) / (1000 * 60 * 60)))
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 select-none">
       <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5 relative max-h-[85vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 pb-3">
           <div className="flex items-center gap-2">
             <TrendingUp size={20} className="text-brand-600" />
-            <h3 className="text-lg font-bold text-gray-900">Post Progression & Insights</h3>
+            <h3 className="text-lg font-bold text-gray-900">Post Analytics & Insights</h3>
           </div>
           <button onClick={onClose} className="p-1 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600">
             <X size={18} />
@@ -73,14 +124,25 @@ export default function PostInsightsModal({ post, onClose }: PostInsightsModalPr
               </div>
             </div>
 
-            <p className="text-xs text-gray-500 leading-relaxed">
-              {totalEngagement} total interactions ({likeCount} likes, {commentCount} comments, {pollVotes} poll votes).
-            </p>
+            <div className="flex items-center justify-between text-xs text-gray-600 pt-1 border-t border-gray-200/60">
+              <span>Engagement Rate</span>
+              <span className="font-bold text-brand-600">{engagementRate}%</span>
+            </div>
           </div>
 
           {/* Breakdown Grid */}
           <h4 className="text-sm font-bold text-gray-900 pt-1">Interactions Breakdown</h4>
           <div className="grid grid-cols-2 gap-3">
+            <div className="bg-white p-3.5 rounded-xl border border-gray-200 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+                <Eye size={18} />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-gray-900 leading-none">{viewCount}</p>
+                <p className="text-xs text-gray-500 mt-0.5">24h Unique Views</p>
+              </div>
+            </div>
+
             <div className="bg-white p-3.5 rounded-xl border border-gray-200 flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center flex-shrink-0">
                 <Heart size={18} />
@@ -102,24 +164,73 @@ export default function PostInsightsModal({ post, onClose }: PostInsightsModalPr
             </div>
 
             <div className="bg-white p-3.5 rounded-xl border border-gray-200 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
-                <Bookmark size={18} />
-              </div>
-              <div>
-                <p className="text-lg font-bold text-gray-900 leading-none">{post.isSavedByMe ? 1 : 0}</p>
-                <p className="text-xs text-gray-500 mt-0.5">Bookmarks</p>
-              </div>
-            </div>
-
-            <div className="bg-white p-3.5 rounded-xl border border-gray-200 flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
-                <Zap size={18} />
+                <Repeat size={18} />
               </div>
               <div>
-                <p className="text-lg font-bold text-gray-900 leading-none">{pollVotes}</p>
-                <p className="text-xs text-gray-500 mt-0.5">Poll Votes</p>
+                <p className="text-lg font-bold text-gray-900 leading-none">{repostCount}</p>
+                <p className="text-xs text-gray-500 mt-0.5">Reposts</p>
               </div>
             </div>
+          </div>
+
+          {/* Viewer Profile List Section */}
+          <div className="pt-2">
+            {isAuthor ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
+                    <Users size={16} className="text-brand-600" />
+                    <span>Viewers List</span>
+                  </h4>
+                  <span className="text-[11px] text-gray-400 font-medium">Author Only</span>
+                </div>
+
+                {loadingViewers ? (
+                  <div className="py-6 text-center text-xs text-gray-400">Loading viewers...</div>
+                ) : viewers.length === 0 ? (
+                  <div className="p-4 bg-gray-50 rounded-xl text-center text-xs text-gray-500 border border-gray-200/80">
+                    No unique 24h viewers recorded yet.
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {viewers.map((v, i) => (
+                      <div key={i} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 border border-gray-100">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center font-bold text-brand-600 text-xs">
+                            {v.viewer?.avatar_url ? (
+                              <Image src={v.viewer.avatar_url} alt="" width={32} height={32} className="rounded-full object-cover" />
+                            ) : (
+                              (v.viewer?.display_name || 'U').charAt(0).toUpperCase()
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold text-gray-900 leading-tight">
+                              {v.viewer?.display_name || 'Anonymous User'}
+                            </p>
+                            <p className="text-[11px] text-gray-400">@{v.viewer?.username || 'user'}</p>
+                          </div>
+                        </div>
+                        <span className="text-[10px] text-gray-400 font-medium">
+                          {new Date(v.viewed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Non-Author Privacy Protection Notice */
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-3.5 text-xs text-gray-600 space-y-1 flex items-start gap-2.5">
+                <Lock size={16} className="text-gray-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-semibold text-gray-800">Viewer Privacy Protected</p>
+                  <p className="text-[11px] text-gray-500 leading-relaxed">
+                    Viewer profiles and breakdown lists are strictly author-only on Private Voices. Public counts exclude author views.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Growth Tip */}

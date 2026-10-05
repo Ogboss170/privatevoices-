@@ -790,7 +790,7 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
 
       {/* Post Progression & Insights Modal */}
       {showInsightsModal && (
-        <PostInsightsModal post={post} onClose={() => setShowInsightsModal(false)} />
+        <PostInsightsModal post={post} currentUserId={currentUserId} onClose={() => setShowInsightsModal(false)} />
       )}
     </article>
   )

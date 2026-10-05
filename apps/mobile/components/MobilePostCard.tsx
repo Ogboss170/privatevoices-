@@ -724,6 +724,7 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
       <PostInsightsModal
         visible={showInsightsModal}
         post={post}
+        currentUserId={currentUserId}
         onClose={() => setShowInsightsModal(false)}
       />
     </View>
