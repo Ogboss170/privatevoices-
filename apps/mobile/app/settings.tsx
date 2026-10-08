@@ -96,6 +96,14 @@ export default function SettingsScreen() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [deleting, setDeleting] = useState(false)
 
+  // Change Password Modal State
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmNewPassword, setConfirmNewPassword] = useState('')
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false)
+  const [updatingPassword, setUpdatingPassword] = useState(false)
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) {
@@ -231,6 +239,33 @@ export default function SettingsScreen() {
     router.push('/login')
   }
 
+  async function handleChangePassword() {
+    if (newPassword.length < 8) {
+      Alert.alert('Password too short', 'Your new password must be at least 8 characters long.')
+      return
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      Alert.alert('Passwords mismatch', 'New passwords do not match. Please verify both fields.')
+      return
+    }
+
+    setUpdatingPassword(true)
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    })
+    setUpdatingPassword(false)
+
+    if (error) {
+      Alert.alert('Update Failed', error.message)
+    } else {
+      Alert.alert('Password Updated', 'Your account password has been changed successfully.')
+      setShowChangePasswordModal(false)
+      setNewPassword('')
+      setConfirmNewPassword('')
+    }
+  }
+
   if (loading) {
     return (
       <View style={styles.centered}>
@@ -277,7 +312,11 @@ export default function SettingsScreen() {
           <ChevronRight size={18} color={colors.gray400} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.rowItem} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.rowItem}
+          activeOpacity={0.7}
+          onPress={() => setShowChangePasswordModal(true)}
+        >
           <View style={styles.rowLeft}>
             <KeyRound size={18} color={colors.gray600} />
             <Text style={styles.rowLabel}>Change Password</Text>
@@ -978,6 +1017,82 @@ export default function SettingsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ── CHANGE PASSWORD MODAL ── */}
+      <Modal visible={showChangePasswordModal} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }]}>
+            <View style={styles.modalHeaderRow}>
+              <KeyRound size={20} color={colors.brand} />
+              <Text style={[styles.modalTitleRed, { color: themeColors.text }]}>Change Password</Text>
+            </View>
+
+            <Text style={[styles.modalBodyText, { color: themeColors.textSecondary }]}>
+              Enter and confirm your new password. It must be at least 8 characters long.
+            </Text>
+
+            <View style={{ gap: 10, marginVertical: 8 }}>
+              <View style={[styles.changePasswordInputRow, { backgroundColor: themeColors.surfaceBorder, borderColor: themeColors.surfaceBorder }]}>
+                <TextInput
+                  style={[styles.changePasswordInput, { color: themeColors.text }]}
+                  placeholder="New password (8+ chars)"
+                  placeholderTextColor={themeColors.textSecondary}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  secureTextEntry={!showNewPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  {showNewPassword ? <EyeOff size={18} color={themeColors.textSecondary} /> : <Eye size={18} color={themeColors.textSecondary} />}
+                </TouchableOpacity>
+              </View>
+
+              <View style={[styles.changePasswordInputRow, { backgroundColor: themeColors.surfaceBorder, borderColor: themeColors.surfaceBorder }]}>
+                <TextInput
+                  style={[styles.changePasswordInput, { color: themeColors.text }]}
+                  placeholder="Confirm new password"
+                  placeholderTextColor={themeColors.textSecondary}
+                  value={confirmNewPassword}
+                  onChangeText={setConfirmNewPassword}
+                  secureTextEntry={!showConfirmNewPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity onPress={() => setShowConfirmNewPassword(!showConfirmNewPassword)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  {showConfirmNewPassword ? <EyeOff size={18} color={themeColors.textSecondary} /> : <Eye size={18} color={themeColors.textSecondary} />}
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => {
+                  setShowChangePasswordModal(false)
+                  setNewPassword('')
+                  setConfirmNewPassword('')
+                }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.savePasswordBtn,
+                  (!newPassword || !confirmNewPassword || updatingPassword) && styles.disabledBtn,
+                ]}
+                onPress={handleChangePassword}
+                disabled={!newPassword || !confirmNewPassword || updatingPassword}
+              >
+                {updatingPassword ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={styles.savePasswordBtnText}>Update</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   )
 }
@@ -1184,7 +1299,32 @@ const styles = StyleSheet.create({
   listUserHandle: { fontSize: 11, color: colors.brand, fontFamily: 'monospace' },
   unblockBtn: { backgroundColor: '#fef2f2', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: '#fca5a5' },
   unblockBtnText: { fontSize: 12, fontWeight: '700', color: '#ef4444' },
-  unmuteBtn: { backgroundColor: '#fffbe6', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: '#fef08a' },
+  unmuteBtn: { backgroundColor: '#fffbe6', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: '#fca5a5' },
   unmuteBtnText: { fontSize: 12, fontWeight: '700', color: '#d97706' },
+  changePasswordInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  changePasswordInput: {
+    flex: 1,
+    fontSize: 14,
+  },
+  savePasswordBtn: {
+    backgroundColor: colors.brand,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  savePasswordBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
 })
 

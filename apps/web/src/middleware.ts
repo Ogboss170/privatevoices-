@@ -32,7 +32,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Public routes that don't require authentication
-  const publicRoutes = ['/login', '/register', '/']
+  const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password', '/auth/callback', '/']
   const isPublicRoute = publicRoutes.includes(pathname)
   // Profile routes are public (/@username)
   const isProfileRoute = pathname.startsWith('/@')

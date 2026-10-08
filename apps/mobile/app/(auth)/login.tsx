@@ -65,6 +65,12 @@ export default function LoginScreen() {
             autoComplete="password"
           />
 
+          <View style={styles.forgotPasswordRow}>
+            <Link href={'/(auth)/forgot-password' as any}>
+              <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+            </Link>
+          </View>
+
           <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
             onPress={handleLogin}
@@ -113,6 +119,16 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
+  forgotPasswordRow: {
+    alignItems: 'flex-end',
+    marginBottom: 12,
+    marginTop: -4,
+  },
+  forgotPasswordText: {
+    color: colors.brand,
+    fontSize: 13,
+    fontWeight: '600',
+  },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 24 },
   footerText: { color: '#6b7280', fontSize: 14 },
   link: { color: colors.brand, fontWeight: '600', fontSize: 14 },

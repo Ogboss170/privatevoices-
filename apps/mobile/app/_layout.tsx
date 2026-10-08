@@ -27,17 +27,16 @@ export default function RootLayout() {
         const hasCompletedOnboarding = await AsyncStorage.getItem(ONBOARDING_STORAGE_KEY)
         const { data: { session } } = await supabase.auth.getSession()
 
-        if (!isMounted) return
-
         const inAuthGroup = segments[0] === '(auth)'
         const inOnboarding = segments[0] === 'onboarding'
+        const inResetPassword = segments.includes('reset-password' as any) || segments.includes('forgot-password' as any)
 
         if (hasCompletedOnboarding !== 'true' && !inOnboarding) {
           router.replace('/onboarding')
         } else if (hasCompletedOnboarding === 'true') {
           if (!session && !inAuthGroup && !inOnboarding) {
             router.replace('/(auth)/login')
-          } else if (session && (inAuthGroup || inOnboarding)) {
+          } else if (session && (inAuthGroup || inOnboarding) && !inResetPassword) {
             router.replace('/(tabs)')
           }
         }
@@ -60,15 +59,18 @@ export default function RootLayout() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         const hasCompletedOnboarding = await AsyncStorage.getItem(ONBOARDING_STORAGE_KEY)
-        const inAuthGroup = segments[0] === '(auth)'
-        const inOnboarding = segments[0] === 'onboarding'
+        const inResetPassword = segments.includes('reset-password' as any) || segments.includes('forgot-password' as any)
 
         if (hasCompletedOnboarding !== 'true' && !inOnboarding) {
           router.replace('/onboarding')
-        } else if (!session && !inAuthGroup && !inOnboarding) {
-          router.replace('/(auth)/login')
-        } else if (session && (inAuthGroup || inOnboarding)) {
-          router.replace('/(tabs)')
+        } else if (hasCompletedOnboarding === 'true') {
+          if (_event === 'PASSWORD_RECOVERY') {
+            router.replace('/(auth)/reset-password' as any)
+          } else if (!session && !inAuthGroup && !inOnboarding) {
+            router.replace('/(auth)/login')
+          } else if (session && (inAuthGroup || inOnboarding) && !inResetPassword) {
+            router.replace('/(tabs)')
+          }
         }
 
         if (session?.user) {

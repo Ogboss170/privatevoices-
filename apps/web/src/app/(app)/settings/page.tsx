@@ -16,6 +16,7 @@ import {
   Shield,
   Ban,
   Eye,
+  EyeOff,
   Sliders,
   VolumeX,
   FileText,
@@ -96,6 +97,16 @@ export default function SettingsPage(): React.JSX.Element {
   // Logout All Confirmation Modal state
   const [showLogoutAllConfirm, setShowLogoutAllConfirm] = useState(false)
   const [loggingOutAll, setLoggingOutAll] = useState(false)
+
+  // Change Password Modal state
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmNewPassword, setConfirmNewPassword] = useState('')
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false)
+  const [updatingPassword, setUpdatingPassword] = useState(false)
+  const [changePasswordError, setChangePasswordError] = useState<string | null>(null)
+  const [changePasswordSuccess, setChangePasswordSuccess] = useState(false)
 
   const fetchSettings = useCallback(async () => {
     setLoading(true)
@@ -315,7 +326,16 @@ export default function SettingsPage(): React.JSX.Element {
             <ChevronRight size={16} className="text-gray-400" />
           </div>
 
-          <div className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors">
+          <div
+            onClick={() => {
+              setShowChangePasswordModal(true)
+              setChangePasswordError(null)
+              setChangePasswordSuccess(false)
+              setNewPassword('')
+              setConfirmNewPassword('')
+            }}
+            className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
+          >
             <div className="flex items-center space-x-3">
               <KeyRound size={18} className="text-gray-500" />
               <div>
@@ -1183,6 +1203,144 @@ export default function SettingsPage(): React.JSX.Element {
                   </div>
                 ))}
               </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── CHANGE PASSWORD MODAL ── */}
+      {showChangePasswordModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-gray-100">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center space-x-2 text-gray-900 font-bold text-base">
+                <KeyRound size={20} className="text-brand-600" />
+                <span>Change Password</span>
+              </div>
+              <button
+                onClick={() => setShowChangePasswordModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-full transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {changePasswordSuccess ? (
+              <div className="text-center py-6 space-y-3">
+                <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+                  <Check size={24} />
+                </div>
+                <h4 className="font-bold text-sm text-gray-900">Password Changed</h4>
+                <p className="text-xs text-gray-500">
+                  Your password has been successfully updated.
+                </p>
+                <button
+                  onClick={() => setShowChangePasswordModal(false)}
+                  className="btn-primary text-xs py-2 px-5 mt-2"
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault()
+                  setChangePasswordError(null)
+
+                  if (newPassword.length < 8) {
+                    setChangePasswordError('Password must be at least 8 characters long.')
+                    return
+                  }
+
+                  if (newPassword !== confirmNewPassword) {
+                    setChangePasswordError('Passwords do not match.')
+                    return
+                  }
+
+                  setUpdatingPassword(true)
+                  const { error } = await supabase.auth.updateUser({
+                    password: newPassword,
+                  })
+                  setUpdatingPassword(false)
+
+                  if (error) {
+                    setChangePasswordError(error.message)
+                  } else {
+                    setChangePasswordSuccess(true)
+                  }
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    New Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      required
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="input-field text-xs pr-9"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      {showNewPassword ? <Eye size={15} /> : <EyeOff size={15} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Confirm New Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showConfirmNewPassword ? 'text' : 'password'}
+                      required
+                      value={confirmNewPassword}
+                      onChange={(e) => setConfirmNewPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="input-field text-xs pr-9"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmNewPassword(!showConfirmNewPassword)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      {showConfirmNewPassword ? <Eye size={15} /> : <EyeOff size={15} />}
+                    </button>
+                  </div>
+                </div>
+
+                {changePasswordError && (
+                  <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2.5">
+                    {changePasswordError}
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowChangePasswordModal(false)}
+                    className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={updatingPassword || !newPassword || !confirmNewPassword}
+                    className="btn-primary text-xs py-2 px-4 rounded-xl disabled:opacity-50"
+                  >
+                    {updatingPassword ? 'Updating…' : 'Update Password'}
+                  </button>
+                </div>
+              </form>
             )}
           </div>
         </div>
