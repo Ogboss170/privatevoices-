@@ -457,6 +457,23 @@ export default function SettingsScreen() {
     }
 
     setUpdatingEmail(true)
+
+    // Pre-validate that new email is not in permanent email_registry
+    try {
+      const { data: availRes } = await supabase.rpc('check_email_change_availability', {
+        p_user_id: userId,
+        p_new_email: trimmed,
+      })
+
+      if (availRes && !availRes.available) {
+        setUpdatingEmail(false)
+        Alert.alert('Email Unavailable', availRes.message || 'This email address is already reserved.')
+        return
+      }
+    } catch {
+      // ignore
+    }
+
     const { error } = await supabase.auth.updateUser({
       email: trimmed,
     })
