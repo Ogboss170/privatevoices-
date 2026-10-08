@@ -26,11 +26,12 @@ export default function PostInsightsModal({ post, currentUserId, onClose }: Post
   const [viewers, setViewers] = useState<any[]>([])
   const [loadingViewers, setLoadingViewers] = useState<boolean>(true)
 
+  const postAny = post as any
   const likeCount = post.likeCount || 0
   const commentCount = post.commentCount || 0
   const repostCount = post.repostCount || 0
-  const bookmarkCount = post.bookmarkCount || post.saveCount || 0
-  const shareCount = post.shareCount || 0
+  const bookmarkCount = postAny.bookmarkCount || postAny.saveCount || 0
+  const shareCount = postAny.shareCount || 0
   const totalEngagement = likeCount + commentCount + repostCount + bookmarkCount
 
   // Calculate Engagement Rate: Total Interactions / Unique Views

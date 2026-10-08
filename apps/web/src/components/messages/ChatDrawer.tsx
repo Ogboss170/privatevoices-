@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
-import { X, Send, Loader2, Image as ImageIcon, ExternalLink, Trash2 } from 'lucide-react'
+import { X, Send, Loader2, Image as ImageIcon, ExternalLink, Trash2, Mic, Play, Pause, Square, Volume2 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 interface ChatDrawerProps {
@@ -35,6 +35,15 @@ export default function ChatDrawer({
   // Presence & Typing State
   const [isPartnerTyping, setIsPartnerTyping] = useState(false)
   const [isPartnerOnline, setIsPartnerOnline] = useState(false)
+
+  // Voice Note / Audio Whisper State
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordingSeconds, setRecordingSeconds] = useState(0)
+  const [playingAudioId, setPlayingAudioId] = useState<string | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const currentAudioElementRef = useRef<HTMLAudioElement | null>(null)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -157,8 +166,195 @@ export default function ChatDrawer({
         })
       }
       supabase.removeChannel(channel)
+
+      if (currentAudioElementRef.current) {
+        currentAudioElementRef.current.pause()
+        currentAudioElementRef.current = null
+      }
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current)
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop()
+      }
     }
   }, [supabase, conversationId, currentUserId, partner.id])
+
+  // --- Web Audio Recording & Playback ---
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      audioChunksRef.current = []
+      const recorder = new MediaRecorder(stream)
+      mediaRecorderRef.current = recorder
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data)
+        }
+      }
+
+      recorder.start()
+      setIsRecording(true)
+      setRecordingSeconds(0)
+
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingSeconds((prev) => prev + 1)
+      }, 1000)
+    } catch (err) {
+      console.error('Failed to get user audio media:', err)
+      alert('Microphone access is required to record voice notes.')
+    }
+  }
+
+  function cancelRecording() {
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current)
+    }
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop())
+      mediaRecorderRef.current.stop()
+    }
+    audioChunksRef.current = []
+    setIsRecording(false)
+    setRecordingSeconds(0)
+  }
+
+  async function stopAndSendRecording() {
+    if (!mediaRecorderRef.current) return
+    const duration = recordingSeconds
+
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current)
+    }
+    setIsRecording(false)
+    setRecordingSeconds(0)
+
+    mediaRecorderRef.current.onstop = async () => {
+      mediaRecorderRef.current?.stream.getTracks().forEach((track) => track.stop())
+      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+      audioChunksRef.current = []
+
+      await uploadAndSendAudio(audioBlob, duration)
+    }
+
+    mediaRecorderRef.current.stop()
+  }
+
+  async function uploadAndSendAudio(blob: Blob, durationSec: number) {
+    setSending(true)
+    const tempId = 'temp-audio-' + Date.now()
+    const tempAudioUrl = URL.createObjectURL(blob)
+
+    const optimisticMsg = {
+      id: tempId,
+      conversation_id: conversationId,
+      sender_id: currentUserId,
+      content: '🎙️ Voice note',
+      audio_url: tempAudioUrl,
+      audio_duration: durationSec,
+      is_read: false,
+      created_at: new Date().toISOString(),
+    }
+
+    setMessages((prev) => [...prev, optimisticMsg])
+    scrollToBottom()
+
+    try {
+      const fileName = `voice-notes/${conversationId}/${Date.now()}.webm`
+      let uploadRes = await supabase.storage
+        .from('chat-media')
+        .upload(fileName, blob, { contentType: 'audio/webm', upsert: true })
+
+      if (uploadRes.error) {
+        uploadRes = await supabase.storage
+          .from('stories')
+          .upload(`chat/${fileName}`, blob, { contentType: 'audio/webm', upsert: true })
+      }
+
+      let uploadedUrl = tempAudioUrl
+      if (uploadRes.data) {
+        const bucket = uploadRes.data.path.startsWith('chat/') ? 'stories' : 'chat-media'
+        const { data: publicUrlData } = supabase.storage
+          .from(bucket)
+          .getPublicUrl(uploadRes.data.path)
+        uploadedUrl = publicUrlData.publicUrl
+      }
+
+      const { data: newMsg, error } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          sender_id: currentUserId,
+          content: '🎙️ Voice note',
+          audio_url: uploadedUrl,
+          audio_duration: durationSec,
+        })
+        .select('*')
+        .single()
+
+      if (error) {
+        console.error('Failed to send audio message:', error)
+        setMessages((prev) => prev.filter((m) => m.id !== tempId))
+        alert(`Failed to send voice note: ${error.message}`)
+      } else if (newMsg) {
+        setMessages((prev) => prev.map((m) => (m.id === tempId ? newMsg : m)))
+        await supabase
+          .from('conversations')
+          .update({
+            last_message: '🎙️ Voice note',
+            last_message_at: new Date().toISOString(),
+          })
+          .eq('id', conversationId)
+      }
+    } catch (err) {
+      console.error('Error uploading voice note:', err)
+      setMessages((prev) => prev.filter((m) => m.id !== tempId))
+    } finally {
+      setSending(false)
+    }
+  }
+
+  function handleToggleAudio(msgId: string, audioUrl: string) {
+    if (playingAudioId === msgId) {
+      if (currentAudioElementRef.current) {
+        currentAudioElementRef.current.pause()
+        currentAudioElementRef.current = null
+      }
+      setPlayingAudioId(null)
+      return
+    }
+
+    if (currentAudioElementRef.current) {
+      currentAudioElementRef.current.pause()
+    }
+
+    const audio = new window.Audio(audioUrl)
+    currentAudioElementRef.current = audio
+    setPlayingAudioId(msgId)
+
+    audio.onended = () => {
+      setPlayingAudioId(null)
+      currentAudioElementRef.current = null
+    }
+
+    audio.onerror = () => {
+      alert('Could not play audio message.')
+      setPlayingAudioId(null)
+      currentAudioElementRef.current = null
+    }
+
+    audio.play().catch((err) => {
+      console.error('Audio play error:', err)
+      setPlayingAudioId(null)
+    })
+  }
+
+  function formatAudioDuration(sec: number) {
+    const mins = Math.floor(sec / 60)
+    const secs = sec % 60
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`
+  }
 
   function scrollToBottom() {
     setTimeout(() => {
@@ -414,7 +610,9 @@ export default function ChatDrawer({
               const isMe = msg.sender_id === currentUserId
               const isTemp = msg.id.startsWith?.('temp-')
               const hasImage = !!msg.image_url
-              const showText = msg.content && msg.content !== '📷 Photo'
+              const hasAudio = !!msg.audio_url
+              const isPlayingThis = playingAudioId === msg.id
+              const showText = msg.content && msg.content !== '📷 Photo' && msg.content !== '🎙️ Voice note'
 
               return (
                 <div
@@ -453,6 +651,50 @@ export default function ChatDrawer({
                           />
                           <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 flex items-center justify-center transition-opacity">
                             <ExternalLink size={18} className="text-white drop-shadow-md" />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Voice Note / Audio Whisper Player */}
+                      {hasAudio && (
+                        <div className={`p-3 flex items-center gap-3 min-w-[210px] ${isMe ? 'text-white' : 'text-gray-900'}`}>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleAudio(msg.id, msg.audio_url)}
+                            className={`w-9 h-9 rounded-full flex items-center justify-center transition-transform hover:scale-105 active:scale-95 shadow-sm flex-shrink-0 ${
+                              isMe ? 'bg-white text-brand-600' : 'bg-brand-600 text-white'
+                            }`}
+                            title={isPlayingThis ? 'Pause' : 'Play voice note'}
+                          >
+                            {isPlayingThis ? (
+                              <Pause size={16} />
+                            ) : (
+                              <Play size={16} className="ml-0.5" />
+                            )}
+                          </button>
+
+                          <div className="flex-1 space-y-1">
+                            <div className="flex items-center gap-1 h-5">
+                              {[35, 60, 45, 90, 65, 100, 75, 45, 80, 50, 70, 95, 40].map((h, idx) => (
+                                <span
+                                  key={idx}
+                                  className={`w-1 rounded-full transition-all duration-150 ${
+                                    isMe
+                                      ? isPlayingThis
+                                        ? 'bg-white animate-pulse'
+                                        : 'bg-white/70'
+                                      : isPlayingThis
+                                      ? 'bg-brand-600 animate-pulse'
+                                      : 'bg-brand-500/60'
+                                  }`}
+                                  style={{ height: `${h}%` }}
+                                />
+                              ))}
+                            </div>
+                            <div className="flex items-center justify-between text-[10px] opacity-80">
+                              <span>{formatAudioDuration(msg.audio_duration || 0)}</span>
+                              <span className="font-semibold uppercase tracking-wider text-[9px]">Audio Whisper</span>
+                            </div>
                           </div>
                         </div>
                       )}
@@ -517,43 +759,85 @@ export default function ChatDrawer({
           </div>
         )}
 
-        {/* Input Bar */}
-        <form onSubmit={handleSend} className="p-3 border-t border-gray-100 bg-white flex gap-2 items-center">
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleImageSelect}
-            accept="image/*"
-            className="hidden"
-          />
+        {/* Input Bar or Voice Recording Bar */}
+        {isRecording ? (
+          <div className="p-3 border-t border-gray-100 bg-white flex items-center justify-between animate-in fade-in duration-150">
+            <div className="flex items-center gap-2.5">
+              <span className="w-3 h-3 rounded-full bg-red-500 animate-ping" />
+              <span className="text-xs font-bold text-red-600">
+                Recording: {formatAudioDuration(recordingSeconds)}
+              </span>
+            </div>
 
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="p-2.5 rounded-xl text-gray-500 hover:text-brand-600 hover:bg-brand-50 transition-colors"
-            title="Attach Image"
-          >
-            <ImageIcon size={19} />
-          </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={cancelRecording}
+                className="px-3 py-1.5 rounded-xl text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center gap-1 transition-colors"
+              >
+                <Trash2 size={14} />
+                <span>Cancel</span>
+              </button>
 
-          <input
-            type="text"
-            placeholder={imageFile ? "Add a caption..." : "Type a message..."}
-            value={text}
-            onChange={(e) => handleTextChange(e.target.value)}
-            disabled={sending}
-            className="input-field text-xs py-2.5 px-3.5 flex-1 rounded-xl focus:border-brand-500"
-            autoFocus
-          />
+              <button
+                type="button"
+                onClick={stopAndSendRecording}
+                className="btn-primary text-xs py-1.5 px-3.5 rounded-xl flex items-center gap-1.5 shadow-sm"
+              >
+                <Send size={13} />
+                <span>Send Note</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleSend} className="p-3 border-t border-gray-100 bg-white flex gap-2 items-center">
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleImageSelect}
+              accept="image/*"
+              className="hidden"
+            />
 
-          <button
-            type="submit"
-            disabled={sending || (!text.trim() && !imageFile)}
-            className="btn-primary text-xs py-2.5 px-4 rounded-xl flex items-center justify-center transition-all disabled:opacity-50"
-          >
-            {sending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-          </button>
-        </form>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="p-2.5 rounded-xl text-gray-500 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+              title="Attach Image"
+            >
+              <ImageIcon size={19} />
+            </button>
+
+            <input
+              type="text"
+              placeholder={imageFile ? "Add a caption..." : "Type a message..."}
+              value={text}
+              onChange={(e) => handleTextChange(e.target.value)}
+              disabled={sending}
+              className="input-field text-xs py-2.5 px-3.5 flex-1 rounded-xl focus:border-brand-500"
+              autoFocus
+            />
+
+            {text.trim() || imageFile ? (
+              <button
+                type="submit"
+                disabled={sending || (!text.trim() && !imageFile)}
+                className="btn-primary text-xs py-2.5 px-4 rounded-xl flex items-center justify-center transition-all disabled:opacity-50"
+              >
+                {sending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={startRecording}
+                className="p-2.5 rounded-xl bg-brand-600 text-white hover:bg-brand-700 transition-colors flex items-center justify-center shadow-xs"
+                title="Record Voice Note / Whisper"
+              >
+                <Mic size={18} />
+              </button>
+            )}
+          </form>
+        )}
       </div>
 
       {/* Fullscreen Image Preview Lightbox */}

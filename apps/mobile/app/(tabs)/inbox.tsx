@@ -327,15 +327,17 @@ export default function InboxScreen() {
               <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.brand} />
             }
             renderItem={({ item }) => (
-              <View style={styles.whisperCard}>
+              <View style={[styles.whisperCard, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }]}>
                 <View style={styles.whisperHeader}>
                   <Text style={styles.whisperBadge}>🤫 Anonymous Whisper</Text>
                   <TouchableOpacity onPress={() => handleDelete(item.id)}>
-                    <Trash2 size={16} color={colors.gray400} />
+                    <Trash2 size={16} color={themeColors.textSecondary} />
                   </TouchableOpacity>
                 </View>
 
-                <Text style={styles.whisperContent}>"{item.content}"</Text>
+                <Text style={[styles.whisperContent, { backgroundColor: themeColors.surfaceBorder, color: themeColors.text }]}>
+                  "{item.content}"
+                </Text>
 
                 <View style={styles.whisperFooter}>
                   <View style={styles.anonymousTag}>
@@ -344,11 +346,11 @@ export default function InboxScreen() {
                   </View>
 
                   <TouchableOpacity
-                    style={styles.shareBtn}
+                    style={[styles.shareBtn, { backgroundColor: themeColors.surfaceBorder }]}
                     onPress={() => handleShareWhisper(item)}
                   >
-                    <Share2 size={14} color={colors.gray700} />
-                    <Text style={styles.shareText}>Share</Text>
+                    <Share2 size={14} color={themeColors.text} />
+                    <Text style={[styles.shareText, { color: themeColors.text }]}>Share</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -378,14 +380,22 @@ export default function InboxScreen() {
               const unread = unreadCounts[item.id] || 0
               const partnerName = partner?.display_name || partner?.username || 'User'
               const avatar = partner?.avatar_url
+              const isVoiceNote = item.last_message?.includes('Voice note')
 
               return (
                 <TouchableOpacity
-                  style={[styles.convCard, unread > 0 && styles.convCardUnread]}
+                  style={[
+                    styles.convCard,
+                    {
+                      backgroundColor: themeColors.surface,
+                      borderColor: unread > 0 ? colors.brand : themeColors.surfaceBorder,
+                    },
+                    unread > 0 && styles.convCardUnread,
+                  ]}
                   onPress={() => openChat(item)}
                   activeOpacity={0.7}
                 >
-                  <View style={styles.avatarCircle}>
+                  <View style={[styles.avatarCircle, { backgroundColor: colors.brandLight }]}>
                     {avatar ? (
                       <Image source={{ uri: avatar }} style={styles.avatarImg} />
                     ) : (
@@ -395,17 +405,28 @@ export default function InboxScreen() {
 
                   <View style={styles.convInfo}>
                     <View style={styles.convTopRow}>
-                      <Text style={[styles.convName, unread > 0 && styles.convNameUnread]} numberOfLines={1}>
+                      <Text
+                        style={[
+                          styles.convName,
+                          { color: themeColors.text },
+                          unread > 0 && styles.convNameUnread,
+                        ]}
+                        numberOfLines={1}
+                      >
                         {partnerName}
                       </Text>
-                      <Text style={styles.convTime}>
+                      <Text style={[styles.convTime, { color: themeColors.textSecondary }]}>
                         {formatTime(item.last_message_at || item.created_at)}
                       </Text>
                     </View>
 
                     <View style={styles.convBottomRow}>
                       <Text
-                        style={[styles.convMsg, unread > 0 && styles.convMsgUnread]}
+                        style={[
+                          styles.convMsg,
+                          { color: isVoiceNote ? colors.brand : unread > 0 ? themeColors.text : themeColors.textSecondary },
+                          unread > 0 && styles.convMsgUnread,
+                        ]}
                         numberOfLines={1}
                       >
                         {item.last_message || 'Tap to start chatting'}
@@ -439,20 +460,20 @@ export default function InboxScreen() {
       {/* New Chat Search Modal */}
       <Modal visible={showNewChatModal} animationType="slide" transparent={true} onRequestClose={() => setShowNewChatModal(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { backgroundColor: themeColors.surface }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>New Direct Message</Text>
+              <Text style={[styles.modalTitle, { color: themeColors.text }]}>New Direct Message</Text>
               <TouchableOpacity onPress={() => setShowNewChatModal(false)} style={styles.closeBtn}>
-                <X size={20} color="#94a3b8" />
+                <X size={20} color={themeColors.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            <View style={styles.searchBar}>
-              <Search size={18} color="#94a3b8" />
+            <View style={[styles.searchBar, { backgroundColor: themeColors.surfaceBorder }]}>
+              <Search size={18} color={themeColors.textSecondary} />
               <TextInput
-                style={styles.searchInput}
+                style={[styles.searchInput, { color: themeColors.text }]}
                 placeholder="Search user by name or @username..."
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={themeColors.textSecondary}
                 value={searchQuery}
                 onChangeText={handleSearchUsers}
                 autoFocus
@@ -462,7 +483,7 @@ export default function InboxScreen() {
             {searching ? (
               <ActivityIndicator color={colors.brand} style={{ marginVertical: 20 }} />
             ) : searchResults.length === 0 ? (
-              <Text style={styles.noSearchText}>
+              <Text style={[styles.noSearchText, { color: themeColors.textSecondary }]}>
                 {searchQuery.trim() ? 'No users found matching query.' : 'Type a username or display name to search.'}
               </Text>
             ) : (
@@ -472,11 +493,11 @@ export default function InboxScreen() {
                 style={{ maxHeight: 300, marginVertical: 10 }}
                 renderItem={({ item }) => (
                   <TouchableOpacity
-                    style={styles.searchResultItem}
+                    style={[styles.searchResultItem, { borderBottomColor: themeColors.surfaceBorder }]}
                     onPress={() => handleStartNewChat(item)}
                     activeOpacity={0.7}
                   >
-                    <View style={styles.avatarCircle}>
+                    <View style={[styles.avatarCircle, { backgroundColor: colors.brandLight }]}>
                       {item.avatar_url ? (
                         <Image source={{ uri: item.avatar_url }} style={styles.avatarImg} />
                       ) : (
@@ -484,8 +505,8 @@ export default function InboxScreen() {
                       )}
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.searchResultName}>{item.display_name || item.username}</Text>
-                      <Text style={styles.searchResultHandle}>@{item.username}</Text>
+                      <Text style={[styles.searchResultName, { color: themeColors.text }]}>{item.display_name || item.username}</Text>
+                      <Text style={[styles.searchResultHandle, { color: themeColors.textSecondary }]}>@{item.username}</Text>
                     </View>
                     <Text style={styles.chatStartText}>Chat</Text>
                   </TouchableOpacity>

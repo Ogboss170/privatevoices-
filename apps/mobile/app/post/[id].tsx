@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     backgroundColor: colors.brandLight,
     alignItems: 'center',
-    justify.content: 'center',
+    justifyContent: 'center',
     overflow: 'hidden',
   },
   commentAvatarImg: { width: 36, height: 36 },

@@ -16,15 +16,15 @@ export type SupportedLanguage =
   | 'zh'
 
 export const LANGUAGE_OPTIONS: { code: SupportedLanguage; label: string; nativeName: string }[] = [
-  { code: 'en', label: 'English', nativeName: 'English (US)' },
-  { code: 'es', label: 'Spanish', nativeName: 'Español' },
-  { code: 'fr', label: 'French', nativeName: 'Français' },
-  { code: 'de', label: 'German', nativeName: 'Deutsch' },
-  | { code: 'pt', label: 'Portuguese', nativeName: 'Português' },
-  { code: 'ja', label: 'Japanese', nativeName: '日本語' },
-  { code: 'ar', label: 'Arabic', nativeName: 'العربية' },
-  { code: 'zh', label: 'Chinese', nativeName: '简体中文' },
-].filter(Boolean)
+  { code: 'en' as SupportedLanguage, label: 'English', nativeName: 'English (US)' },
+  { code: 'es' as SupportedLanguage, label: 'Spanish', nativeName: 'Español' },
+  { code: 'fr' as SupportedLanguage, label: 'French', nativeName: 'Français' },
+  { code: 'de' as SupportedLanguage, label: 'German', nativeName: 'Deutsch' },
+  { code: 'pt' as SupportedLanguage, label: 'Portuguese', nativeName: 'Português' },
+  { code: 'ja' as SupportedLanguage, label: 'Japanese', nativeName: '日本語' },
+  { code: 'ar' as SupportedLanguage, label: 'Arabic', nativeName: 'العربية' },
+  { code: 'zh' as SupportedLanguage, label: 'Chinese', nativeName: '简体中文' },
+]
 
 export interface WebDesignTokens {
   background: string
