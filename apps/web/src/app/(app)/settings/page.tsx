@@ -37,10 +37,14 @@ import {
   UserPlus,
   Bug,
   Send,
+  Bookmark,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { useWebTheme, LANGUAGE_OPTIONS } from '@/context/WebThemeContext'
 import EditProfileModal from '@/components/profile/EditProfileModal'
+import PostCard from '@/components/feed/PostCard'
+import type { Post } from '@private-voices/shared'
+import { extractPostMediaAndCleanContent } from '@private-voices/shared'
 
 export default function SettingsPage(): React.JSX.Element {
   const router = useRouter()
@@ -128,6 +132,98 @@ export default function SettingsPage(): React.JSX.Element {
   const [changePasswordError, setChangePasswordError] = useState<string | null>(null)
   const [changePasswordSuccess, setChangePasswordSuccess] = useState(false)
 
+  // Saved Posts (Bookmarks) state
+  const [showSavedPostsModal, setShowSavedPostsModal] = useState(false)
+  const [savedPosts, setSavedPosts] = useState<Post[]>([])
+  const [loadingSaved, setLoadingSaved] = useState(false)
+
+  const fetchSavedPosts = useCallback(async (uId: string) => {
+    setLoadingSaved(true)
+    try {
+      const { data: savedRows } = await supabase
+        .from('saved_posts')
+        .select('post_id, created_at')
+        .eq('user_id', uId)
+        .order('created_at', { ascending: false })
+
+      if (savedRows && savedRows.length > 0) {
+        const savedPostIds = savedRows.map((r) => r.post_id)
+        let { data: rawSavedPosts } = await supabase
+          .from('posts')
+          .select('*, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url)')
+          .in('id', savedPostIds)
+
+        if (!rawSavedPosts) {
+          const fallbackRes = await supabase.from('posts').select('*').in('id', savedPostIds)
+          rawSavedPosts = fallbackRes.data
+        }
+
+        if (rawSavedPosts) {
+          const authorIds = Array.from(new Set(rawSavedPosts.map((p) => p.author_id)))
+          const { data: profList } = await supabase
+            .from('profiles')
+            .select('id, username, display_name, avatar_url')
+            .in('id', authorIds)
+          const profileMap = new Map((profList ?? []).map((p) => [p.id, p]))
+
+          const postMap = new Map(rawSavedPosts.map((p) => [p.id, p]))
+          const orderedSaved = savedPostIds.map((id) => postMap.get(id)).filter(Boolean) as any[]
+
+          const formattedSaved: Post[] = await Promise.all(
+            orderedSaved.map(async (p) => {
+              let likeCount = 0
+              let commentCount = 0
+              let isLiked = false
+              try {
+                const [{ count: lCount }, { count: cCount }, { data: myLike }] = await Promise.all([
+                  supabase.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
+                  supabase.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
+                  supabase.from('likes').select('user_id').match({ user_id: uId, post_id: p.id }).maybeSingle(),
+                ])
+                likeCount = lCount ?? 0
+                commentCount = cCount ?? 0
+                isLiked = !!myLike
+              } catch {
+                // ignore
+              }
+
+              const authorObj = p.author || profileMap.get(p.author_id)
+              const { content: cleanContent, imageUrls } = extractPostMediaAndCleanContent(p.content, p.image_urls)
+              return {
+                id: p.id,
+                authorId: p.author_id,
+                author: {
+                  id: authorObj?.id || p.author_id,
+                  username: authorObj?.username || 'user',
+                  displayName: authorObj?.display_name || 'User',
+                  avatarUrl: authorObj?.avatar_url || null,
+                },
+                content: cleanContent,
+                imageUrls,
+                hashtags: [],
+                likeCount,
+                commentCount,
+                repostCount: 0,
+                isLikedByMe: isLiked,
+                isSavedByMe: true,
+                isRepostedByMe: false,
+                createdAt: p.created_at,
+                updatedAt: p.updated_at,
+              }
+            })
+          )
+          setSavedPosts(formattedSaved)
+        }
+      } else {
+        setSavedPosts([])
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingSaved(false)
+    }
+  }, [supabase])
+
   const fetchSettings = useCallback(async () => {
     setLoading(true)
     const { data: userRes } = await supabase.auth.getUser()
@@ -152,7 +248,8 @@ export default function SettingsPage(): React.JSX.Element {
       allow_profile_indexing: true,
     })
     setLoading(false)
-  }, [supabase, router])
+    fetchSavedPosts(userRes.user.id)
+  }, [supabase, router, fetchSavedPosts])
 
   useEffect(() => {
     fetchSettings()
@@ -487,12 +584,29 @@ export default function SettingsPage(): React.JSX.Element {
           Social
         </h2>
         <div className="space-y-1 text-sm">
+          <div
+            onClick={() => {
+              if (userId) fetchSavedPosts(userId)
+              setShowSavedPostsModal(true)
+            }}
+            className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
+          >
+            <div className="flex items-center space-x-3">
+              <Bookmark size={18} className="text-brand-600" />
+              <div>
+                <span className="font-semibold text-gray-800 block">Saved</span>
+                <span className="text-xs text-gray-400">Voices and posts you bookmarked ({savedPosts.length})</span>
+              </div>
+            </div>
+            <ChevronRight size={16} className="text-gray-400" />
+          </div>
+
           <Link
             href="/communities"
             className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
           >
             <div className="flex items-center space-x-3">
-              <Users size={18} className="text-brand-600" />
+              <Users size={18} className="text-gray-500" />
               <div>
                 <span className="font-semibold text-gray-800 block">Communities</span>
                 <span className="text-xs text-gray-400">Discover, join, create, and manage communities</span>
@@ -1608,6 +1722,69 @@ export default function SettingsPage(): React.JSX.Element {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── SAVED POSTS (BOOKMARKS) MODAL ── */}
+      {showSavedPostsModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-xl border border-gray-100 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center space-x-2 text-brand-600">
+                <Bookmark size={22} />
+                <h3 className="font-bold text-gray-900 text-base">Saved Voices</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSavedPostsModal(false)}
+                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+              {loadingSaved ? (
+                <div className="py-12 text-center text-gray-400">
+                  <p className="text-sm">Loading saved voices…</p>
+                </div>
+              ) : savedPosts.length === 0 ? (
+                <div className="py-12 text-center text-gray-400 space-y-2 flex flex-col items-center">
+                  <div className="w-12 h-12 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 mb-2">
+                    <Bookmark size={22} />
+                  </div>
+                  <p className="text-sm font-semibold text-gray-700">No saved Voices yet</p>
+                  <p className="text-xs text-gray-500 max-w-sm">
+                    Bookmark interesting voices by clicking the bookmark icon on any post to read them anytime.
+                  </p>
+                </div>
+              ) : (
+                savedPosts.map((post) => (
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    currentUserId={userId || undefined}
+                    onDelete={(id) => setSavedPosts((prev) => prev.filter((p) => p.id !== id))}
+                    onToggleSave={(id, isSaved) => {
+                      if (!isSaved) {
+                        setSavedPosts((prev) => prev.filter((p) => p.id !== id))
+                      }
+                    }}
+                  />
+                ))
+              )}
+            </div>
+
+            <div className="pt-2 flex justify-end border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setShowSavedPostsModal(false)}
+                className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

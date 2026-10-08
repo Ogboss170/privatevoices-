@@ -43,12 +43,16 @@ import {
   Bug,
   Check,
   EyeOff,
+  Bookmark,
 } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import { supabase } from '../lib/supabase'
 import { colors } from '../constants/colors'
 import { useTheme } from '../context/ThemeContext'
 import { EditProfileModal } from '../components/EditProfileModal'
+import { MobilePostCard } from '../components/MobilePostCard'
+import type { Post } from '@private-voices/shared'
+import { extractPostMediaAndCleanContent } from '@private-voices/shared'
 
 export default function SettingsScreen() {
   const router = useRouter()
@@ -119,6 +123,11 @@ export default function SettingsScreen() {
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false)
   const [updatingPassword, setUpdatingPassword] = useState(false)
 
+  // Saved Posts (Bookmarks) State
+  const [showSavedPostsModal, setShowSavedPostsModal] = useState(false)
+  const [savedPosts, setSavedPosts] = useState<Post[]>([])
+  const [loadingSaved, setLoadingSaved] = useState(false)
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) {
@@ -138,6 +147,94 @@ export default function SettingsScreen() {
     setProfile(prof)
     setPrivacy(priv || { whisper_visibility: 'anyone', who_can_message: 'anyone', show_in_recommendations: true })
     setLoading(false)
+    fetchSavedPosts(uId)
+  }
+
+  async function fetchSavedPosts(uId: string) {
+    setLoadingSaved(true)
+    try {
+      const { data: savedRows } = await supabase
+        .from('saved_posts')
+        .select('post_id, created_at')
+        .eq('user_id', uId)
+        .order('created_at', { ascending: false })
+
+      if (savedRows && savedRows.length > 0) {
+        const savedPostIds = savedRows.map((r) => r.post_id)
+        let { data: rawSavedPosts } = await supabase
+          .from('posts')
+          .select('*, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url)')
+          .in('id', savedPostIds)
+
+        if (!rawSavedPosts) {
+          const fallbackRes = await supabase.from('posts').select('*').in('id', savedPostIds)
+          rawSavedPosts = fallbackRes.data
+        }
+
+        if (rawSavedPosts) {
+          const authorIds = Array.from(new Set(rawSavedPosts.map((p) => p.author_id)))
+          const { data: profList } = await supabase
+            .from('profiles')
+            .select('id, username, display_name, avatar_url')
+            .in('id', authorIds)
+          const profileMap = new Map((profList ?? []).map((p) => [p.id, p]))
+
+          const postMap = new Map(rawSavedPosts.map((p) => [p.id, p]))
+          const orderedSaved = savedPostIds.map((id) => postMap.get(id)).filter(Boolean) as any[]
+
+          const formattedSaved: Post[] = await Promise.all(
+            orderedSaved.map(async (p) => {
+              let likeCount = 0
+              let commentCount = 0
+              let isLiked = false
+              try {
+                const [{ count: lCount }, { count: cCount }, { data: myLike }] = await Promise.all([
+                  supabase.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
+                  supabase.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', p.id),
+                  supabase.from('likes').select('user_id').match({ user_id: uId, post_id: p.id }).maybeSingle(),
+                ])
+                likeCount = lCount ?? 0
+                commentCount = cCount ?? 0
+                isLiked = !!myLike
+              } catch {
+                // ignore
+              }
+
+              const authorObj = p.author || profileMap.get(p.author_id)
+              const { content: cleanContent, imageUrls } = extractPostMediaAndCleanContent(p.content, p.image_urls)
+              return {
+                id: p.id,
+                authorId: p.author_id,
+                author: {
+                  id: authorObj?.id || p.author_id,
+                  username: authorObj?.username || 'user',
+                  displayName: authorObj?.display_name || 'User',
+                  avatarUrl: authorObj?.avatar_url || null,
+                },
+                content: cleanContent,
+                imageUrls,
+                hashtags: [],
+                likeCount,
+                commentCount,
+                repostCount: 0,
+                isLikedByMe: isLiked,
+                isSavedByMe: true,
+                isRepostedByMe: false,
+                createdAt: p.created_at,
+                updatedAt: p.updated_at,
+              }
+            })
+          )
+          setSavedPosts(formattedSaved)
+        }
+      } else {
+        setSavedPosts([])
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingSaved(false)
+    }
   }
 
   async function handleUpdateProfile(updates: Partial<any>) {
@@ -523,11 +620,32 @@ export default function SettingsScreen() {
         <TouchableOpacity
           style={styles.rowItem}
           activeOpacity={0.7}
+          onPress={() => {
+            if (userId) fetchSavedPosts(userId)
+            setShowSavedPostsModal(true)
+          }}
+        >
+          <View style={styles.rowLeft}>
+            <Bookmark size={18} color={colors.brand} />
+            <View>
+              <Text style={styles.rowLabel}>Saved</Text>
+              <Text style={styles.rowSubLabel}>Voices and posts you bookmarked ({savedPosts.length})</Text>
+            </View>
+          </View>
+          <ChevronRight size={18} color={colors.gray400} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.rowItem}
+          activeOpacity={0.7}
           onPress={() => router.push('/communities' as any)}
         >
           <View style={styles.rowLeft}>
-            <Users size={18} color={colors.brand} />
-            <Text style={styles.rowLabel}>Communities</Text>
+            <Users size={18} color={colors.gray600} />
+            <View>
+              <Text style={styles.rowLabel}>Communities</Text>
+              <Text style={styles.rowSubLabel}>Explore and join groups</Text>
+            </View>
           </View>
           <ChevronRight size={18} color={colors.gray400} />
         </TouchableOpacity>
@@ -539,7 +657,10 @@ export default function SettingsScreen() {
         >
           <View style={styles.rowLeft}>
             <UserPlus size={18} color={colors.gray600} />
-            <Text style={styles.rowLabel}>Invite Friends</Text>
+            <View>
+              <Text style={styles.rowLabel}>Invite Friends</Text>
+              <Text style={styles.rowSubLabel}>Share your invite link</Text>
+            </View>
           </View>
           <ChevronRight size={18} color={colors.gray400} />
         </TouchableOpacity>
@@ -1339,6 +1460,57 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             </View>
           </View>
+        </View>
+      </Modal>
+
+      {/* ── SAVED POSTS (BOOKMARKS) MODAL ── */}
+      <Modal visible={showSavedPostsModal} animationType="slide">
+        <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+          <View style={[styles.header, { paddingHorizontal: 20, paddingTop: 50, borderBottomWidth: 1, borderBottomColor: themeColors.surfaceBorder, paddingBottom: 14 }]}>
+            <TouchableOpacity
+              onPress={() => setShowSavedPostsModal(false)}
+              style={[styles.backBtn, { backgroundColor: themeColors.surface }]}
+            >
+              <ArrowLeft size={22} color={themeColors.text} />
+            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Bookmark size={20} color={colors.brand} />
+              <Text style={[styles.headerTitle, { color: themeColors.text }]}>Saved Voices</Text>
+            </View>
+          </View>
+
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 80 }}>
+            {loadingSaved ? (
+              <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                <ActivityIndicator size="large" color={colors.brand} />
+                <Text style={{ marginTop: 12, fontSize: 13, color: themeColors.textSecondary }}>Loading saved voices…</Text>
+              </View>
+            ) : savedPosts.length === 0 ? (
+              <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 60, paddingHorizontal: 24 }}>
+                <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: colors.brandLight, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                  <Bookmark size={28} color={colors.brand} />
+                </View>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: themeColors.text, marginBottom: 6 }}>No Saved Voices</Text>
+                <Text style={{ fontSize: 13, color: themeColors.textSecondary, textAlign: 'center', lineHeight: 18 }}>
+                  Tap the bookmark icon on any voice or post to save it here for later.
+                </Text>
+              </View>
+            ) : (
+              savedPosts.map((item) => (
+                <MobilePostCard
+                  key={item.id}
+                  post={item}
+                  currentUserId={userId || undefined}
+                  onDelete={(id) => setSavedPosts((prev) => prev.filter((p) => p.id !== id))}
+                  onToggleSave={(id, isSaved) => {
+                    if (!isSaved) {
+                      setSavedPosts((prev) => prev.filter((p) => p.id !== id))
+                    }
+                  }}
+                />
+              ))
+            )}
+          </ScrollView>
         </View>
       </Modal>
     </ScrollView>
