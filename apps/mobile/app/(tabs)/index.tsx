@@ -12,6 +12,7 @@ import { useFocusEffect } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { colors } from '../../constants/colors'
 import { MobilePostCard } from '../../components/MobilePostCard'
+import { HomeHeader } from '../../components/HomeHeader'
 import { StoriesTray } from '../../components/StoriesTray'
 import { SkeletonCard } from '../../components/SkeletonCard'
 import { PublicProfileModal } from '../../components/PublicProfileModal'
@@ -217,13 +218,16 @@ export default function HomeScreen() {
     setPosts((prev) => prev.filter((p) => p.id !== deletedId))
   }
 
-  return (
-    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+  const renderFeedHeader = () => (
+    <View>
+      {/* ＋ Create   PRIVATE VOICES   🔔 — Scrollable with feed */}
+      <HomeHeader currentUserId={currentUserId} />
+
       {/* 24-Hour Stories Tray */}
       <StoriesTray />
 
       {/* Tab filter bar */}
-      <View style={[styles.tabRow, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.surfaceBorder }]}>
+      <View style={[styles.tabRow, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.surfaceBorder, marginBottom: 12 }]}>
         {TABS.map((tab) => (
           <TouchableOpacity
             key={tab.id}
@@ -242,27 +246,17 @@ export default function HomeScreen() {
           </TouchableOpacity>
         ))}
       </View>
+    </View>
+  )
 
-      {/* Feed List */}
-      {loading ? (
-        <View style={styles.listContent}>
-          <SkeletonCard type="post" />
-          <SkeletonCard type="post" />
-          <SkeletonCard type="post" />
-        </View>
-      ) : posts.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>✨</Text>
-          <Text style={[styles.emptyTitle, { color: themeColors.textPrimary }]}>No posts yet</Text>
-          <Text style={[styles.emptyBody, { color: themeColors.textSecondary }]}>
-            Be the first to share your thoughts, or follow more people to fill your feed.
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={posts}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
+  return (
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+      <FlatList
+        data={loading ? [] : posts}
+        keyExtractor={(item) => item.id}
+        ListHeaderComponent={renderFeedHeader}
+        renderItem={({ item }) => (
+          <View style={styles.postCardWrapper}>
             <MobilePostCard
               post={item}
               currentUserId={currentUserId}
@@ -270,17 +264,34 @@ export default function HomeScreen() {
               onPressAuthor={(authorId) => setSelectedProfileTarget({ userId: authorId })}
               onPressMention={(username) => setSelectedProfileTarget({ username })}
             />
-          )}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              tintColor={colors.brand}
-            />
-          }
-        />
-      )}
+          </View>
+        )}
+        ListEmptyComponent={
+          loading ? (
+            <View style={styles.skeletonList}>
+              <SkeletonCard type="post" />
+              <SkeletonCard type="post" />
+              <SkeletonCard type="post" />
+            </View>
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyEmoji}>✨</Text>
+              <Text style={[styles.emptyTitle, { color: themeColors.textPrimary }]}>No posts yet</Text>
+              <Text style={[styles.emptyBody, { color: themeColors.textSecondary }]}>
+                Be the first to share your thoughts, or follow more people to fill your feed.
+              </Text>
+            </View>
+          )
+        }
+        contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.brand}
+          />
+        }
+      />
 
       {/* Public Profile Modal */}
       {selectedProfileTarget && (
@@ -323,10 +334,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingVertical: 48 },
   emptyEmoji: { fontSize: 48, marginBottom: 12 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: colors.gray900, marginBottom: 8 },
   emptyBody: { fontSize: 14, color: colors.gray500, textAlign: 'center', lineHeight: 20 },
-  listContent: { padding: 16, paddingBottom: 100 },
+  listContent: { paddingBottom: 100 },
+  postCardWrapper: { paddingHorizontal: 16 },
+  skeletonList: { padding: 16 },
 })
 

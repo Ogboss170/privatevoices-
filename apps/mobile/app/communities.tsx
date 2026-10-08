@@ -13,12 +13,14 @@ import {
 } from 'react-native'
 import { Users, Plus, Hash, Check, X } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../lib/supabase'
 import { colors } from '../constants/colors'
 import { useTheme } from '../context/ThemeContext'
 
 export default function CommunitiesScreen() {
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const { colors: themeColors } = useTheme()
   const [communities, setCommunities] = useState<any[]>([])
   const [joinedIds, setJoinedIds] = useState<string[]>([])
@@ -125,7 +127,7 @@ export default function CommunitiesScreen() {
   return (
     <View style={[styles.container, { backgroundColor: themeColors.background }]}>
       {/* Top Action Bar */}
-      <View style={[styles.header, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.surfaceBorder }]}>
+      <View style={[styles.header, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.surfaceBorder, paddingTop: insets.top + 10 }]}>
         <View style={styles.headerInfo}>
           <Text style={[styles.title, { color: themeColors.textPrimary }]}>Communities</Text>
           <Text style={[styles.subtitle, { color: themeColors.textMuted }]}>Discover & join topic groups</Text>

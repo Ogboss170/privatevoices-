@@ -20,10 +20,12 @@ import { PublicProfileModal } from '../../components/PublicProfileModal'
 import type { Post } from '@private-voices/shared'
 import { extractPostMediaAndCleanContent } from '@private-voices/shared'
 import type { User } from '@supabase/supabase-js'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../../context/ThemeContext'
 
 export default function ProfileScreen() {
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const { colors: themeColors } = useTheme()
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<{
@@ -229,7 +231,7 @@ export default function ProfileScreen() {
   return (
     <ScrollView style={[styles.container, { backgroundColor: themeColors.background }]} contentContainerStyle={styles.scrollContent}>
       {/* Top Header Bar with Settings Gear Icon */}
-      <View style={styles.topHeaderBar}>
+      <View style={[styles.topHeaderBar, { paddingTop: insets.top + 8 }]}>
         <Text style={[styles.headerTitle, { color: themeColors.textPrimary }]}>Profile</Text>
         <TouchableOpacity
           style={[styles.settingsBtn, { backgroundColor: themeColors.surfaceBorder }]}

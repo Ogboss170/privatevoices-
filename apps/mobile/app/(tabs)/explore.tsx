@@ -20,6 +20,7 @@ import {
   ArrowRight,
   Flame,
 } from 'lucide-react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import { supabase } from '../../lib/supabase'
 import { colors } from '../../constants/colors'
@@ -33,6 +34,7 @@ type SearchTab = 'all' | 'voices' | 'people' | 'communities'
 
 export default function ExploreScreen() {
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const { colors: themeColors } = useTheme()
   const params = useLocalSearchParams<{ q?: string; tab?: string }>()
 
@@ -258,7 +260,13 @@ export default function ExploreScreen() {
   const normalizedSearch = searchTerm.trim().toLowerCase()
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: themeColors.background }]} contentContainerStyle={styles.scrollContent}>
+    <ScrollView
+      style={[styles.container, { backgroundColor: themeColors.background }]}
+      contentContainerStyle={[
+        styles.scrollContent,
+        { paddingTop: Math.max(insets.top + 8, 16) },
+      ]}
+    >
       {/* ── Search Bar ── */}
       <View style={[styles.searchBar, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }]}>
         <Search size={18} color={themeColors.textMuted} />

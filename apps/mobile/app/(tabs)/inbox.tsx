@@ -18,8 +18,10 @@ import { supabase } from '../../lib/supabase'
 import { colors } from '../../constants/colors'
 import { ChatModal } from '../../components/ChatModal'
 import { useTheme } from '../../context/ThemeContext'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 export default function InboxScreen() {
+  const insets = useSafeAreaInsets()
   const { colors: themeColors } = useTheme()
   const [activeTab, setActiveTab] = useState<'whispers' | 'messages'>('whispers')
   const [whispers, setWhispers] = useState<any[]>([])
@@ -252,7 +254,7 @@ export default function InboxScreen() {
   return (
     <View style={[styles.container, { backgroundColor: themeColors.background }]}>
       {/* Tab Switcher */}
-      <View style={[styles.tabRow, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.surfaceBorder }]}>
+      <View style={[styles.tabRow, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.surfaceBorder, paddingTop: insets.top + 6 }]}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'whispers' && styles.tabActive]}
           onPress={() => setActiveTab('whispers')}
