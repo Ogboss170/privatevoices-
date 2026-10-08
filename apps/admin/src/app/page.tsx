@@ -25,6 +25,10 @@ import {
   Mail,
   UserCheck,
   Eye,
+  LogIn,
+  LogOut,
+  KeyRound,
+  ShieldAlert,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
@@ -44,13 +48,61 @@ export default function AdminDashboardPage(): React.JSX.Element {
   const [searchQuery, setSearchQuery] = useState('')
   const [loading, setLoading] = useState(true)
 
+  // Admin Authentication State
+  const [authChecked, setAuthChecked] = useState(false)
+  const [currentAdminUser, setCurrentAdminUser] = useState<any | null>(null)
+  const [authError, setAuthError] = useState<string | null>(null)
+  const [loginEmail, setLoginEmail] = useState('')
+  const [loginPassword, setLoginPassword] = useState('')
+  const [loggingIn, setLoggingIn] = useState(false)
+
   const [topPosts, setTopPosts] = useState<any[]>([])
   const [communityGrowth, setCommunityGrowth] = useState<any[]>([])
   const [activeUsersCount, setActiveUsersCount] = useState<number>(0)
 
+  const checkAdminAuth = useCallback(async () => {
+    try {
+      const { data: authData } = await supabase.auth.getUser()
+      if (!authData?.user) {
+        setCurrentAdminUser(null)
+        setAuthChecked(true)
+        return false
+      }
+
+      // Check if user has is_admin role
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id, username, display_name, is_admin')
+        .eq('id', authData.user.id)
+        .maybeSingle()
+
+      if (!profile || !profile.is_admin) {
+        setAuthError('Access denied: Your account does not have administrative privileges.')
+        setCurrentAdminUser(null)
+        setAuthChecked(true)
+        return false
+      }
+
+      setCurrentAdminUser({ ...authData.user, ...profile })
+      setAuthChecked(true)
+      return true
+    } catch (err: any) {
+      setAuthError(err.message || 'Authentication error')
+      setCurrentAdminUser(null)
+      setAuthChecked(true)
+      return false
+    }
+  }, [supabase])
+
   const loadAdminData = useCallback(async () => {
     setLoading(true)
     try {
+      const isAuthed = await checkAdminAuth()
+      if (!isAuthed) {
+        setLoading(false)
+        return
+      }
+
       // 1. Fetch content reports via RPC or direct fallback
       let reportsData: any[] = []
       try {
@@ -255,6 +307,118 @@ export default function AdminDashboardPage(): React.JSX.Element {
     { id: 'audit', label: 'Audit Logs', icon: Shield },
   ]
 
+  async function handleAdminLogin(e: React.FormEvent) {
+    e.preventDefault()
+    if (!loginEmail.trim() || !loginPassword.trim()) return
+
+    setLoggingIn(true)
+    setAuthError(null)
+
+    const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+      email: loginEmail.trim(),
+      password: loginPassword,
+    })
+
+    if (signInErr) {
+      setLoggingIn(false)
+      setAuthError(signInErr.message)
+      return
+    }
+
+    if (signInData.user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id, username, display_name, is_admin')
+        .eq('id', signInData.user.id)
+        .maybeSingle()
+
+      if (!profile || !profile.is_admin) {
+        await supabase.auth.signOut()
+        setLoggingIn(false)
+        setAuthError('Access Denied: This account does not possess administrator privileges.')
+        return
+      }
+
+      setCurrentAdminUser({ ...signInData.user, ...profile })
+      setLoggingIn(false)
+      loadAdminData()
+    }
+  }
+
+  async function handleAdminLogout() {
+    await supabase.auth.signOut()
+    setCurrentAdminUser(null)
+  }
+
+  // If user is not authenticated as an admin, render the secure Admin Login gate
+  if (!currentAdminUser && authChecked) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-8 space-y-6 shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-600 to-indigo-600" />
+          
+          <div className="text-center space-y-2">
+            <div className="w-14 h-14 bg-purple-600/20 text-purple-400 border border-purple-500/30 rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-purple-600/20">
+              <Shield size={28} />
+            </div>
+            <h1 className="text-xl font-black text-white tracking-tight">Private Voices Admin</h1>
+            <p className="text-xs text-slate-400">
+              Sign in with your verified administrator account to access platform moderation.
+            </p>
+          </div>
+
+          {authError && (
+            <div className="bg-red-950/60 border border-red-800/80 p-3.5 rounded-xl text-xs text-red-300 font-medium flex items-center space-x-2">
+              <ShieldAlert size={16} className="text-red-400 shrink-0" />
+              <span>{authError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleAdminLogin} className="space-y-4">
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold text-slate-300">Admin Email</label>
+              <input
+                type="email"
+                required
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                placeholder="admin@privatevoices.com"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-purple-500"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold text-slate-300">Password</label>
+              <input
+                type="password"
+                required
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                placeholder="••••••••••••"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-purple-500"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loggingIn || !loginEmail || !loginPassword}
+              className="w-full py-2.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-lg shadow-purple-600/30 transition-all flex items-center justify-center space-x-2"
+            >
+              <LogIn size={15} />
+              <span>{loggingIn ? 'Authenticating…' : 'Authenticate Administrator'}</span>
+            </button>
+          </form>
+
+          <div className="text-center pt-2">
+            <span className="text-[11px] text-slate-500 font-mono">
+              Role-Based Access Control Active &bull; SSL Encrypted
+            </span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col md:flex-row">
       {/* Sidebar */}
@@ -290,7 +454,25 @@ export default function AdminDashboardPage(): React.JSX.Element {
           </nav>
         </div>
 
-        <div className="pt-6 border-t border-slate-800">
+        <div className="pt-6 border-t border-slate-800 space-y-3">
+          {currentAdminUser && (
+            <div className="px-2 py-1 flex items-center justify-between text-xs">
+              <div className="truncate">
+                <span className="font-bold text-white block truncate">
+                  {currentAdminUser.display_name || currentAdminUser.username}
+                </span>
+                <span className="text-[10px] text-purple-400 font-mono">Admin Verified</span>
+              </div>
+              <button
+                onClick={handleAdminLogout}
+                className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-lg transition-colors"
+                title="Log out"
+              >
+                <LogOut size={15} />
+              </button>
+            </div>
+          )}
+
           <button
             onClick={() => loadAdminData()}
             className="w-full flex items-center justify-center space-x-2 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 rounded-xl transition-all"
