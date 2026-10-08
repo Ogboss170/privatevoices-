@@ -46,7 +46,6 @@ export async function registerForPushNotificationsAsync(userId: string): Promise
         lightColor: '#3b82f6',
         enableVibrate: true,
         showBadge: true,
-        playSound: true,
       })
     }
 
