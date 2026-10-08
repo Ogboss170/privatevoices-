@@ -105,10 +105,10 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex justify-center">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex justify-center text-gray-900 dark:text-gray-100 transition-colors">
       <div className="flex w-full max-w-7xl">
         {/* ── Sidebar (desktop) ── */}
-        <aside className="hidden md:flex flex-col w-64 xl:w-72 bg-white/80 backdrop-blur-md border-r border-gray-200/80 px-4 py-6 sticky top-0 h-screen z-10 flex-shrink-0">
+        <aside className="hidden md:flex flex-col w-64 xl:w-72 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-r border-gray-200/80 dark:border-slate-800 px-4 py-6 sticky top-0 h-screen z-10 flex-shrink-0">
           {/* Logo */}
           <div className="px-3 mb-8">
             <Link href="/feed" className="flex items-center gap-3 group">
@@ -117,7 +117,7 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
                   <path d="M12 2C6.48 2 2 6.48 2 12C2 14.05 2.61 15.96 3.65 17.56L2 22L6.44 20.35C8.04 21.39 9.95 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2Z" fill="white"/>
                 </svg>
               </div>
-              <span className="font-extrabold text-lg text-gray-900 tracking-tight">Private Voices</span>
+              <span className="font-extrabold text-lg text-gray-900 dark:text-white tracking-tight">Private Voices</span>
             </Link>
           </div>
 
@@ -135,7 +135,7 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
                   className={`flex items-center justify-between px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
                     isActive
                       ? 'bg-brand-600 text-white shadow-md shadow-brand-600/20'
-                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-white'
                   }`}
                 >
                   <div className="flex items-center gap-3.5">
@@ -160,7 +160,7 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
           </nav>
 
           {/* Quick Create Button */}
-          <div className="pt-4 border-t border-gray-100">
+          <div className="pt-4 border-t border-gray-100 dark:border-slate-800">
             <Link
               href="/create"
               className="w-full py-3 bg-gradient-to-r from-brand-600 to-purple-600 text-white font-bold rounded-xl shadow-md hover:shadow-lg hover:brightness-105 transition-all flex items-center justify-center gap-2 text-sm"
@@ -172,7 +172,7 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
         </aside>
 
         {/* ── Main Feed Content ── */}
-        <div className="flex-1 min-w-0 min-h-screen border-r border-gray-200/60 bg-white/40">
+        <div className="flex-1 min-w-0 min-h-screen border-r border-gray-200/60 dark:border-slate-800/60 bg-white/40 dark:bg-slate-900/40">
           <main className="max-w-2xl w-full mx-auto px-4 py-4 md:py-6 pb-20 md:pb-6">
             {children}
           </main>
@@ -183,7 +183,7 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
       </div>
 
         {/* ── Bottom tab bar (mobile view on web) ── */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-gray-200 flex items-center justify-around px-2 py-2 z-20 shadow-lg">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-gray-200 dark:border-slate-800 flex items-center justify-around px-2 py-2 z-20 shadow-lg">
         {MOBILE_BOTTOM_NAV_ITEMS.map(({ href, label, Icon }) => {
           const isActive = pathname === href || pathname.startsWith(href + '/')
           const badgeCount =
@@ -194,7 +194,7 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
               key={href}
               href={href}
               className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-colors relative ${
-                isActive ? 'text-brand-600 font-bold' : 'text-gray-400 hover:text-gray-600'
+                isActive ? 'text-brand-600 dark:text-brand-400 font-bold' : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
               }`}
             >
               <div className="relative">

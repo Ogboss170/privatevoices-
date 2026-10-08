@@ -446,3 +446,34 @@ export function calculateUserGamification(xp: number, userBadges: UserBadge[] = 
     badges: userBadges,
   };
 }
+
+// ─── Appearance & Localization Settings ────────────────────────────────────────
+
+export type ThemeMode = 'system' | 'light' | 'dark';
+
+export type SupportedLanguage = 
+  | 'en' // English
+  | 'es' // Spanish
+  | 'fr' // French
+  | 'de' // German
+  | 'pt' // Portuguese
+  | 'ja' // Japanese
+  | 'ar' // Arabic
+  | 'zh'; // Chinese (Simplified)
+
+export interface AppearancePreferences {
+  theme: ThemeMode;
+  language: SupportedLanguage;
+  reduceMotion: boolean;
+  highContrast: boolean;
+  compactMode: boolean;
+}
+
+export const DEFAULT_APPEARANCE: AppearancePreferences = {
+  theme: 'system',
+  language: 'en',
+  reduceMotion: false,
+  highContrast: false,
+  compactMode: false,
+};
+

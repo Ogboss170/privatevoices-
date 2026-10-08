@@ -49,7 +49,19 @@ import { useTheme } from '../context/ThemeContext'
 
 export default function SettingsScreen() {
   const router = useRouter()
-  const { themeMode, setThemeMode } = useTheme()
+  const {
+    themeMode,
+    setThemeMode,
+    language,
+    setLanguage,
+    reduceMotion,
+    setReduceMotion,
+    highContrast,
+    setHighContrast,
+    compactMode,
+    setCompactMode,
+    colors: themeColors,
+  } = useTheme()
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<any>(null)
   const [privacy, setPrivacy] = useState<any>(null)
@@ -523,10 +535,11 @@ export default function SettingsScreen() {
       <View style={styles.sectionCard}>
         <Text style={styles.sectionCategoryTitle}>APPEARANCE</Text>
 
+        {/* Theme: System | Light | Dark */}
         <View style={styles.rowItemNoClick}>
           <View style={styles.rowLeft}>
-            <SunMoon size={18} color={colors.gray600} />
-            <Text style={styles.rowLabel}>Theme</Text>
+            <SunMoon size={18} color={themeColors.textSecondary} />
+            <Text style={[styles.rowLabel, { color: themeColors.textPrimary }]}>Theme</Text>
           </View>
         </View>
         <View style={styles.optionsGroup}>
@@ -543,12 +556,95 @@ export default function SettingsScreen() {
           ))}
         </View>
 
+        {/* Language Picker */}
+        <TouchableOpacity
+          style={styles.rowItem}
+          onPress={() => {
+            Alert.alert(
+              'Select Language',
+              'Choose your preferred language for Private Voices:',
+              [
+                { text: 'English (US)', onPress: () => setLanguage('en') },
+                { text: 'Español (Spanish)', onPress: () => setLanguage('es') },
+                { text: 'Français (French)', onPress: () => setLanguage('fr') },
+                { text: 'Deutsch (German)', onPress: () => setLanguage('de') },
+                { text: 'Português (Portuguese)', onPress: () => setLanguage('pt') },
+                { text: '日本語 (Japanese)', onPress: () => setLanguage('ja') },
+                { text: 'العربية (Arabic)', onPress: () => setLanguage('ar') },
+                { text: '简体中文 (Chinese)', onPress: () => setLanguage('zh') },
+                { text: 'Cancel', style: 'cancel' },
+              ]
+            )
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={styles.rowLeft}>
+            <Globe size={18} color={themeColors.textSecondary} />
+            <div>
+              <Text style={[styles.rowLabel, { color: themeColors.textPrimary }]}>Language</Text>
+            </div>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={[styles.valueText, { color: colors.brand, fontWeight: '600' }]}>
+              {language === 'en' ? 'English (US)' :
+               language === 'es' ? 'Español' :
+               language === 'fr' ? 'Français' :
+               language === 'de' ? 'Deutsch' :
+               language === 'pt' ? 'Português' :
+               language === 'ja' ? '日本語' :
+               language === 'ar' ? 'العربية' :
+               language === 'zh' ? '简体中文' : 'English'}
+            </Text>
+            <ChevronRight size={16} color={themeColors.textMuted} />
+          </View>
+        </TouchableOpacity>
+
+        {/* Reduce Motion */}
         <View style={styles.rowItemNoClick}>
           <View style={styles.rowLeft}>
-            <Globe size={18} color={colors.gray600} />
-            <Text style={styles.rowLabel}>Language</Text>
+            <Sliders size={18} color={themeColors.textSecondary} />
+            <View>
+              <Text style={[styles.rowLabel, { color: themeColors.textPrimary }]}>Reduce Motion</Text>
+              <Text style={[styles.rowSubLabel, { color: themeColors.textMuted }]}>Minimize interface animations and transitions</Text>
+            </View>
           </View>
-          <Text style={styles.valueText}>English (US)</Text>
+          <Switch
+            value={reduceMotion}
+            onValueChange={setReduceMotion}
+            trackColor={{ false: '#e2e8f0', true: colors.brand }}
+          />
+        </View>
+
+        {/* High Contrast */}
+        <View style={styles.rowItemNoClick}>
+          <View style={styles.rowLeft}>
+            <Eye size={18} color={themeColors.textSecondary} />
+            <View>
+              <Text style={[styles.rowLabel, { color: themeColors.textPrimary }]}>High Contrast</Text>
+              <Text style={[styles.rowSubLabel, { color: themeColors.textMuted }]}>Increase visual borders and text sharpness</Text>
+            </View>
+          </View>
+          <Switch
+            value={highContrast}
+            onValueChange={setHighContrast}
+            trackColor={{ false: '#e2e8f0', true: colors.brand }}
+          />
+        </View>
+
+        {/* Compact Mode */}
+        <View style={styles.rowItemNoClick}>
+          <View style={styles.rowLeft}>
+            <Smartphone size={18} color={themeColors.textSecondary} />
+            <View>
+              <Text style={[styles.rowLabel, { color: themeColors.textPrimary }]}>Compact Mode</Text>
+              <Text style={[styles.rowSubLabel, { color: themeColors.textMuted }]}>Fit more posts and cards on smaller screens</Text>
+            </View>
+          </View>
+          <Switch
+            value={compactMode}
+            onValueChange={setCompactMode}
+            trackColor={{ false: '#e2e8f0', true: colors.brand }}
+          />
         </View>
       </View>
 

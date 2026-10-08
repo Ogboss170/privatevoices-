@@ -38,10 +38,23 @@ import {
   Send,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { useWebTheme, LANGUAGE_OPTIONS } from '@/context/WebThemeContext'
 
 export default function SettingsPage(): React.JSX.Element {
   const router = useRouter()
   const supabase = createSupabaseBrowserClient()
+  const {
+    themeMode,
+    setThemeMode,
+    language,
+    setLanguage,
+    reduceMotion,
+    setReduceMotion,
+    highContrast,
+    setHighContrast,
+    compactMode,
+    setCompactMode,
+  } = useWebTheme()
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -620,22 +633,23 @@ export default function SettingsPage(): React.JSX.Element {
 
       {/* ── 6. APPEARANCE ── */}
       <section className="card p-6 space-y-4">
-        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 pb-2">
+        <h2 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider border-b border-gray-100 dark:border-slate-800 pb-2">
           Appearance
         </h2>
-        <div className="space-y-3 text-sm">
+        <div className="space-y-4 text-sm">
+          {/* Theme: System | Light | Dark */}
           <div className="flex items-center justify-between p-2">
             <div className="flex items-center space-x-3">
-              <SunMoon size={18} className="text-gray-500" />
+              <SunMoon size={18} className="text-gray-500 dark:text-gray-400" />
               <div>
-                <span className="font-semibold text-gray-800 block">Theme</span>
-                <span className="text-xs text-gray-400">Select application visual style</span>
+                <span className="font-semibold text-gray-800 dark:text-gray-100 block">Theme</span>
+                <span className="text-xs text-gray-400 dark:text-gray-500">System follows device/browser; Light and Dark force mode</span>
               </div>
             </div>
             <select
-              value={theme}
-              onChange={(e: any) => setTheme(e.target.value)}
-              className="input-field w-auto py-1 px-2 text-xs"
+              value={themeMode}
+              onChange={(e: any) => setThemeMode(e.target.value)}
+              className="input-field w-auto py-1 px-3 text-xs font-semibold cursor-pointer"
             >
               <option value="system">System</option>
               <option value="light">Light</option>
@@ -643,12 +657,77 @@ export default function SettingsPage(): React.JSX.Element {
             </select>
           </div>
 
-          <div className="flex items-center justify-between p-2">
+          {/* Language */}
+          <div className="flex items-center justify-between p-2 border-t border-gray-50 dark:border-slate-800/60 pt-3">
             <div className="flex items-center space-x-3">
-              <Globe size={18} className="text-gray-500" />
-              <span className="font-semibold text-gray-800">Language</span>
+              <Globe size={18} className="text-gray-500 dark:text-gray-400" />
+              <div>
+                <span className="font-semibold text-gray-800 dark:text-gray-100 block">Language</span>
+                <span className="text-xs text-gray-400 dark:text-gray-500">Select language for interface and content</span>
+              </div>
             </div>
-            <span className="text-xs text-gray-500 font-medium">English (US)</span>
+            <select
+              value={language}
+              onChange={(e: any) => setLanguage(e.target.value)}
+              className="input-field w-auto py-1 px-3 text-xs font-semibold cursor-pointer"
+            >
+              {LANGUAGE_OPTIONS.map((opt) => (
+                <option key={opt.code} value={opt.code}>
+                  {opt.nativeName} ({opt.label})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Reduce Motion */}
+          <div className="flex items-center justify-between p-2 border-t border-gray-50 dark:border-slate-800/60 pt-3">
+            <div className="flex items-center space-x-3">
+              <Sliders size={18} className="text-gray-500 dark:text-gray-400" />
+              <div>
+                <span className="font-semibold text-gray-800 dark:text-gray-100 block">Reduce Motion</span>
+                <span className="text-xs text-gray-400 dark:text-gray-500">Disable animations, bouncy springs, and transitions</span>
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={reduceMotion}
+              onChange={(e) => setReduceMotion(e.target.checked)}
+              className="w-4 h-4 text-brand-600 rounded border-gray-300 dark:border-slate-700 focus:ring-brand-500 cursor-pointer"
+            />
+          </div>
+
+          {/* High Contrast */}
+          <div className="flex items-center justify-between p-2 border-t border-gray-50 dark:border-slate-800/60 pt-3">
+            <div className="flex items-center space-x-3">
+              <Eye size={18} className="text-gray-500 dark:text-gray-400" />
+              <div>
+                <span className="font-semibold text-gray-800 dark:text-gray-100 block">High Contrast</span>
+                <span className="text-xs text-gray-400 dark:text-gray-500">Enhance borders and card visibility for high legibility</span>
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={highContrast}
+              onChange={(e) => setHighContrast(e.target.checked)}
+              className="w-4 h-4 text-brand-600 rounded border-gray-300 dark:border-slate-700 focus:ring-brand-500 cursor-pointer"
+            />
+          </div>
+
+          {/* Compact Mode */}
+          <div className="flex items-center justify-between p-2 border-t border-gray-50 dark:border-slate-800/60 pt-3">
+            <div className="flex items-center space-x-3">
+              <Smartphone size={18} className="text-gray-500 dark:text-gray-400" />
+              <div>
+                <span className="font-semibold text-gray-800 dark:text-gray-100 block">Compact Mode</span>
+                <span className="text-xs text-gray-400 dark:text-gray-500">Reduce spacing to display more content per screen</span>
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={compactMode}
+              onChange={(e) => setCompactMode(e.target.checked)}
+              className="w-4 h-4 text-brand-600 rounded border-gray-300 dark:border-slate-700 focus:ring-brand-500 cursor-pointer"
+            />
           </div>
         </div>
       </section>

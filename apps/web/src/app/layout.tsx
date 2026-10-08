@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { WebThemeProvider } from '@/context/WebThemeContext'
 
 export const metadata: Metadata = {
   title: {
@@ -21,7 +22,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body>{children}</body>
+      <body>
+        <WebThemeProvider>
+          {children}
+        </WebThemeProvider>
+      </body>
     </html>
   )
 }

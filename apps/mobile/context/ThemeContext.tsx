@@ -1,84 +1,279 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { useColorScheme } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { supabase } from '../lib/supabase'
 
 export type ThemeMode = 'system' | 'light' | 'dark'
+
+export type SupportedLanguage =
+  | 'en'
+  | 'es'
+  | 'fr'
+  | 'de'
+  | 'pt'
+  | 'ja'
+  | 'ar'
+  | 'zh'
+
+export interface DesignTokens {
+  background: string
+  surface: string
+  surfaceBorder: string
+  textPrimary: string
+  textSecondary: string
+  textMuted: string
+  brand: string
+  brandLight: string
+  inputBg: string
+  inputBorder: string
+  cardBg: string
+  headerBg: string
+  danger: string
+  success: string
+  warning: string
+}
 
 interface ThemeContextType {
   themeMode: ThemeMode
   setThemeMode: (mode: ThemeMode) => Promise<void>
+  language: SupportedLanguage
+  setLanguage: (lang: SupportedLanguage) => Promise<void>
+  reduceMotion: boolean
+  setReduceMotion: (val: boolean) => Promise<void>
+  highContrast: boolean
+  setHighContrast: (val: boolean) => Promise<void>
+  compactMode: boolean
+  setCompactMode: (val: boolean) => Promise<void>
   isDark: boolean
-  colors: {
-    background: string
-    surface: string
-    surfaceBorder: string
-    textPrimary: string
-    textSecondary: string
-    textMuted: string
-    brand: string
-    brandLight: string
-    inputBg: string
-    inputBorder: string
-    cardBg: string
-    headerBg: string
-  }
+  colors: DesignTokens
 }
 
-const THEME_STORAGE_KEY = '@pv_theme_mode'
+const STORAGE_KEYS = {
+  THEME: '@pv_theme_mode',
+  LANGUAGE: '@pv_language',
+  REDUCE_MOTION: '@pv_reduce_motion',
+  HIGH_CONTRAST: '@pv_high_contrast',
+  COMPACT_MODE: '@pv_compact_mode',
+}
+
+const DEFAULT_TOKENS_LIGHT: DesignTokens = {
+  background: '#f9fafb',
+  surface: '#ffffff',
+  surfaceBorder: '#e5e7eb',
+  textPrimary: '#111827',
+  textSecondary: '#4b5563',
+  textMuted: '#9ca3af',
+  brand: '#7c3aed',
+  brandLight: '#ede9fe',
+  inputBg: '#f3f4f6',
+  inputBorder: '#d1d5db',
+  cardBg: '#ffffff',
+  headerBg: '#ffffff',
+  danger: '#ef4444',
+  success: '#10b981',
+  warning: '#f59e0b',
+}
+
+const DEFAULT_TOKENS_DARK: DesignTokens = {
+  background: '#0b0f17',
+  surface: '#111827',
+  surfaceBorder: '#1f2937',
+  textPrimary: '#f9fafb',
+  textSecondary: '#9ca3af',
+  textMuted: '#6b7280',
+  brand: '#8b5cf6',
+  brandLight: 'rgba(124, 58, 237, 0.2)',
+  inputBg: '#1f2937',
+  inputBorder: '#374151',
+  cardBg: '#111827',
+  headerBg: '#111827',
+  danger: '#f87171',
+  success: '#34d399',
+  warning: '#fbbf24',
+}
+
+const HIGH_CONTRAST_TOKENS_LIGHT: DesignTokens = {
+  ...DEFAULT_TOKENS_LIGHT,
+  background: '#ffffff',
+  surface: '#ffffff',
+  surfaceBorder: '#000000',
+  textPrimary: '#000000',
+  textSecondary: '#111827',
+  textMuted: '#374151',
+  brand: '#5b21b6',
+  inputBorder: '#000000',
+}
+
+const HIGH_CONTRAST_TOKENS_DARK: DesignTokens = {
+  ...DEFAULT_TOKENS_DARK,
+  background: '#000000',
+  surface: '#0a0a0a',
+  surfaceBorder: '#ffffff',
+  textPrimary: '#ffffff',
+  textSecondary: '#f3f4f6',
+  textMuted: '#d1d5db',
+  brand: '#a78bfa',
+  inputBorder: '#ffffff',
+}
 
 export const ThemeContext = createContext<ThemeContextType>({
   themeMode: 'system',
   setThemeMode: async () => {},
+  language: 'en',
+  setLanguage: async () => {},
+  reduceMotion: false,
+  setReduceMotion: async () => {},
+  highContrast: false,
+  setHighContrast: async () => {},
+  compactMode: false,
+  setCompactMode: async () => {},
   isDark: false,
-  colors: {
-    background: '#f9fafb',
-    surface: '#ffffff',
-    surfaceBorder: '#e5e7eb',
-    textPrimary: '#111827',
-    textSecondary: '#4b5563',
-    textMuted: '#9ca3af',
-    brand: '#7c3aed',
-    brandLight: '#ede9fe',
-    inputBg: '#f3f4f6',
-    inputBorder: '#d1d5db',
-    cardBg: '#ffffff',
-    headerBg: '#ffffff',
-  },
+  colors: DEFAULT_TOKENS_LIGHT,
 })
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemScheme = useColorScheme()
   const [themeMode, setThemeModeState] = useState<ThemeMode>('system')
+  const [language, setLanguageState] = useState<SupportedLanguage>('en')
+  const [reduceMotion, setReduceMotionState] = useState(false)
+  const [highContrast, setHighContrastState] = useState(false)
+  const [compactMode, setCompactModeState] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
+
+  // 1. Load cached preferences from AsyncStorage immediately
+  useEffect(() => {
+    async function loadLocalPrefs() {
+      try {
+        const [t, l, rm, hc, cm] = await Promise.all([
+          AsyncStorage.getItem(STORAGE_KEYS.THEME),
+          AsyncStorage.getItem(STORAGE_KEYS.LANGUAGE),
+          AsyncStorage.getItem(STORAGE_KEYS.REDUCE_MOTION),
+          AsyncStorage.getItem(STORAGE_KEYS.HIGH_CONTRAST),
+          AsyncStorage.getItem(STORAGE_KEYS.COMPACT_MODE),
+        ])
+
+        if (t === 'light' || t === 'dark' || t === 'system') setThemeModeState(t)
+        if (l) setLanguageState(l as SupportedLanguage)
+        if (rm !== null) setReduceMotionState(rm === 'true')
+        if (hc !== null) setHighContrastState(hc === 'true')
+        if (cm !== null) setCompactModeState(cm === 'true')
+      } catch (err) {
+        console.error('Error loading local appearance prefs:', err)
+      }
+    }
+    loadLocalPrefs()
+  }, [])
+
+  // 2. Sync with cloud preferences for authenticated user
+  const syncWithCloud = useCallback(async (uId: string) => {
+    try {
+      const { data: cloudPrefs } = await supabase
+        .from('user_preferences')
+        .select('*')
+        .eq('user_id', uId)
+        .maybeSingle()
+
+      if (cloudPrefs) {
+        if (cloudPrefs.theme) {
+          setThemeModeState(cloudPrefs.theme as ThemeMode)
+          AsyncStorage.setItem(STORAGE_KEYS.THEME, cloudPrefs.theme)
+        }
+        if (cloudPrefs.language) {
+          setLanguageState(cloudPrefs.language as SupportedLanguage)
+          AsyncStorage.setItem(STORAGE_KEYS.LANGUAGE, cloudPrefs.language)
+        }
+        if (typeof cloudPrefs.reduce_motion === 'boolean') {
+          setReduceMotionState(cloudPrefs.reduce_motion)
+          AsyncStorage.setItem(STORAGE_KEYS.REDUCE_MOTION, String(cloudPrefs.reduce_motion))
+        }
+        if (typeof cloudPrefs.high_contrast === 'boolean') {
+          setHighContrastState(cloudPrefs.high_contrast)
+          AsyncStorage.setItem(STORAGE_KEYS.HIGH_CONTRAST, String(cloudPrefs.high_contrast))
+        }
+        if (typeof cloudPrefs.compact_mode === 'boolean') {
+          setCompactModeState(cloudPrefs.compact_mode)
+          AsyncStorage.setItem(STORAGE_KEYS.COMPACT_MODE, String(cloudPrefs.compact_mode))
+        }
+      }
+    } catch {
+      // If table doesn't exist yet or offline, local prefs remain active
+    }
+  }, [])
 
   useEffect(() => {
-    AsyncStorage.getItem(THEME_STORAGE_KEY).then((saved) => {
-      if (saved === 'light' || saved === 'dark' || saved === 'system') {
-        setThemeModeState(saved as ThemeMode)
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) {
+        setUserId(data.user.id)
+        syncWithCloud(data.user.id)
       }
     })
-  }, [])
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUserId(session.user.id)
+        syncWithCloud(session.user.id)
+      } else {
+        setUserId(null)
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [syncWithCloud])
+
+  // Helper to persist updates locally and to Supabase
+  const persistPref = async (key: string, value: any, cloudCol?: string) => {
+    await AsyncStorage.setItem(key, typeof value === 'boolean' ? String(value) : value)
+    if (userId && cloudCol) {
+      try {
+        await supabase.from('user_preferences').upsert(
+          {
+            user_id: userId,
+            [cloudCol]: value,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id' }
+        )
+      } catch {
+        // Fallback to local
+      }
+    }
+  }
 
   const setThemeMode = async (mode: ThemeMode) => {
     setThemeModeState(mode)
-    await AsyncStorage.setItem(THEME_STORAGE_KEY, mode)
+    await persistPref(STORAGE_KEYS.THEME, mode, 'theme')
+  }
+
+  const setLanguage = async (lang: SupportedLanguage) => {
+    setLanguageState(lang)
+    await persistPref(STORAGE_KEYS.LANGUAGE, lang, 'language')
+  }
+
+  const setReduceMotion = async (val: boolean) => {
+    setReduceMotionState(val)
+    await persistPref(STORAGE_KEYS.REDUCE_MOTION, val, 'reduce_motion')
+  }
+
+  const setHighContrast = async (val: boolean) => {
+    setHighContrastState(val)
+    await persistPref(STORAGE_KEYS.HIGH_CONTRAST, val, 'high_contrast')
+  }
+
+  const setCompactMode = async (val: boolean) => {
+    setCompactModeState(val)
+    await persistPref(STORAGE_KEYS.COMPACT_MODE, val, 'compact_mode')
   }
 
   const isDark =
     themeMode === 'dark' || (themeMode === 'system' && systemScheme === 'dark')
 
-  const themeColors = {
-    background: isDark ? '#0b0f17' : '#f9fafb',
-    surface: isDark ? '#111827' : '#ffffff',
-    surfaceBorder: isDark ? '#1f2937' : '#e5e7eb',
-    textPrimary: isDark ? '#f9fafb' : '#111827',
-    textSecondary: isDark ? '#9ca3af' : '#4b5563',
-    textMuted: isDark ? '#6b7280' : '#9ca3af',
-    brand: '#7c3aed',
-    brandLight: isDark ? 'rgba(124, 58, 237, 0.2)' : '#ede9fe',
-    inputBg: isDark ? '#1f2937' : '#f3f4f6',
-    inputBorder: isDark ? '#374151' : '#d1d5db',
-    cardBg: isDark ? '#111827' : '#ffffff',
-    headerBg: isDark ? '#111827' : '#ffffff',
+  let themeColors: DesignTokens
+  if (highContrast) {
+    themeColors = isDark ? HIGH_CONTRAST_TOKENS_DARK : HIGH_CONTRAST_TOKENS_LIGHT
+  } else {
+    themeColors = isDark ? DEFAULT_TOKENS_DARK : DEFAULT_TOKENS_LIGHT
   }
 
   return (
@@ -86,6 +281,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       value={{
         themeMode,
         setThemeMode,
+        language,
+        setLanguage,
+        reduceMotion,
+        setReduceMotion,
+        highContrast,
+        setHighContrast,
+        compactMode,
+        setCompactMode,
         isDark,
         colors: themeColors,
       }}
