@@ -44,9 +44,11 @@ import { BadgeManagementSection } from '@/components/BadgeManagementSection'
 import { AppealsSection } from '@/components/AppealsSection'
 import { AuditLogsSection } from '@/components/AuditLogsSection'
 import { SqlConsoleSection } from '@/components/SqlConsoleSection'
+import { StaffManagementSection } from '@/components/StaffManagementSection'
 
 type AdminSection =
   | 'overview'
+  | 'staff'
   | 'users'
   | 'posts'
   | 'communities'
@@ -93,6 +95,7 @@ export default function AdminDashboardPage(): React.JSX.Element {
   const [userBadges, setUserBadges] = useState<any[]>([])
   const [appeals, setAppeals] = useState<any[]>([])
   const [auditLogs, setAuditLogs] = useState<any[]>([])
+  const [staffList, setStaffList] = useState<any[]>([])
 
   const [reportFilter, setReportFilter] = useState<'all' | 'bug_report' | 'post' | 'comment' | 'profile'>('all')
   const [reportStatusFilter, setReportStatusFilter] = useState<'all' | 'pending' | 'resolved' | 'dismissed' | 'actioned'>('all')
@@ -225,6 +228,28 @@ export default function AdminDashboardPage(): React.JSX.Element {
         supabase.from('admin_audit_logs').select('*').order('created_at', { ascending: false }).limit(100),
       ])
 
+      let staffRows: any[] = []
+      try {
+        const { data: rpcStaff } = await supabase.rpc('admin_get_staff_directory')
+        if (rpcStaff) staffRows = rpcStaff
+      } catch {
+        // Fallback
+      }
+
+      if (staffRows.length === 0) {
+        const { data: adminProfiles } = await supabase.from('profiles').select('*').eq('is_admin', true)
+        const { data: allAdminRoles } = await supabase.from('admin_roles').select('*')
+        staffRows = (adminProfiles ?? []).map((ap) => ({
+          user_id: ap.id,
+          username: ap.username,
+          display_name: ap.display_name,
+          is_admin: ap.is_admin,
+          is_banned: ap.is_banned,
+          roles: (allAdminRoles ?? []).filter((r) => r.user_id === ap.id).map((r) => r.role),
+          notes: (allAdminRoles ?? []).find((r) => r.user_id === ap.id)?.notes,
+        }))
+      }
+
       const bugReportsCount = reportsData.filter((r) => r.target_type === 'bug_report').length
       const suspendedCount = (userRows ?? []).filter((u) => u.is_banned).length
       const earlySupporters = (uBadges ?? []).filter((b) => b.badge_id === 'early_supporter').length
@@ -262,6 +287,7 @@ export default function AdminDashboardPage(): React.JSX.Element {
       setUserBadges(uBadges ?? [])
       setAppeals(appealData ?? [])
       setAuditLogs(auditData ?? [])
+      setStaffList(staffRows)
     } catch (err) {
       console.error('Error loading admin dashboard data:', err)
     } finally {
@@ -396,6 +422,7 @@ export default function AdminDashboardPage(): React.JSX.Element {
   // 13 Required Sidebar Navigation Sections
   const SECTIONS: { id: AdminSection; label: string; icon: React.ElementType }[] = [
     { id: 'overview', label: 'Overview', icon: Activity },
+    { id: 'staff', label: 'Staff & Roles', icon: ShieldAlert },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'posts', label: 'Posts', icon: FileText },
     { id: 'communities', label: 'Communities', icon: Users },
@@ -729,7 +756,18 @@ export default function AdminDashboardPage(): React.JSX.Element {
           </div>
         )}
 
-        {/* 2. USERS DIRECTORY */}
+        {/* 2. STAFF & ROLE GOVERNANCE */}
+        {activeSection === 'staff' && (
+          <StaffManagementSection
+            supabase={supabase}
+            staff={staffList}
+            users={users}
+            currentAdminUser={currentAdminUser}
+            onRefresh={loadAdminData}
+          />
+        )}
+
+        {/* 3. USERS DIRECTORY */}
         {activeSection === 'users' && (
           <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl overflow-hidden shadow-xl">
             <table className="w-full text-left text-xs">
