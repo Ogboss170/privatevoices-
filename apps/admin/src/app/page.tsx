@@ -19,19 +19,28 @@ import {
   Database,
   BarChart2,
   TrendingUp,
+  Bug,
+  Flag,
+  UserX,
+  Mail,
+  UserCheck,
+  Eye,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
-type AdminSection = 'dashboard' | 'analytics' | 'users' | 'posts' | 'whispers' | 'reports' | 'sql' | 'audit'
+type AdminSection = 'dashboard' | 'analytics' | 'users' | 'identities' | 'posts' | 'whispers' | 'reports' | 'sql' | 'audit'
 
 export default function AdminDashboardPage(): React.JSX.Element {
   const supabase = createSupabaseBrowserClient()
   const [activeSection, setActiveSection] = useState<AdminSection>('dashboard')
-  const [stats, setStats] = useState({ users: 0, posts: 0, whispers: 0, reports: 0 })
+  const [stats, setStats] = useState({ users: 0, posts: 0, whispers: 0, reports: 0, bugReports: 0, identities: 0 })
   const [users, setUsers] = useState<any[]>([])
   const [posts, setPosts] = useState<any[]>([])
   const [whispers, setWhispers] = useState<any[]>([])
   const [reports, setReports] = useState<any[]>([])
+  const [identities, setIdentities] = useState<any[]>([])
+  const [reportFilter, setReportFilter] = useState<'all' | 'bug_report' | 'post' | 'comment' | 'profile'>('all')
+  const [reportStatusFilter, setReportStatusFilter] = useState<'all' | 'pending' | 'resolved' | 'dismissed' | 'actioned'>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [loading, setLoading] = useState(true)
 
@@ -42,27 +51,76 @@ export default function AdminDashboardPage(): React.JSX.Element {
   const loadAdminData = useCallback(async () => {
     setLoading(true)
     try {
+      // 1. Fetch content reports via RPC or direct fallback
+      let reportsData: any[] = []
+      try {
+        const { data: rpcReports } = await supabase.rpc('admin_get_content_reports', { p_limit: 100 })
+        if (rpcReports) {
+          reportsData = rpcReports
+        }
+      } catch {
+        // Fallback to direct table query
+      }
+
+      if (reportsData.length === 0) {
+        const { data: directReports } = await supabase
+          .from('content_reports')
+          .select('*, reporter:profiles!content_reports_reporter_id_fkey(username, display_name)')
+          .order('created_at', { ascending: false })
+          .limit(100)
+        reportsData = directReports ?? []
+      }
+
+      // 2. Fetch email registry & identities
+      let identitiesData: any[] = []
+      try {
+        const { data: rpcIdentities } = await supabase.rpc('admin_get_identities', { p_limit: 100 })
+        if (rpcIdentities) {
+          identitiesData = rpcIdentities
+        }
+      } catch {
+        // Fallback
+      }
+
+      if (identitiesData.length === 0) {
+        const { data: directReg } = await supabase
+          .from('email_registry')
+          .select('*')
+          .order('registered_at', { ascending: false })
+          .limit(100)
+        identitiesData = (directReg ?? []).map((r) => ({
+          registry_id: r.id,
+          normalized_email: r.normalized_email,
+          original_user_id: r.original_user_id,
+          registered_at: r.registered_at,
+          registry_status: r.status,
+          is_banned: r.status === 'banned',
+        }))
+      }
+
       const [
         { count: userCount, data: userRows },
         { count: postCount, data: postRows },
         { count: whisperCount, data: whisperRows },
-        { count: reportCount, data: reportRows },
         { data: topPostsData },
         { data: commData },
       ] = await Promise.all([
         supabase.from('profiles').select('*', { count: 'exact' }).order('created_at', { ascending: false }).limit(50),
         supabase.from('posts').select('*, author:profiles!posts_author_id_fkey(username, display_name)').order('created_at', { ascending: false }).limit(50),
         supabase.from('whispers').select('*').order('created_at', { ascending: false }).limit(50),
-        supabase.from('reports').select('*').order('created_at', { ascending: false }).limit(50),
         supabase.from('posts').select('*, author:profiles!posts_author_id_fkey(username, display_name), likes(count), comments(count)').order('created_at', { ascending: false }).limit(10),
         supabase.from('communities').select('*, community_members(count)').order('created_at', { ascending: false }).limit(10),
       ])
+
+      const bugReportsCount = reportsData.filter((r) => r.target_type === 'bug_report').length
 
       setStats({
         users: userCount ?? 0,
         posts: postCount ?? 0,
         whispers: whisperCount ?? 0,
-        reports: reportCount ?? 0,
+        reports: reportsData.length,
+        bugReports: bugReportsCount,
+        identities: identitiesData.length,
       })
 
       setActiveUsersCount(userCount ? Math.min(userCount, Math.round(userCount * 0.72)) : 0)
@@ -72,7 +130,8 @@ export default function AdminDashboardPage(): React.JSX.Element {
       setUsers(userRows ?? [])
       setPosts(postRows ?? [])
       setWhispers(whisperRows ?? [])
-      setReports(reportRows ?? [])
+      setReports(reportsData)
+      setIdentities(identitiesData)
     } catch (err) {
       console.error('Error loading admin dashboard data:', err)
     } finally {
@@ -96,12 +155,52 @@ export default function AdminDashboardPage(): React.JSX.Element {
     setWhispers((prev) => prev.filter((w) => w.id !== whisperId))
   }
 
-  async function handleResolveReport(reportId: string, action: 'dismiss' | 'action_taken') {
-    await supabase
-      .from('reports')
-      .update({ status: action === 'dismiss' ? 'dismissed' : 'resolved' })
-      .eq('id', reportId)
-    setReports((prev) => prev.filter((r) => r.id !== reportId))
+  async function handleResolveReport(reportId: string, action: 'dismiss' | 'resolve' | 'delete_target_content' | 'ban_target_user') {
+    try {
+      const { data: res } = await supabase.rpc('admin_action_report', {
+        p_report_id: reportId,
+        p_action: action,
+      })
+      if (!res?.success) {
+        // Direct table fallback
+        const newStatus = action === 'dismiss' ? 'dismissed' : action === 'resolve' ? 'resolved' : 'actioned'
+        await supabase.from('content_reports').update({ status: newStatus }).eq('id', reportId)
+      }
+    } catch {
+      const newStatus = action === 'dismiss' ? 'dismissed' : action === 'resolve' ? 'resolved' : 'actioned'
+      await supabase.from('content_reports').update({ status: newStatus }).eq('id', reportId)
+    }
+
+    setReports((prev) =>
+      prev.map((r) =>
+        r.id === reportId
+          ? { ...r, status: action === 'dismiss' ? 'dismissed' : action === 'resolve' ? 'resolved' : 'actioned' }
+          : r
+      )
+    )
+  }
+
+  async function handleToggleBanUser(userId: string, targetBanned: boolean) {
+    if (!confirm(`Are you sure you want to ${targetBanned ? 'BAN' : 'UNBAN'} this account and registry identity?`)) return
+
+    try {
+      await supabase.rpc('admin_toggle_user_ban', {
+        p_user_id: userId,
+        p_banned: targetBanned,
+      })
+    } catch {
+      await supabase.from('profiles').update({ is_banned: targetBanned }).eq('id', userId)
+      await supabase.from('email_registry').update({ status: targetBanned ? 'banned' : 'active' }).eq('original_user_id', userId)
+    }
+
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, is_banned: targetBanned } : u)))
+    setIdentities((prev) =>
+      prev.map((item) =>
+        item.original_user_id === userId
+          ? { ...item, is_banned: targetBanned, registry_status: targetBanned ? 'banned' : 'active' }
+          : item
+      )
+    )
   }
 
   // SQL Editor State
@@ -148,9 +247,10 @@ export default function AdminDashboardPage(): React.JSX.Element {
     { id: 'dashboard', label: 'Overview', icon: Activity },
     { id: 'analytics', label: 'Analytics', icon: BarChart2 },
     { id: 'users', label: 'Users', icon: Users },
+    { id: 'identities', label: 'Email Registry', icon: Mail },
     { id: 'posts', label: 'Posts', icon: FileText },
     { id: 'whispers', label: 'Whispers', icon: Radio },
-    { id: 'reports', label: 'Reports Queue', icon: AlertTriangle },
+    { id: 'reports', label: 'Reports & Bugs', icon: AlertTriangle },
     { id: 'sql', label: 'SQL Editor', icon: Terminal },
     { id: 'audit', label: 'Audit Logs', icon: Shield },
   ]
@@ -485,38 +585,267 @@ export default function AdminDashboardPage(): React.JSX.Element {
           </div>
         )}
 
-        {/* Reports Queue */}
+        {/* Email Registry & Identity Management */}
+        {activeSection === 'identities' && (
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center space-x-2">
+                  <Mail size={16} className="text-purple-400" />
+                  <span>Permanent Email Registry & Reservations</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Every registered email is permanently reserved against reuse or re-registration.
+                </p>
+              </div>
+              <span className="text-xs font-mono font-bold px-3 py-1 bg-purple-950 text-purple-300 border border-purple-800/50 rounded-xl">
+                {identities.length} Permanent Records
+              </span>
+            </div>
+
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-950 text-slate-400 font-bold uppercase border-b border-slate-800">
+                  <tr>
+                    <th className="p-4">Normalized Email</th>
+                    <th className="p-4">Linked User</th>
+                    <th className="p-4">Registered Date</th>
+                    <th className="p-4">Registry Status</th>
+                    <th className="p-4 text-right">Identity Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {identities.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-slate-500">
+                        No email registry entries found.
+                      </td>
+                    </tr>
+                  ) : (
+                    identities.map((item) => (
+                      <tr key={item.registry_id || item.normalized_email} className="hover:bg-slate-800/40 transition-colors">
+                        <td className="p-4 font-mono font-bold text-purple-300">
+                          {item.normalized_email}
+                        </td>
+                        <td className="p-4">
+                          {item.username ? (
+                            <div>
+                              <span className="font-bold text-white block">{item.display_name || item.username}</span>
+                              <span className="text-[11px] font-mono text-slate-400">@{item.username}</span>
+                            </div>
+                          ) : (
+                            <span className="text-slate-500 font-mono text-[11px]">{item.original_user_id}</span>
+                          )}
+                        </td>
+                        <td className="p-4 text-slate-400 font-mono text-[11px]">
+                          {new Date(item.registered_at).toLocaleString()}
+                        </td>
+                        <td className="p-4">
+                          <span
+                            className={`px-2 py-0.5 rounded-md font-semibold text-[11px] ${
+                              item.registry_status === 'banned' || item.is_banned
+                                ? 'bg-red-500/20 text-red-400'
+                                : item.registry_status === 'deleted'
+                                ? 'bg-amber-500/20 text-amber-400'
+                                : 'bg-emerald-500/20 text-emerald-400'
+                            }`}
+                          >
+                            {item.registry_status || (item.is_banned ? 'banned' : 'active')}
+                          </span>
+                        </td>
+                        <td className="p-4 text-right">
+                          <button
+                            onClick={() => handleToggleBanUser(item.original_user_id, !item.is_banned)}
+                            className={`px-3 py-1 text-[11px] font-bold rounded-lg transition-colors ${
+                              item.is_banned
+                                ? 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+                                : 'bg-red-900/40 hover:bg-red-900/60 text-red-300 border border-red-800/50'
+                            }`}
+                          >
+                            {item.is_banned ? 'Unban Identity' : 'Ban Identity'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Reports & Bug Reports Queue */}
         {activeSection === 'reports' && (
-          <div className="space-y-3">
-            {reports.length === 0 ? (
-              <div className="bg-slate-900 border border-slate-800 p-12 text-center text-slate-400 text-xs">
-                No open reports in moderation queue.
+          <div className="space-y-4">
+            {/* Filter Tabs */}
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mr-1">Type:</span>
+                {(['all', 'bug_report', 'post', 'comment', 'profile'] as const).map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => setReportFilter(type)}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                      reportFilter === type
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
+                    }`}
+                  >
+                    {type === 'all'
+                      ? 'All'
+                      : type === 'bug_report'
+                      ? '🐞 Bug Reports'
+                      : type.charAt(0).toUpperCase() + type.slice(1)}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mr-1">Status:</span>
+                {(['all', 'pending', 'resolved', 'dismissed', 'actioned'] as const).map((st) => (
+                  <button
+                    key={st}
+                    onClick={() => setReportStatusFilter(st)}
+                    className={`px-2.5 py-1 rounded-xl text-[11px] font-semibold transition-all ${
+                      reportStatusFilter === st
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-slate-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {st.charAt(0).toUpperCase() + st.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Reports List */}
+            {reports
+              .filter((r) => (reportFilter === 'all' ? true : r.target_type === reportFilter))
+              .filter((r) => (reportStatusFilter === 'all' ? true : r.status === reportStatusFilter)).length === 0 ? (
+              <div className="bg-slate-900 border border-slate-800 p-12 text-center text-slate-400 text-xs rounded-2xl">
+                No reports matching the selected filters.
               </div>
             ) : (
-              reports.map((r) => (
-                <div key={r.id} className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between">
-                  <div>
-                    <span className="text-xs font-bold text-amber-400 uppercase">Report ({r.target_type})</span>
-                    <p className="text-xs text-slate-300 mt-1">Reason: {r.reason}</p>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => handleResolveReport(r.id, 'action_taken')}
-                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center space-x-1"
+              <div className="space-y-3">
+                {reports
+                  .filter((r) => (reportFilter === 'all' ? true : r.target_type === reportFilter))
+                  .filter((r) => (reportStatusFilter === 'all' ? true : r.status === reportStatusFilter))
+                  .map((r) => (
+                    <div
+                      key={r.id}
+                      className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-3 transition-colors hover:border-slate-700"
                     >
-                      <CheckCircle size={14} />
-                      <span>Resolve</span>
-                    </button>
-                    <button
-                      onClick={() => handleResolveReport(r.id, 'dismiss')}
-                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition-colors flex items-center space-x-1"
-                    >
-                      <XCircle size={14} />
-                      <span>Dismiss</span>
-                    </button>
-                  </div>
-                </div>
-              ))
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                        <div className="space-y-1.5 flex-1">
+                          <div className="flex items-center space-x-2">
+                            {r.target_type === 'bug_report' ? (
+                              <span className="flex items-center space-x-1 px-2.5 py-0.5 bg-red-950 text-red-400 border border-red-800/50 rounded-md font-bold text-xs">
+                                <Bug size={13} />
+                                <span>Bug Report</span>
+                              </span>
+                            ) : (
+                              <span className="flex items-center space-x-1 px-2.5 py-0.5 bg-amber-950 text-amber-400 border border-amber-800/50 rounded-md font-bold text-xs uppercase">
+                                <Flag size={13} />
+                                <span>{r.target_type}</span>
+                              </span>
+                            )}
+
+                            <span
+                              className={`px-2 py-0.5 rounded-md text-[11px] font-semibold ${
+                                r.status === 'pending'
+                                  ? 'bg-amber-500/20 text-amber-300'
+                                  : r.status === 'resolved'
+                                  ? 'bg-emerald-500/20 text-emerald-300'
+                                  : r.status === 'actioned'
+                                  ? 'bg-blue-500/20 text-blue-300'
+                                  : 'bg-slate-800 text-slate-400'
+                              }`}
+                            >
+                              {r.status}
+                            </span>
+
+                            <span className="text-[11px] text-slate-500 font-mono">
+                              {new Date(r.created_at).toLocaleString()}
+                            </span>
+                          </div>
+
+                          <h4 className="text-sm font-bold text-white">{r.reason}</h4>
+
+                          {r.details && (
+                            <p className="text-xs text-slate-300 bg-slate-950 p-3 rounded-xl border border-slate-800/80 leading-relaxed font-mono">
+                              {r.details}
+                            </p>
+                          )}
+
+                          {r.target_preview && (
+                            <div className="text-[11px] text-slate-400 font-mono bg-slate-950/60 p-2 rounded-lg border border-slate-800/40">
+                              Preview: &ldquo;{r.target_preview}&rdquo;
+                            </div>
+                          )}
+
+                          <div className="text-[11px] text-slate-400 pt-1">
+                            Reported by:{' '}
+                            <span className="text-purple-300 font-semibold">
+                              {r.reporter_display_name || r.reporter?.display_name || 'Anonymous User'}{' '}
+                              {r.reporter_username || r.reporter?.username
+                                ? `(@${r.reporter_username || r.reporter?.username})`
+                                : ''}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex flex-wrap sm:flex-col items-end gap-2 pt-2 sm:pt-0">
+                          {r.status === 'pending' && (
+                            <>
+                              <button
+                                onClick={() => handleResolveReport(r.id, 'resolve')}
+                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-colors flex items-center space-x-1.5"
+                              >
+                                <CheckCircle size={14} />
+                                <span>Mark Resolved</span>
+                              </button>
+
+                              {r.target_type !== 'bug_report' && (
+                                <>
+                                  <button
+                                    onClick={() => handleResolveReport(r.id, 'delete_target_content')}
+                                    className="px-3.5 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-xl transition-colors flex items-center space-x-1.5"
+                                  >
+                                    <Trash2 size={14} />
+                                    <span>Delete Content</span>
+                                  </button>
+
+                                  <button
+                                    onClick={() => handleResolveReport(r.id, 'ban_target_user')}
+                                    className="px-3.5 py-1.5 bg-red-950 hover:bg-red-900 border border-red-800/80 text-red-300 text-xs font-bold rounded-xl transition-colors flex items-center space-x-1.5"
+                                  >
+                                    <UserX size={14} />
+                                    <span>Ban Target</span>
+                                  </button>
+                                </>
+                              )}
+
+                              <button
+                                onClick={() => handleResolveReport(r.id, 'dismiss')}
+                                className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors flex items-center space-x-1.5"
+                              >
+                                <XCircle size={14} />
+                                <span>Dismiss</span>
+                              </button>
+                            </>
+                          )}
+
+                          {r.status !== 'pending' && (
+                            <span className="text-xs text-slate-500 font-mono italic">
+                              Status: {r.status}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
             )}
           </div>
         )}
