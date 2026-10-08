@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Edit3, Lock, Shield, ExternalLink, LogOut, Settings, Bookmark } from 'lucide-react'
+import { Edit3, Lock, Shield, ExternalLink, LogOut, Settings, Bookmark, LayoutGrid, Play, Repeat, UserCheck } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import EditProfileModal from '@/components/profile/EditProfileModal'
 import FollowListModal from '@/components/profile/FollowListModal'
@@ -24,7 +24,7 @@ export default function ProfileDashboardPage(): React.JSX.Element {
   const [showEditModal, setShowEditModal] = useState(false)
   const [showFollowModal, setShowFollowModal] = useState(false)
   const [followModalTab, setFollowModalTab] = useState<'followers' | 'following'>('followers')
-  const [activeSection, setActiveSection] = useState<'posts' | 'saved' | 'privacy'>('posts')
+  const [activeSection, setActiveSection] = useState<'posts' | 'voices' | 'reposts' | 'tagged'>('posts')
 
   const fetchUserData = useCallback(async () => {
     setLoading(true)
@@ -306,40 +306,87 @@ export default function ProfileDashboardPage(): React.JSX.Element {
         </div>
       </div>
 
-      {/* Tabs / Sections */}
-      <div className="flex border-b border-gray-200 bg-white rounded-xl p-1 gap-1">
+      {/* 4-Tab Content Navigation: Posts | Voices | Reposts | Tagged */}
+      <div className="flex border-b border-gray-200">
         <button
+          type="button"
           onClick={() => setActiveSection('posts')}
-          className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${
-            activeSection === 'posts' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'
-          }`}
+          title="Posts"
+          aria-label="Posts"
+          className="flex-1 py-3 flex flex-col items-center justify-center relative transition-colors focus:outline-none"
         >
-          My Voices ({posts.length})
+          <LayoutGrid
+            size={20}
+            className={`transition-colors ${
+              activeSection === 'posts' ? 'text-brand-600' : 'text-gray-400 hover:text-gray-600'
+            }`}
+            strokeWidth={activeSection === 'posts' ? 2.5 : 1.8}
+          />
+          {activeSection === 'posts' && (
+            <span className="absolute bottom-0 h-0.5 w-12 bg-brand-600 rounded-full transition-all duration-200" />
+          )}
         </button>
 
         <button
-          onClick={() => setActiveSection('saved')}
-          className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
-            activeSection === 'saved' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'
-          }`}
+          type="button"
+          onClick={() => setActiveSection('voices')}
+          title="Voices"
+          aria-label="Voices"
+          className="flex-1 py-3 flex flex-col items-center justify-center relative transition-colors focus:outline-none"
         >
-          <Bookmark size={14} />
-          <span>Saved ({savedPosts.length})</span>
+          <Play
+            size={20}
+            className={`transition-colors ${
+              activeSection === 'voices' ? 'text-brand-600 fill-brand-600' : 'text-gray-400 hover:text-gray-600'
+            }`}
+            strokeWidth={activeSection === 'voices' ? 2.5 : 1.8}
+          />
+          {activeSection === 'voices' && (
+            <span className="absolute bottom-0 h-0.5 w-12 bg-brand-600 rounded-full transition-all duration-200" />
+          )}
         </button>
 
         <button
-          onClick={() => setActiveSection('privacy')}
-          className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
-            activeSection === 'privacy' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'
-          }`}
+          type="button"
+          onClick={() => setActiveSection('reposts')}
+          title="Reposts"
+          aria-label="Reposts"
+          className="flex-1 py-3 flex flex-col items-center justify-center relative transition-colors focus:outline-none"
         >
-          <Shield size={14} />
-          <span>Privacy Center</span>
+          <Repeat
+            size={20}
+            className={`transition-colors ${
+              activeSection === 'reposts' ? 'text-brand-600' : 'text-gray-400 hover:text-gray-600'
+            }`}
+            strokeWidth={activeSection === 'reposts' ? 2.5 : 1.8}
+          />
+          {activeSection === 'reposts' && (
+            <span className="absolute bottom-0 h-0.5 w-12 bg-brand-600 rounded-full transition-all duration-200" />
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSection('tagged')}
+          title="Tagged"
+          aria-label="Tagged"
+          className="flex-1 py-3 flex flex-col items-center justify-center relative transition-colors focus:outline-none"
+        >
+          <UserCheck
+            size={20}
+            className={`transition-colors ${
+              activeSection === 'tagged' ? 'text-brand-600' : 'text-gray-400 hover:text-gray-600'
+            }`}
+            strokeWidth={activeSection === 'tagged' ? 2.5 : 1.8}
+          />
+          {activeSection === 'tagged' && (
+            <span className="absolute bottom-0 h-0.5 w-12 bg-brand-600 rounded-full transition-all duration-200" />
+          )}
         </button>
       </div>
 
       {/* Section Content */}
-      {activeSection === 'posts' ? (
+      {activeSection === 'posts' && (
         posts.length === 0 ? (
           <div className="card p-12 text-center text-gray-400 space-y-1">
             <p className="text-sm font-medium">You haven't posted anything yet.</p>
@@ -365,23 +412,34 @@ export default function ProfileDashboardPage(): React.JSX.Element {
             ))}
           </div>
         )
-      ) : activeSection === 'saved' ? (
-        savedPosts.length === 0 ? (
-          <div className="card p-12 text-center text-gray-400 space-y-2">
-            <div className="text-3xl">🔖</div>
-            <p className="text-sm font-semibold text-gray-700">No saved Voices yet</p>
+      )}
+
+      {activeSection === 'voices' && (() => {
+        const voicePosts = posts.filter(
+          (p) =>
+            p.content?.includes('🎙️') ||
+            p.content?.includes('audio') ||
+            (p as any).audio_url ||
+            (p as any).media_type === 'audio'
+        )
+        return voicePosts.length === 0 ? (
+          <div className="card p-12 text-center text-gray-400 space-y-2 flex flex-col items-center">
+            <div className="w-12 h-12 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 mb-2">
+              <Play size={22} className="fill-brand-600" />
+            </div>
+            <p className="text-sm font-semibold text-gray-700">No Voices recorded</p>
             <p className="text-xs text-gray-500">
-              Bookmark interesting voices by clicking the bookmark icon on any post to read them anytime.
+              Audio whispers and voice notes you record will appear here.
             </p>
           </div>
         ) : (
           <div className="space-y-4">
-            {savedPosts.map((post) => (
+            {voicePosts.map((post) => (
               <PostCard
                 key={post.id}
                 post={post}
                 currentUserId={profile.id}
-                onDelete={(id) => setSavedPosts((prev) => prev.filter((p) => p.id !== id))}
+                onDelete={(id) => setPosts((prev) => prev.filter((p) => p.id !== id))}
                 onToggleSave={(id, isSaved) => {
                   if (!isSaved) {
                     setSavedPosts((prev) => prev.filter((p) => p.id !== id))
@@ -391,55 +449,61 @@ export default function ProfileDashboardPage(): React.JSX.Element {
             ))}
           </div>
         )
-      ) : (
-        /* Privacy Center Settings */
-        <div className="card p-6 space-y-5 divide-y divide-gray-100">
-          <div className="space-y-3 pt-1">
-            <h3 className="text-sm font-bold text-gray-900">Whisper Controls</h3>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-600">Who can send you Whispers?</span>
-              <select
-                value={privacy?.whisper_visibility ?? 'anyone'}
-                onChange={(e) => handleUpdatePrivacy('whisper_visibility', e.target.value)}
-                className="input-field w-auto py-1 px-2.5 text-xs"
-              >
-                <option value="anyone">Anyone</option>
-                <option value="followers">Followers only</option>
-                <option value="nobody">Nobody</option>
-              </select>
-            </div>
-          </div>
+      })()}
 
-          <div className="space-y-3 pt-4">
-            <h3 className="text-sm font-bold text-gray-900">Direct Message Controls</h3>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-600">Who can message you?</span>
-              <select
-                value={privacy?.who_can_message ?? 'anyone'}
-                onChange={(e) => handleUpdatePrivacy('who_can_message', e.target.value)}
-                className="input-field w-auto py-1 px-2.5 text-xs"
-              >
-                <option value="anyone">Anyone</option>
-                <option value="followers">Followers only</option>
-                <option value="nobody">Nobody</option>
-              </select>
+      {activeSection === 'reposts' && (() => {
+        const repostList = posts.filter((p) => p.isRepostedByMe)
+        return repostList.length === 0 ? (
+          <div className="card p-12 text-center text-gray-400 space-y-2 flex flex-col items-center">
+            <div className="w-12 h-12 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 mb-2">
+              <Repeat size={22} />
             </div>
+            <p className="text-sm font-semibold text-gray-700">No reposts yet</p>
+            <p className="text-xs text-gray-500">
+              Voices and posts you repost will appear on your profile tab.
+            </p>
           </div>
-
-          <div className="space-y-3 pt-4">
-            <h3 className="text-sm font-bold text-gray-900">Discovery Preferences</h3>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-600">Show me in recommendations</span>
-              <input
-                type="checkbox"
-                checked={privacy?.show_in_recommendations ?? true}
-                onChange={(e) => handleUpdatePrivacy('show_in_recommendations', e.target.checked)}
-                className="rounded text-brand-600 focus:ring-brand-500 h-4 w-4"
+        ) : (
+          <div className="space-y-4">
+            {repostList.map((post) => (
+              <PostCard
+                key={post.id}
+                post={post}
+                currentUserId={profile.id}
+                onDelete={(id) => setPosts((prev) => prev.filter((p) => p.id !== id))}
               />
-            </div>
+            ))}
           </div>
-        </div>
-      )}
+        )
+      })()}
+
+      {activeSection === 'tagged' && (() => {
+        const taggedPosts = posts.filter(
+          (p) => profile?.username && p.content?.toLowerCase().includes(`@${profile.username.toLowerCase()}`)
+        )
+        return taggedPosts.length === 0 ? (
+          <div className="card p-12 text-center text-gray-400 space-y-2 flex flex-col items-center">
+            <div className="w-12 h-12 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 mb-2">
+              <UserCheck size={22} />
+            </div>
+            <p className="text-sm font-semibold text-gray-700">No tagged voices</p>
+            <p className="text-xs text-gray-500">
+              When someone tags you in a voice or whisper, it will show up here.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {taggedPosts.map((post) => (
+              <PostCard
+                key={post.id}
+                post={post}
+                currentUserId={profile.id}
+                onDelete={(id) => setPosts((prev) => prev.filter((p) => p.id !== id))}
+              />
+            ))}
+          </div>
+        )
+      })()}
 
       {/* Edit Profile Modal */}
       {showEditModal && (

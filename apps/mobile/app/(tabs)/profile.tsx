@@ -9,7 +9,7 @@ import {
   ScrollView,
   Share,
 } from 'react-native'
-import { Edit3, Lock, LogOut, Settings, Bookmark } from 'lucide-react-native'
+import { Edit3, Lock, LogOut, Settings, Bookmark, LayoutGrid, Play, Repeat, UserCheck } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { colors } from '../../constants/colors'
@@ -36,7 +36,7 @@ export default function ProfileScreen() {
     is_private: boolean
   } | null>(null)
   const [stats, setStats] = useState({ followerCount: 0, followingCount: 0, postCount: 0 })
-  const [activeTab, setActiveTab] = useState<'posts' | 'saved'>('posts')
+  const [activeTab, setActiveTab] = useState<'posts' | 'voices' | 'reposts' | 'tagged'>('posts')
   const [posts, setPosts] = useState<Post[]>([])
   const [savedPosts, setSavedPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
@@ -324,36 +324,76 @@ export default function ProfileScreen() {
         </View>
       )}
 
-      {/* Segmented Tabs: My Voices vs Saved */}
-      <View style={[styles.tabBar, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }]}>
+      {/* 4-Tab Content Navigation: Posts | Voices | Reposts | Tagged */}
+      <View style={[styles.tabBar, { borderBottomColor: themeColors.surfaceBorder }]}>
         <TouchableOpacity
           style={[styles.tabButton, activeTab === 'posts' && styles.tabButtonActive]}
           onPress={() => setActiveTab('posts')}
           activeOpacity={0.7}
+          accessibilityLabel="Posts"
+          accessibilityRole="tab"
+          accessibilityState={{ selected: activeTab === 'posts' }}
         >
-          <Text style={[styles.tabText, activeTab === 'posts' && styles.tabTextActive]}>
-            My Voices ({posts.length})
-          </Text>
+          <LayoutGrid
+            size={22}
+            color={activeTab === 'posts' ? colors.brand : themeColors.textMuted}
+            strokeWidth={activeTab === 'posts' ? 2.4 : 1.8}
+          />
+          {activeTab === 'posts' && <View style={styles.activeIndicator} />}
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'saved' && styles.tabButtonActive]}
-          onPress={() => setActiveTab('saved')}
+          style={[styles.tabButton, activeTab === 'voices' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('voices')}
           activeOpacity={0.7}
+          accessibilityLabel="Voices"
+          accessibilityRole="tab"
+          accessibilityState={{ selected: activeTab === 'voices' }}
         >
-          <Bookmark
-            size={14}
-            color={activeTab === 'saved' ? colors.brand : colors.gray500}
-            fill={activeTab === 'saved' ? colors.brand : 'none'}
+          <Play
+            size={22}
+            color={activeTab === 'voices' ? colors.brand : themeColors.textMuted}
+            strokeWidth={activeTab === 'voices' ? 2.4 : 1.8}
+            fill={activeTab === 'voices' ? colors.brand : 'none'}
           />
-          <Text style={[styles.tabText, activeTab === 'saved' && styles.tabTextActive]}>
-            Saved ({savedPosts.length})
-          </Text>
+          {activeTab === 'voices' && <View style={styles.activeIndicator} />}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'reposts' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('reposts')}
+          activeOpacity={0.7}
+          accessibilityLabel="Reposts"
+          accessibilityRole="tab"
+          accessibilityState={{ selected: activeTab === 'reposts' }}
+        >
+          <Repeat
+            size={22}
+            color={activeTab === 'reposts' ? colors.brand : themeColors.textMuted}
+            strokeWidth={activeTab === 'reposts' ? 2.4 : 1.8}
+          />
+          {activeTab === 'reposts' && <View style={styles.activeIndicator} />}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'tagged' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('tagged')}
+          activeOpacity={0.7}
+          accessibilityLabel="Tagged"
+          accessibilityRole="tab"
+          accessibilityState={{ selected: activeTab === 'tagged' }}
+        >
+          <UserCheck
+            size={22}
+            color={activeTab === 'tagged' ? colors.brand : themeColors.textMuted}
+            strokeWidth={activeTab === 'tagged' ? 2.4 : 1.8}
+          />
+          {activeTab === 'tagged' && <View style={styles.activeIndicator} />}
         </TouchableOpacity>
       </View>
 
       {/* Tab Content */}
-      {activeTab === 'posts' ? (
+      {activeTab === 'posts' && (
         posts.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>No Voices Yet</Text>
@@ -381,23 +421,32 @@ export default function ProfileScreen() {
             ))}
           </View>
         )
-      ) : (
-        savedPosts.length === 0 ? (
+      )}
+
+      {activeTab === 'voices' && (() => {
+        const voicePosts = posts.filter(
+          (p) =>
+            p.content?.includes('🎙️') ||
+            p.content?.includes('audio') ||
+            (p as any).audio_url ||
+            (p as any).media_type === 'audio'
+        )
+        return voicePosts.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={{ fontSize: 32, marginBottom: 8 }}>🔖</Text>
-            <Text style={styles.emptyTitle}>No Saved Voices</Text>
-            <Text style={styles.emptyText}>
-              Bookmark voices you want to revisit later by tapping the bookmark icon on any post.
-            </Text>
+            <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.brandLight, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+              <Play size={24} color={colors.brand} fill={colors.brand} />
+            </View>
+            <Text style={styles.emptyTitle}>No Voices Recorded</Text>
+            <Text style={styles.emptyText}>Audio whispers and voice notes you record will appear here.</Text>
           </View>
         ) : (
           <View style={styles.postsList}>
-            {savedPosts.map((item) => (
+            {voicePosts.map((item) => (
               <MobilePostCard
                 key={item.id}
                 post={item}
                 currentUserId={user?.id}
-                onDelete={(id) => setSavedPosts((prev) => prev.filter((p) => p.id !== id))}
+                onDelete={(id) => setPosts((prev) => prev.filter((p) => p.id !== id))}
                 onPressAuthor={(authorId) => setSelectedProfileTarget({ userId: authorId })}
                 onPressMention={(username) => setSelectedProfileTarget({ username })}
                 onToggleSave={(id, isSaved) => {
@@ -409,7 +458,61 @@ export default function ProfileScreen() {
             ))}
           </View>
         )
-      )}
+      })()}
+
+      {activeTab === 'reposts' && (() => {
+        const repostList = posts.filter((p) => p.isRepostedByMe)
+        return repostList.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.brandLight, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+              <Repeat size={24} color={colors.brand} />
+            </View>
+            <Text style={styles.emptyTitle}>No Reposts Yet</Text>
+            <Text style={styles.emptyText}>Voices and posts you repost will appear on your profile tab.</Text>
+          </View>
+        ) : (
+          <View style={styles.postsList}>
+            {repostList.map((item) => (
+              <MobilePostCard
+                key={item.id}
+                post={item}
+                currentUserId={user?.id}
+                onDelete={(id) => setPosts((prev) => prev.filter((p) => p.id !== id))}
+                onPressAuthor={(authorId) => setSelectedProfileTarget({ userId: authorId })}
+                onPressMention={(username) => setSelectedProfileTarget({ username })}
+              />
+            ))}
+          </View>
+        )
+      })()}
+
+      {activeTab === 'tagged' && (() => {
+        const taggedPosts = posts.filter(
+          (p) => profile?.username && p.content?.toLowerCase().includes(`@${profile.username.toLowerCase()}`)
+        )
+        return taggedPosts.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.brandLight, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+              <UserCheck size={24} color={colors.brand} />
+            </View>
+            <Text style={styles.emptyTitle}>No Tagged Voices</Text>
+            <Text style={styles.emptyText}>When someone tags you in a voice or whisper, it will show up here.</Text>
+          </View>
+        ) : (
+          <View style={styles.postsList}>
+            {taggedPosts.map((item) => (
+              <MobilePostCard
+                key={item.id}
+                post={item}
+                currentUserId={user?.id}
+                onDelete={(id) => setPosts((prev) => prev.filter((p) => p.id !== id))}
+                onPressAuthor={(authorId) => setSelectedProfileTarget({ userId: authorId })}
+                onPressMention={(username) => setSelectedProfileTarget({ username })}
+              />
+            ))}
+          </View>
+        )
+      })()}
 
       {/* Edit Profile Modal */}
       {profile && (
@@ -564,34 +667,27 @@ const styles = StyleSheet.create({
   tabBar: {
     width: '100%',
     flexDirection: 'row',
-    backgroundColor: '#ffffff',
-    borderRadius: 14,
-    padding: 4,
     marginTop: 20,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.gray200,
+    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray200,
   },
   tabButton: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 10,
+    paddingVertical: 12,
+    position: 'relative',
   },
-  tabButtonActive: {
-    backgroundColor: colors.brandLight,
-  },
-  tabText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.gray500,
-  },
-  tabTextActive: {
-    color: colors.brand,
-    fontWeight: '700',
+  tabButtonActive: {},
+  activeIndicator: {
+    position: 'absolute',
+    bottom: -1,
+    left: '20%',
+    right: '20%',
+    height: 2.5,
+    backgroundColor: colors.brand,
+    borderRadius: 2,
   },
   postsSectionHeader: { width: '100%', marginTop: 24, marginBottom: 12 },
   postsSectionTitle: { fontSize: 16, fontWeight: '700', color: colors.gray900 },
