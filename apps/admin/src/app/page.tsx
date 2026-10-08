@@ -29,6 +29,8 @@ import {
   LogOut,
   KeyRound,
   ShieldAlert,
+  ArrowUpRight,
+  Check,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
@@ -353,66 +355,79 @@ export default function AdminDashboardPage(): React.JSX.Element {
   // If user is not authenticated as an admin, render the secure Admin Login gate
   if (!currentAdminUser && authChecked) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-8 space-y-6 shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-600 to-indigo-600" />
-          
-          <div className="text-center space-y-2">
-            <div className="w-14 h-14 bg-purple-600/20 text-purple-400 border border-purple-500/30 rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-purple-600/20">
-              <Shield size={28} />
+      <div className="min-h-screen bg-[#030712] flex items-center justify-center p-4 selection:bg-purple-500 selection:text-white">
+        <div className="w-full max-w-md">
+          {/* Top Brand Pill */}
+          <div className="flex items-center justify-center mb-6">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/80 border border-slate-800 text-slate-400 text-xs shadow-sm">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="font-medium">Private Voices Console &bull; v1.0 Production</span>
             </div>
-            <h1 className="text-xl font-black text-white tracking-tight">Private Voices Admin</h1>
-            <p className="text-xs text-slate-400">
-              Sign in with your verified administrator account to access platform moderation.
-            </p>
           </div>
 
-          {authError && (
-            <div className="bg-red-950/60 border border-red-800/80 p-3.5 rounded-xl text-xs text-red-300 font-medium flex items-center space-x-2">
-              <ShieldAlert size={16} className="text-red-400 shrink-0" />
-              <span>{authError}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleAdminLogin} className="space-y-4">
-            <div className="space-y-1">
-              <label className="block text-xs font-semibold text-slate-300">Admin Email</label>
-              <input
-                type="email"
-                required
-                value={loginEmail}
-                onChange={(e) => setLoginEmail(e.target.value)}
-                placeholder="admin@privatevoices.com"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-purple-500"
-              />
+          <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-8 space-y-6 shadow-2xl relative">
+            <div className="text-center space-y-2">
+              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 text-white rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-purple-500/25">
+                <Shield size={24} />
+              </div>
+              <h1 className="text-xl font-bold text-white tracking-tight">Executive Authentication</h1>
+              <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
+                Enter your administrative credentials to access moderation controls, telemetry, and identity registries.
+              </p>
             </div>
 
-            <div className="space-y-1">
-              <label className="block text-xs font-semibold text-slate-300">Password</label>
-              <input
-                type="password"
-                required
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                placeholder="••••••••••••"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-purple-500"
-              />
+            {authError && (
+              <div className="bg-red-950/40 border border-red-800/60 p-3.5 rounded-2xl text-xs text-red-300 font-medium flex items-center gap-2.5">
+                <ShieldAlert size={16} className="text-red-400 shrink-0" />
+                <span>{authError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleAdminLogin} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-300">Administrator Email</label>
+                <div className="relative">
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" size={15} />
+                  <input
+                    type="email"
+                    required
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    placeholder="admin@privatevoices.com"
+                    className="w-full bg-slate-950/80 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-300">Password</label>
+                <div className="relative">
+                  <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" size={15} />
+                  <input
+                    type="password"
+                    required
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    className="w-full bg-slate-950/80 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40 transition-all font-mono"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loggingIn || !loginEmail || !loginPassword}
+                className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 text-white font-semibold text-xs rounded-xl shadow-lg shadow-purple-600/25 transition-all flex items-center justify-center gap-2 mt-2"
+              >
+                <LogIn size={15} />
+                <span>{loggingIn ? 'Verifying Identity…' : 'Sign In to Console'}</span>
+              </button>
+            </form>
+
+            <div className="border-t border-slate-800/80 pt-4 flex items-center justify-between text-[11px] text-slate-500">
+              <span>RBAC Policy: Enforced</span>
+              <span>Encrypted Session</span>
             </div>
-
-            <button
-              type="submit"
-              disabled={loggingIn || !loginEmail || !loginPassword}
-              className="w-full py-2.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-lg shadow-purple-600/30 transition-all flex items-center justify-center space-x-2"
-            >
-              <LogIn size={15} />
-              <span>{loggingIn ? 'Authenticating…' : 'Authenticate Administrator'}</span>
-            </button>
-          </form>
-
-          <div className="text-center pt-2">
-            <span className="text-[11px] text-slate-500 font-mono">
-              Role-Based Access Control Active &bull; SSL Encrypted
-            </span>
           </div>
         </div>
       </div>
@@ -420,18 +435,21 @@ export default function AdminDashboardPage(): React.JSX.Element {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col md:flex-row">
+    <div className="min-h-screen bg-[#030712] text-slate-100 flex flex-col md:flex-row selection:bg-purple-600 selection:text-white">
       {/* Sidebar */}
-      <aside className="w-full md:w-64 bg-slate-900 border-r border-slate-800 p-6 flex flex-col justify-between">
+      <aside className="w-full md:w-64 bg-slate-950/70 backdrop-blur-xl border-r border-slate-800/80 p-5 flex flex-col justify-between">
         <div className="space-y-6">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-600 flex items-center justify-center text-white shadow-lg shadow-purple-500/30">
-              <Shield size={20} />
+          <div className="flex items-center space-x-3 px-1">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-purple-600/25">
+              <Shield size={18} />
             </div>
             <div>
-              <h1 className="font-extrabold text-sm tracking-tight text-white">Private Voices</h1>
-              <span className="text-[11px] font-semibold text-purple-400 uppercase tracking-widest">
-                Admin Console
+              <h1 className="font-bold text-sm tracking-tight text-white flex items-center gap-1.5">
+                <span>Private Voices</span>
+                <span className="text-[10px] bg-purple-950/80 text-purple-400 font-mono px-1.5 py-0.5 rounded border border-purple-800/40">HQ</span>
+              </h1>
+              <span className="text-[11px] font-medium text-slate-400">
+                Operations & Moderation
               </span>
             </div>
           </div>
@@ -441,108 +459,196 @@ export default function AdminDashboardPage(): React.JSX.Element {
               <button
                 key={id}
                 onClick={() => setActiveSection(id)}
-                className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
                   activeSection === id
-                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
-                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                    ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                    : 'text-slate-400 hover:bg-slate-900/80 hover:text-white'
                 }`}
               >
-                <Icon size={16} />
-                <span>{label}</span>
+                <div className="flex items-center space-x-3">
+                  <Icon size={16} />
+                  <span>{label}</span>
+                </div>
+                {id === 'reports' && stats.reports > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                    {stats.reports}
+                  </span>
+                )}
               </button>
             ))}
           </nav>
         </div>
 
-        <div className="pt-6 border-t border-slate-800 space-y-3">
+        <div className="pt-5 border-t border-slate-800/80 space-y-3">
           {currentAdminUser && (
-            <div className="px-2 py-1 flex items-center justify-between text-xs">
-              <div className="truncate">
-                <span className="font-bold text-white block truncate">
+            <div className="px-3 py-2 bg-slate-900/60 rounded-xl border border-slate-800/60 flex items-center justify-between text-xs">
+              <div className="truncate pr-2">
+                <span className="font-semibold text-white block truncate">
                   {currentAdminUser.display_name || currentAdminUser.username}
                 </span>
-                <span className="text-[10px] text-purple-400 font-mono">Admin Verified</span>
+                <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  Verified SuperAdmin
+                </span>
               </div>
               <button
                 onClick={handleAdminLogout}
                 className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-lg transition-colors"
                 title="Log out"
               >
-                <LogOut size={15} />
+                <LogOut size={14} />
               </button>
             </div>
           )}
 
           <button
             onClick={() => loadAdminData()}
-            className="w-full flex items-center justify-center space-x-2 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 rounded-xl transition-all"
+            className="w-full flex items-center justify-center space-x-2 py-2 bg-slate-900 hover:bg-slate-850 hover:text-white text-xs font-semibold text-slate-300 rounded-xl border border-slate-800 transition-all"
           >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            <span>Refresh Data</span>
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+            <span>Sync Live Data</span>
           </button>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-6 md:p-10 space-y-8 overflow-y-auto">
-        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-6">
+      <main className="flex-1 p-6 md:p-8 space-y-6 overflow-y-auto">
+        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
           <div>
-            <h2 className="text-2xl font-black text-white">
+            <h2 className="text-xl font-bold text-white tracking-tight">
               {SECTIONS.find((s) => s.id === activeSection)?.label}
             </h2>
-            <p className="text-xs text-slate-400 mt-1">
-              Separate administrative & moderation portal for Private Voices
+            <p className="text-xs text-slate-400 mt-0.5">
+              Secure enterprise operations console &bull; Real-time PostgreSQL sync
             </p>
           </div>
 
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
             <input
               type="text"
-              placeholder="Search records..."
+              placeholder="Filter current view..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 w-64"
+              className="bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/30 w-64 transition-all"
             />
           </div>
         </header>
 
         {/* Dashboard Overview Cards */}
         {activeSection === 'dashboard' && (
-          <div className="space-y-8">
+          <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-2">
-                <span className="text-xs text-slate-400 font-semibold uppercase">Total Users</span>
-                <p className="text-3xl font-black text-white">{stats.users}</p>
+              <div className="bg-slate-900/60 border border-slate-800/80 p-5 rounded-2xl space-y-3 relative overflow-hidden">
+                <div className="flex items-center justify-between text-slate-400">
+                  <span className="text-xs font-semibold uppercase tracking-wider">Registered Users</span>
+                  <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center">
+                    <Users size={15} />
+                  </div>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-white tracking-tight">{stats.users.toLocaleString()}</p>
+                  <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1 font-medium">
+                    <span className="text-emerald-400">Active</span> &bull; Global Profiles
+                  </p>
+                </div>
               </div>
-              <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-2">
-                <span className="text-xs text-slate-400 font-semibold uppercase">Total Posts</span>
-                <p className="text-3xl font-black text-white">{stats.posts}</p>
+
+              <div className="bg-slate-900/60 border border-slate-800/80 p-5 rounded-2xl space-y-3 relative overflow-hidden">
+                <div className="flex items-center justify-between text-slate-400">
+                  <span className="text-xs font-semibold uppercase tracking-wider">Public Voices</span>
+                  <div className="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center">
+                    <FileText size={15} />
+                  </div>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-white tracking-tight">{stats.posts.toLocaleString()}</p>
+                  <p className="text-[11px] text-slate-500 mt-1 font-medium">
+                    Published network feed
+                  </p>
+                </div>
               </div>
-              <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-2">
-                <span className="text-xs text-slate-400 font-semibold uppercase">Anonymous Whispers</span>
-                <p className="text-3xl font-black text-purple-400">{stats.whispers}</p>
+
+              <div className="bg-slate-900/60 border border-slate-800/80 p-5 rounded-2xl space-y-3 relative overflow-hidden">
+                <div className="flex items-center justify-between text-slate-400">
+                  <span className="text-xs font-semibold uppercase tracking-wider">Anon Whispers</span>
+                  <div className="w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+                    <Radio size={15} />
+                  </div>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-indigo-400 tracking-tight">{stats.whispers.toLocaleString()}</p>
+                  <p className="text-[11px] text-slate-500 mt-1 font-medium">
+                    Zero-knowledge anonymity
+                  </p>
+                </div>
               </div>
-              <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-2">
-                <span className="text-xs text-slate-400 font-semibold uppercase">Pending Reports</span>
-                <p className="text-3xl font-black text-amber-400">{stats.reports}</p>
+
+              <div className="bg-slate-900/60 border border-slate-800/80 p-5 rounded-2xl space-y-3 relative overflow-hidden">
+                <div className="flex items-center justify-between text-slate-400">
+                  <span className="text-xs font-semibold uppercase tracking-wider">Moderation Queue</span>
+                  <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
+                    <AlertTriangle size={15} />
+                  </div>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-amber-400 tracking-tight">{stats.reports.toLocaleString()}</p>
+                  <p className="text-[11px] text-slate-500 mt-1 font-medium">
+                    {stats.bugReports} bug reports pending
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
-              <h3 className="text-sm font-bold text-white">System Security & Health Status</h3>
+            <div className="bg-slate-900/50 border border-slate-800/80 rounded-2xl p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Shield size={16} className="text-purple-400" />
+                  <span>Platform Security & Identity Guard Status</span>
+                </h3>
+                <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold font-mono">
+                  100% Operational
+                </span>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-1">
-                  <span className="text-emerald-400 font-bold">● RLS Policies Active</span>
-                  <p className="text-slate-400">PostgreSQL row-level safety rules enforced across all user tables.</p>
+                <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-800/80 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-emerald-400 font-bold flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      PostgreSQL RLS Safety
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">Active</span>
+                  </div>
+                  <p className="text-slate-400 leading-relaxed text-[11px]">
+                    Row-level isolation enforced across profiles, posts, whispers, and messages.
+                  </p>
                 </div>
-                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-1">
-                  <span className="text-emerald-400 font-bold">● IP & Session Rate Limiting</span>
-                  <p className="text-slate-400">SHA-256 anonymous metadata hashing active for abuse mitigation.</p>
+
+                <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-800/80 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-purple-400 font-bold flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                      Permanent Email Registry
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">Synced</span>
+                  </div>
+                  <p className="text-slate-400 leading-relaxed text-[11px]">
+                    {stats.identities} reserved email identities protected from account squatting & re-registration.
+                  </p>
                 </div>
-                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-1">
-                  <span className="text-purple-400 font-bold">● Isolated Admin Console</span>
-                  <p className="text-slate-400">Separated app workspace (`apps/admin`) with restricted endpoints.</p>
+
+                <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-800/80 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-indigo-400 font-bold flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                      60-Day Username Cooldown
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">Enforced</span>
+                  </div>
+                  <p className="text-slate-400 leading-relaxed text-[11px]">
+                    Atomic handle reservation and anti-impersonation history active across web & mobile.
+                  </p>
                 </div>
               </div>
             </div>
@@ -665,39 +771,60 @@ export default function AdminDashboardPage(): React.JSX.Element {
 
         {/* Users Management */}
         {activeSection === 'users' && (
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+          <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl overflow-hidden shadow-xl">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-950 text-slate-400 font-bold uppercase border-b border-slate-800">
+              <thead className="bg-slate-950/80 text-slate-400 font-semibold uppercase tracking-wider text-[11px] border-b border-slate-800/80">
                 <tr>
-                  <th className="p-4">User</th>
-                  <th className="p-4">Username</th>
+                  <th className="p-4">Account</th>
+                  <th className="p-4">Handle</th>
+                  <th className="p-4">Role & Status</th>
                   <th className="p-4">Privacy</th>
-                  <th className="p-4">Status</th>
-                  <th className="p-4">Joined</th>
-                  <th className="p-4 text-right">Actions</th>
+                  <th className="p-4">Registered</th>
+                  <th className="p-4 text-right">Moderation</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
                 {users.map((u) => (
-                  <tr key={u.id} className="hover:bg-slate-800/50 transition-colors">
-                    <td className="p-4 font-bold text-white">{u.display_name}</td>
-                    <td className="p-4 text-purple-400 font-mono">@{u.username}</td>
+                  <tr key={u.id} className="hover:bg-slate-850/40 transition-colors">
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-700 to-indigo-700 text-white font-bold flex items-center justify-center text-xs flex-shrink-0">
+                          {u.display_name?.charAt(0).toUpperCase() || u.username?.charAt(0).toUpperCase() || 'U'}
+                        </div>
+                        <div>
+                          <span className="font-semibold text-white block">{u.display_name}</span>
+                          <span className="text-[10px] text-slate-500 font-mono">{u.id.substring(0, 8)}...</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-4 text-purple-400 font-mono font-medium">@{u.username}</td>
+                    <td className="p-4">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {u.is_admin && (
+                          <span className="px-2 py-0.5 bg-purple-500/10 border border-purple-500/20 text-purple-300 rounded-md font-semibold text-[10px]">
+                            Admin
+                          </span>
+                        )}
+                        {u.is_banned ? (
+                          <span className="px-2 py-0.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-md font-semibold text-[10px]">
+                            Banned
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-md font-semibold text-[10px]">
+                            Active
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="p-4">
                       {u.is_private ? (
-                        <span className="px-2 py-0.5 bg-purple-500/20 text-purple-300 rounded-md font-semibold">Private</span>
+                        <span className="px-2 py-0.5 bg-slate-800 text-slate-300 rounded-md text-[10px] font-medium">Private</span>
                       ) : (
-                        <span className="px-2 py-0.5 bg-slate-800 text-slate-300 rounded-md">Public</span>
+                        <span className="text-slate-500 text-[11px]">Public</span>
                       )}
                     </td>
-                    <td className="p-4">
-                      {u.is_banned ? (
-                        <span className="px-2 py-0.5 bg-red-500/20 text-red-400 rounded-md font-semibold">Banned</span>
-                      ) : (
-                        <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded-md font-semibold">Active</span>
-                      )}
-                    </td>
-                    <td className="p-4 text-slate-400">
-                      {new Date(u.created_at).toLocaleDateString()}
+                    <td className="p-4 text-slate-400 font-mono text-[11px]">
+                      {new Date(u.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
                     </td>
                     <td className="p-4 text-right">
                       <button
@@ -705,15 +832,16 @@ export default function AdminDashboardPage(): React.JSX.Element {
                           const newStatus = !u.is_banned
                           if (!confirm(`Are you sure you want to ${newStatus ? 'BAN' : 'UNBAN'} @${u.username}?`)) return
                           await supabase.from('profiles').update({ is_banned: newStatus }).eq('id', u.id)
+                          await supabase.from('email_registry').update({ status: newStatus ? 'banned' : 'active' }).eq('original_user_id', u.id)
                           setUsers((prev) => prev.map((item) => item.id === u.id ? { ...item, is_banned: newStatus } : item))
                         }}
-                        className={`px-3 py-1 text-[11px] font-bold rounded-lg transition-colors ${
+                        className={`px-3 py-1 text-[11px] font-semibold rounded-xl transition-all ${
                           u.is_banned
-                            ? 'bg-slate-800 hover:bg-slate-700 text-slate-200'
-                            : 'bg-red-900/40 hover:bg-red-900/60 text-red-300 border border-red-800/50'
+                            ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                            : 'bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-800/40'
                         }`}
                       >
-                        {u.is_banned ? 'Unban User' : 'Ban User'}
+                        {u.is_banned ? 'Unban Account' : 'Ban Account'}
                       </button>
                     </td>
                   </tr>
