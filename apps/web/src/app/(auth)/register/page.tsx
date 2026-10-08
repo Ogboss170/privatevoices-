@@ -46,15 +46,33 @@ export default function RegisterPage() {
     setLoading(true)
 
     const acceptedAt = new Date().toISOString()
+    const normEmail = form.email.trim().toLowerCase()
+    const normUsername = form.username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '')
+
+    // 0. Pre-check email & username availability via atomic RPC
+    try {
+      const { data: availData, error: availError } = await supabase.rpc('check_registration_availability', {
+        p_email: normEmail,
+        p_username: normUsername,
+      })
+
+      if (!availError && availData && !availData.available) {
+        setError(availData.message || 'This email or username is already taken.')
+        setLoading(false)
+        return
+      }
+    } catch {
+      // Continue if RPC unavailable
+    }
 
     // 1. Create the Supabase Auth user with terms consent metadata
     const { data, error: signUpError } = await supabase.auth.signUp({
-      email: form.email,
+      email: normEmail,
       password: form.password,
       options: {
         data: {
-          username: form.username,
-          display_name: form.displayName,
+          username: normUsername,
+          display_name: form.displayName.trim(),
           accepted_terms: true,
           accepted_terms_at: acceptedAt,
         },
@@ -62,7 +80,11 @@ export default function RegisterPage() {
     })
 
     if (signUpError) {
-      setError(signUpError.message)
+      if (signUpError.message?.toLowerCase().includes('already registered')) {
+        setError('This email address is already registered and cannot be used again.')
+      } else {
+        setError(signUpError.message)
+      }
       setLoading(false)
       return
     }
@@ -73,7 +95,7 @@ export default function RegisterPage() {
       return
     }
 
-    // 2. Create the profile with terms consent recorded
+    // 2. Create the profile with permanent email registry and username history recorded
     let profileCreated = false
 
     if (process.env.NEXT_PUBLIC_API_URL) {
@@ -83,8 +105,9 @@ export default function RegisterPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             userId: data.user.id,
-            username: form.username,
-            displayName: form.displayName,
+            username: normUsername,
+            displayName: form.displayName.trim(),
+            email: normEmail,
             acceptedTerms: true,
             acceptedTermsAt: acceptedAt,
           }),
@@ -92,34 +115,37 @@ export default function RegisterPage() {
 
         if (apiRes.ok) {
           profileCreated = true
+        } else {
+          const errBody = await apiRes.json().catch(() => null)
+          if (errBody?.message) {
+            setError(errBody.message)
+            setLoading(false)
+            return
+          }
         }
       } catch {
-        // Ignore network errors calling API, fallback below
+        // Fallback to direct RPC below
       }
     }
 
     if (!profileCreated) {
-      // Fallback: create profile directly via Supabase RPC / table insert
+      // Fallback: create profile directly via atomic create_profile stored procedure
       const { error: rpcError } = await supabase.rpc('create_profile', {
         p_user_id: data.user.id,
-        p_username: form.username,
-        p_display_name: form.displayName,
+        p_username: normUsername,
+        p_display_name: form.displayName.trim(),
         p_accepted_terms: true,
         p_accepted_terms_at: acceptedAt,
+        p_email: normEmail,
       })
 
       if (rpcError) {
-        const { error: insertError } = await supabase.from('profiles').upsert({
-          id: data.user.id,
-          username: form.username,
-          display_name: form.displayName,
-          accepted_terms: true,
-          accepted_terms_at: acceptedAt,
-        })
-
-        if (insertError) {
-          console.warn('Profile creation error:', rpcError || insertError)
+        if (rpcError.message?.includes('already registered') || rpcError.message?.includes('already taken')) {
+          setError(rpcError.message)
+          setLoading(false)
+          return
         }
+        console.warn('Profile creation error:', rpcError)
       }
     }
 

@@ -7,6 +7,16 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   /**
+   * POST /api/auth/check-availability
+   * Validates if email and username can be registered
+   */
+  @Post('check-availability')
+  @HttpCode(HttpStatus.OK)
+  checkAvailability(@Body() body: { email: string; username: string }) {
+    return this.authService.checkRegistrationAvailability(body.email, body.username);
+  }
+
+  /**
    * POST /api/auth/complete-profile
    *
    * Called by the web/mobile client immediately after Supabase Auth sign-up

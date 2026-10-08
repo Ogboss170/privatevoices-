@@ -16,4 +16,10 @@ export class CompleteProfileDto {
   @MinLength(1)
   @MaxLength(50)
   displayName: string;
+
+  @IsString()
+  email?: string;
+
+  acceptedTerms?: boolean;
+  acceptedTermsAt?: string;
 }

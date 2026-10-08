@@ -114,6 +114,12 @@ export default function SettingsPage(): React.JSX.Element {
   const [updatingUsername, setUpdatingUsername] = useState(false)
   const [changeUsernameError, setChangeUsernameError] = useState<string | null>(null)
   const [changeUsernameSuccess, setChangeUsernameSuccess] = useState(false)
+  const [usernameCooldown, setUsernameCooldown] = useState<{
+    can_change: boolean
+    days_remaining: number
+    eligible_at: string | null
+    username_changed_at: string | null
+  } | null>(null)
 
   // Change Email Modal state
   const [showChangeEmailModal, setShowChangeEmailModal] = useState(false)
@@ -247,6 +253,18 @@ export default function SettingsPage(): React.JSX.Element {
       show_in_recommendations: true,
       allow_profile_indexing: true,
     })
+
+    try {
+      const { data: cdData } = await supabase.rpc('get_username_cooldown_status', {
+        p_user_id: userRes.user.id,
+      })
+      if (cdData) {
+        setUsernameCooldown(cdData)
+      }
+    } catch {
+      // ignore
+    }
+
     setLoading(false)
     fetchSavedPosts(userRes.user.id)
   }, [supabase, router, fetchSavedPosts])
@@ -1523,6 +1541,31 @@ export default function SettingsPage(): React.JSX.Element {
               <h3 className="font-bold text-gray-900 text-base">Change Username</h3>
             </div>
 
+            <p className="text-xs text-gray-500">
+              Usernames must be unique and can contain letters, numbers, and underscores (min 3 chars). You can change your username only once every 60 days.
+            </p>
+
+            {usernameCooldown && !usernameCooldown.can_change && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3 text-xs space-y-1">
+                <div className="font-semibold flex items-center space-x-1">
+                  <span>⏳ Cooldown Active</span>
+                </div>
+                <p>
+                  You can change your username again on{' '}
+                  <span className="font-bold">
+                    {usernameCooldown.eligible_at
+                      ? new Date(usernameCooldown.eligible_at).toLocaleDateString(undefined, {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                        })
+                      : 'in 60 days'}
+                  </span>{' '}
+                  ({usernameCooldown.days_remaining} {usernameCooldown.days_remaining === 1 ? 'day' : 'days'} remaining).
+                </p>
+              </div>
+            )}
+
             {changeUsernameSuccess ? (
               <div className="text-center py-4 space-y-3">
                 <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
@@ -1554,31 +1597,45 @@ export default function SettingsPage(): React.JSX.Element {
                   }
 
                   setUpdatingUsername(true)
-                  const { data: existing } = await supabase
-                    .from('profiles')
-                    .select('id')
-                    .eq('username', trimmed)
-                    .neq('id', userId || '')
-                    .maybeSingle()
-
-                  if (existing) {
-                    setUpdatingUsername(false)
-                    setChangeUsernameError('This username is already taken. Please choose another.')
-                    return
-                  }
-
-                  const { error } = await supabase
-                    .from('profiles')
-                    .update({ username: trimmed })
-                    .eq('id', userId || '')
+                  const { data: result, error } = await supabase.rpc('change_username', {
+                    p_user_id: userId,
+                    p_new_username: trimmed,
+                  })
 
                   setUpdatingUsername(false)
                   if (error) {
                     setChangeUsernameError(error.message)
-                  } else {
-                    setProfile((prev: any) => ({ ...prev, username: trimmed }))
-                    setChangeUsernameSuccess(true)
+                    return
                   }
+
+                  if (!result?.success) {
+                    if (result?.code === 'COOLDOWN_ACTIVE') {
+                      const eligibleDate = result.eligible_at
+                        ? new Date(result.eligible_at).toLocaleDateString(undefined, {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                          })
+                        : 'in 60 days'
+                      setChangeUsernameError(
+                        `You can only change your username once every 60 days. You will be eligible again on ${eligibleDate} (${result.days_remaining} days remaining).`
+                      )
+                    } else if (result?.code === 'USERNAME_TAKEN' || result?.code === 'USERNAME_RESERVED') {
+                      setChangeUsernameError('This username is unavailable or reserved. Please choose another.')
+                    } else {
+                      setChangeUsernameError(result?.message || 'Failed to update username.')
+                    }
+                    return
+                  }
+
+                  setProfile((prev: any) => ({ ...prev, username: trimmed }))
+                  setUsernameCooldown({
+                    can_change: false,
+                    days_remaining: 60,
+                    eligible_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
+                    username_changed_at: new Date().toISOString(),
+                  })
+                  setChangeUsernameSuccess(true)
                 }}
                 className="space-y-4"
               >
@@ -1594,7 +1651,8 @@ export default function SettingsPage(): React.JSX.Element {
                       value={newUsername}
                       onChange={(e) => setNewUsername(e.target.value.toLowerCase())}
                       placeholder="username"
-                      className="input-field text-xs pl-7"
+                      disabled={Boolean(usernameCooldown && !usernameCooldown.can_change)}
+                      className="input-field text-xs pl-7 disabled:opacity-60 disabled:cursor-not-allowed"
                       autoFocus
                       autoCapitalize="none"
                     />
@@ -1618,7 +1676,7 @@ export default function SettingsPage(): React.JSX.Element {
                   </button>
                   <button
                     type="submit"
-                    disabled={updatingUsername || !newUsername.trim()}
+                    disabled={Boolean(updatingUsername || !newUsername.trim() || (usernameCooldown && !usernameCooldown.can_change))}
                     className="btn-primary text-xs py-2 px-4 rounded-xl disabled:opacity-50"
                   >
                     {updatingUsername ? 'Saving…' : 'Save Username'}

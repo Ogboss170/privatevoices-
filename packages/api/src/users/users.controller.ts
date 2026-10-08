@@ -41,6 +41,30 @@ export class UsersController {
   }
 
   /**
+   * GET /api/users/me/username-cooldown
+   * Check 60-day username cooldown status and eligibility date.
+   */
+  @Get('me/username-cooldown')
+  @UseGuards(SupabaseAuthGuard)
+  getUsernameCooldown(@CurrentUser() user: User) {
+    return this.usersService.getUsernameCooldown(user);
+  }
+
+  /**
+   * POST /api/users/me/change-username
+   * Atomically change username with 60-day cooldown enforcement.
+   */
+  @Post('me/change-username')
+  @UseGuards(SupabaseAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  changeUsername(
+    @CurrentUser() user: User,
+    @Body() body: { username: string },
+  ) {
+    return this.usersService.changeUsername(user, body.username);
+  }
+
+  /**
    * GET /api/users/:username
    * Fetch a public profile by username. No auth required.
    */

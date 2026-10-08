@@ -110,6 +110,11 @@ export default function SettingsScreen() {
   const [showChangeUsernameModal, setShowChangeUsernameModal] = useState(false)
   const [newUsername, setNewUsername] = useState('')
   const [updatingUsername, setUpdatingUsername] = useState(false)
+  const [usernameCooldown, setUsernameCooldown] = useState<{
+    can_change: boolean
+    eligible_at?: string
+    days_remaining?: number
+  } | null>(null)
 
   const [showChangeEmailModal, setShowChangeEmailModal] = useState(false)
   const [newEmail, setNewEmail] = useState('')
@@ -379,6 +384,19 @@ export default function SettingsScreen() {
     }
   }
 
+  async function fetchUsernameCooldown(uId: string) {
+    try {
+      const { data } = await supabase.rpc('get_username_cooldown_status', {
+        p_user_id: uId,
+      })
+      if (data) {
+        setUsernameCooldown(data)
+      }
+    } catch {
+      // fallback
+    }
+  }
+
   async function handleChangeUsername() {
     const trimmed = newUsername.trim().toLowerCase().replace(/[^a-z0-9_]/g, '')
     if (trimmed.length < 3) {
@@ -392,34 +410,42 @@ export default function SettingsScreen() {
     }
 
     setUpdatingUsername(true)
-    // Check uniqueness
-    const { data: existing } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('username', trimmed)
-      .neq('id', userId || '')
-      .maybeSingle()
 
-    if (existing) {
-      setUpdatingUsername(false)
-      Alert.alert('Username Taken', 'This username is already taken. Please choose another.')
+    // Call atomic stored procedure enforcing 60-day cooldown and permanent reservation
+    const { data: result, error } = await supabase.rpc('change_username', {
+      p_user_id: userId,
+      p_new_username: trimmed,
+    })
+
+    setUpdatingUsername(false)
+
+    if (error) {
+      Alert.alert('Update Failed', error.message)
       return
     }
 
-    const { error } = await supabase
-      .from('profiles')
-      .update({ username: trimmed })
-      .eq('id', userId || '')
-
-    setUpdatingUsername(false)
-    if (error) {
-      Alert.alert('Update Failed', error.message)
-    } else {
-      setProfile((prev: any) => ({ ...prev, username: trimmed }))
-      Alert.alert('Username Updated', `Your username has been changed to @${trimmed}`)
-      setShowChangeUsernameModal(false)
-      setNewUsername('')
+    if (!result?.success) {
+      if (result?.code === 'COOLDOWN_ACTIVE') {
+        const eligibleDate = result.eligible_at ? new Date(result.eligible_at).toLocaleDateString(undefined, {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        }) : 'in 60 days'
+        Alert.alert(
+          'Username Cooldown Active',
+          `You can change your username only once every 60 days. You will be eligible again on ${eligibleDate}. (${result.days_remaining} days remaining)`
+        )
+      } else {
+        Alert.alert('Username Unavailable', result?.message || 'Could not change username.')
+      }
+      return
     }
+
+    setProfile((prev: any) => ({ ...prev, username: trimmed }))
+    Alert.alert('Username Updated', `Your username has been changed to @${trimmed}. Your 60-day cooldown is now active.`)
+    setShowChangeUsernameModal(false)
+    setNewUsername('')
+    if (userId) fetchUsernameCooldown(userId)
   }
 
   async function handleChangeEmail() {
@@ -490,6 +516,7 @@ export default function SettingsScreen() {
           activeOpacity={0.7}
           onPress={() => {
             setNewUsername(profile?.username || '')
+            if (userId) fetchUsernameCooldown(userId)
             setShowChangeUsernameModal(true)
           }}
         >
@@ -1357,11 +1384,33 @@ export default function SettingsScreen() {
             </View>
 
             <Text style={[styles.modalBodyText, { color: themeColors.textSecondary }]}>
-              Enter a unique username using letters, numbers, and underscores (min 3 chars).
+              Enter a unique username using letters, numbers, and underscores (min 3 chars). You can only change your username once every 60 days.
             </Text>
 
+            {usernameCooldown && !usernameCooldown.can_change && (
+              <View style={{
+                backgroundColor: '#fffbeb',
+                borderColor: '#fef3c7',
+                borderWidth: 1,
+                borderRadius: 12,
+                padding: 10,
+                marginVertical: 6,
+              }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#b45309' }}>
+                  ⏳ Cooldown Active
+                </Text>
+                <Text style={{ fontSize: 11, color: '#92400e', marginTop: 2 }}>
+                  You can change your username again on {usernameCooldown.eligible_at ? new Date(usernameCooldown.eligible_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : 'in 60 days'} ({usernameCooldown.days_remaining} {usernameCooldown.days_remaining === 1 ? 'day' : 'days'} remaining).
+                </Text>
+              </View>
+            )}
+
             <View style={{ marginVertical: 10 }}>
-              <View style={[styles.changePasswordInputRow, { backgroundColor: themeColors.surfaceBorder, borderColor: themeColors.surfaceBorder }]}>
+              <View style={[
+                styles.changePasswordInputRow,
+                { backgroundColor: themeColors.surfaceBorder, borderColor: themeColors.surfaceBorder },
+                usernameCooldown && !usernameCooldown.can_change && { opacity: 0.6 }
+              ]}>
                 <Text style={{ fontSize: 14, fontWeight: '700', color: colors.brand, marginRight: 4 }}>@</Text>
                 <TextInput
                   style={[styles.changePasswordInput, { color: themeColors.text }]}
@@ -1371,6 +1420,7 @@ export default function SettingsScreen() {
                   onChangeText={(val) => setNewUsername(val.toLowerCase())}
                   autoCapitalize="none"
                   autoCorrect={false}
+                  editable={!usernameCooldown || usernameCooldown.can_change}
                 />
               </View>
             </View>
@@ -1389,10 +1439,10 @@ export default function SettingsScreen() {
               <TouchableOpacity
                 style={[
                   styles.savePasswordBtn,
-                  (!newUsername.trim() || updatingUsername) && styles.disabledBtn,
+                  (!newUsername.trim() || updatingUsername || (usernameCooldown && !usernameCooldown.can_change)) && styles.disabledBtn,
                 ]}
                 onPress={handleChangeUsername}
-                disabled={!newUsername.trim() || updatingUsername}
+                disabled={!newUsername.trim() || updatingUsername || (usernameCooldown && !usernameCooldown.can_change)}
               >
                 {updatingUsername ? (
                   <ActivityIndicator size="small" color="#ffffff" />

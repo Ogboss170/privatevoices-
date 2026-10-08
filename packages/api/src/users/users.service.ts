@@ -73,6 +73,29 @@ export class UsersService {
     return data;
   }
 
+  async getUsernameCooldown(user: User) {
+    const { data, error } = await this.supabase.admin.rpc('get_username_cooldown_status', {
+      p_user_id: user.id,
+    });
+
+    if (error) throw new ConflictException(error.message);
+    return data;
+  }
+
+  async changeUsername(user: User, newUsername: string) {
+    const { data, error } = await this.supabase.admin.rpc('change_username', {
+      p_user_id: user.id,
+      p_new_username: newUsername,
+    });
+
+    if (error) throw new ConflictException(error.message);
+    if (!data?.success) {
+      throw new ConflictException(data?.message || 'Failed to change username');
+    }
+
+    return data;
+  }
+
   async followUser(follower: User, targetUsername: string) {
     const target = await this.getProfileByUsername(targetUsername);
 
