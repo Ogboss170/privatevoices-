@@ -45,10 +45,13 @@ import { AppealsSection } from '@/components/AppealsSection'
 import { AuditLogsSection } from '@/components/AuditLogsSection'
 import { SqlConsoleSection } from '@/components/SqlConsoleSection'
 import { StaffManagementSection } from '@/components/StaffManagementSection'
+import { BugReportManagementSection } from '@/components/BugReportManagementSection'
+import { BugReportFormModal } from '@/components/BugReportFormModal'
 
 type AdminSection =
   | 'overview'
   | 'staff'
+  | 'bug_reports'
   | 'users'
   | 'posts'
   | 'communities'
@@ -96,6 +99,8 @@ export default function AdminDashboardPage(): React.JSX.Element {
   const [appeals, setAppeals] = useState<any[]>([])
   const [auditLogs, setAuditLogs] = useState<any[]>([])
   const [staffList, setStaffList] = useState<any[]>([])
+  const [adminBugReports, setAdminBugReports] = useState<any[]>([])
+  const [isBugModalOpen, setIsBugModalOpen] = useState(false)
 
   const [reportFilter, setReportFilter] = useState<'all' | 'bug_report' | 'post' | 'comment' | 'profile'>('all')
   const [reportStatusFilter, setReportStatusFilter] = useState<'all' | 'pending' | 'resolved' | 'dismissed' | 'actioned'>('all')
@@ -250,6 +255,12 @@ export default function AdminDashboardPage(): React.JSX.Element {
         }))
       }
 
+      // Fetch dedicated admin bug reports
+      const { data: bugReportData } = await supabase
+        .from('admin_bug_reports')
+        .select('*, reporter:profiles!admin_bug_reports_reporter_id_fkey(username, display_name), assignee:profiles!admin_bug_reports_assigned_to_id_fkey(username, display_name)')
+        .order('created_at', { ascending: false })
+
       const bugReportsCount = reportsData.filter((r) => r.target_type === 'bug_report').length
       const suspendedCount = (userRows ?? []).filter((u) => u.is_banned).length
       const earlySupporters = (uBadges ?? []).filter((b) => b.badge_id === 'early_supporter').length
@@ -288,6 +299,7 @@ export default function AdminDashboardPage(): React.JSX.Element {
       setAppeals(appealData ?? [])
       setAuditLogs(auditData ?? [])
       setStaffList(staffRows)
+      setAdminBugReports(bugReportData ?? [])
     } catch (err) {
       console.error('Error loading admin dashboard data:', err)
     } finally {
@@ -423,6 +435,7 @@ export default function AdminDashboardPage(): React.JSX.Element {
   const SECTIONS: { id: AdminSection; label: string; icon: React.ElementType }[] = [
     { id: 'overview', label: 'Overview', icon: Activity },
     { id: 'staff', label: 'Staff & Roles', icon: ShieldAlert },
+    { id: 'bug_reports', label: 'Bug Reports', icon: Bug },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'posts', label: 'Posts', icon: FileText },
     { id: 'communities', label: 'Communities', icon: Users },
@@ -640,6 +653,14 @@ export default function AdminDashboardPage(): React.JSX.Element {
           )}
 
           <button
+            onClick={() => setIsBugModalOpen(true)}
+            className="w-full flex items-center justify-center space-x-2 py-2 bg-purple-950/40 hover:bg-purple-900/60 text-purple-300 text-xs font-semibold rounded-xl border border-purple-800/40 transition-all"
+          >
+            <Bug size={13} />
+            <span>Report a Bug</span>
+          </button>
+
+          <button
             onClick={() => loadAdminData()}
             className="w-full flex items-center justify-center space-x-2 py-2 bg-slate-900 hover:bg-slate-850 hover:text-white text-xs font-semibold text-slate-300 rounded-xl border border-slate-800 transition-all"
           >
@@ -764,6 +785,18 @@ export default function AdminDashboardPage(): React.JSX.Element {
             users={users}
             currentAdminUser={currentAdminUser}
             onRefresh={loadAdminData}
+          />
+        )}
+
+        {/* 3. BUG REPORTS PIPELINE */}
+        {activeSection === 'bug_reports' && (
+          <BugReportManagementSection
+            supabase={supabase}
+            reports={adminBugReports}
+            staff={staffList}
+            currentAdminUser={currentAdminUser}
+            onRefresh={loadAdminData}
+            onOpenReportModal={() => setIsBugModalOpen(true)}
           />
         )}
 
@@ -1092,6 +1125,19 @@ export default function AdminDashboardPage(): React.JSX.Element {
           </div>
         )}
       </main>
+
+      {/* Report a Bug Modal */}
+      {isBugModalOpen && (
+        <BugReportFormModal
+          supabase={supabase}
+          currentAdminUser={currentAdminUser}
+          onSuccess={() => {
+            setIsBugModalOpen(false)
+            loadAdminData()
+          }}
+          onCancel={() => setIsBugModalOpen(false)}
+        />
+      )}
     </div>
   )
 }

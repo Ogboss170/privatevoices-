@@ -124,4 +124,59 @@ export class AdminController {
   getAuditLogs(@Query('limit') limit = 100) {
     return this.adminService.getAuditLogs(Number(limit) || 100);
   }
+
+  /**
+   * POST /api/admin/bug-reports
+   */
+  @Post('bug-reports')
+  @RequireAdminPermission('bug_reports.create')
+  createBugReport(@Req() req: any, @Body() body: any) {
+    return this.adminService.createBugReport(req.user.id, body);
+  }
+
+  /**
+   * GET /api/admin/bug-reports
+   */
+  @Get('bug-reports')
+  @RequireAdminPermission('bug_reports.read')
+  getBugReports(@Req() req: any, @Query('status') status?: string) {
+    const isSecurityAuthorized =
+      req.isSuperAdmin ||
+      (req.adminRoles && req.adminRoles.includes('ADMIN'));
+    return this.adminService.getBugReports(isSecurityAuthorized, status);
+  }
+
+  /**
+   * GET /api/admin/bug-reports/:id
+   */
+  @Get('bug-reports/:id')
+  @RequireAdminPermission('bug_reports.read')
+  getBugReportById(@Req() req: any, @Param('id') id: string) {
+    const isSecurityAuthorized =
+      req.isSuperAdmin ||
+      (req.adminRoles && req.adminRoles.includes('ADMIN'));
+    return this.adminService.getBugReportById(id, isSecurityAuthorized);
+  }
+
+  /**
+   * PATCH /api/admin/bug-reports/:id
+   */
+  @Patch('bug-reports/:id')
+  @RequireAdminPermission('bug_reports.update')
+  updateBugReport(@Req() req: any, @Param('id') id: string, @Body() body: any) {
+    return this.adminService.updateBugReport(req.user.id, id, body);
+  }
+
+  /**
+   * POST /api/admin/bug-reports/:id/comments
+   */
+  @Post('bug-reports/:id/comments')
+  @RequireAdminPermission('bug_reports.update')
+  addComment(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body('body') body: string,
+  ) {
+    return this.adminService.addBugReportComment(req.user.id, id, body);
+  }
 }

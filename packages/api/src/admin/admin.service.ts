@@ -184,4 +184,116 @@ export class AdminService {
     if (error) throw new InternalServerErrorException('Failed to fetch audit ledger');
     return data ?? [];
   }
+
+  // ─── Bug Reports Management Methods ────────────────────────────────────────
+
+  async createBugReport(actorId: string, payload: any) {
+    if (!payload.title || !payload.title.trim()) {
+      throw new BadRequestException('Bug title is required');
+    }
+    if (!payload.description || !payload.description.trim()) {
+      throw new BadRequestException('Bug description is required');
+    }
+
+    const { data, error } = await this.supabase.admin.rpc('admin_create_bug_report', {
+      p_title: payload.title.trim(),
+      p_description: payload.description.trim(),
+      p_category: payload.category || 'Other',
+      p_severity: payload.severity || 'Low',
+      p_affected_route: payload.affectedRoute || null,
+      p_expected_behavior: payload.expectedBehavior || null,
+      p_actual_behavior: payload.actualBehavior || null,
+      p_reproduction_steps: payload.reproductionSteps || null,
+      p_environment_metadata: payload.environmentMetadata || {},
+      p_console_logs: payload.consoleLogs || null,
+      p_allow_follow_up: payload.allowFollowUp ?? true,
+      p_is_security_sensitive: payload.isSecuritySensitive ?? false,
+    });
+
+    if (error) throw new InternalServerErrorException(error.message);
+    if (!data?.success) throw new ForbiddenException(data?.error || 'Failed to submit bug report');
+
+    return data;
+  }
+
+  async getBugReports(isSecurityAuthorized = false, status?: string) {
+    let query = this.supabase.admin
+      .from('admin_bug_reports')
+      .select('*, reporter:profiles!admin_bug_reports_reporter_id_fkey(username, display_name), assignee:profiles!admin_bug_reports_assigned_to_id_fkey(username, display_name)')
+      .order('created_at', { ascending: false });
+
+    if (!isSecurityAuthorized) {
+      query = query.eq('is_security_sensitive', false);
+    }
+
+    if (status && status !== 'all') {
+      query = query.eq('status', status);
+    }
+
+    const { data, error } = await query;
+    if (error) throw new InternalServerErrorException(error.message);
+    return data ?? [];
+  }
+
+  async getBugReportById(id: string, isSecurityAuthorized = false) {
+    const { data: report, error } = await this.supabase.admin
+      .from('admin_bug_reports')
+      .select('*, reporter:profiles!admin_bug_reports_reporter_id_fkey(username, display_name), assignee:profiles!admin_bug_reports_assigned_to_id_fkey(username, display_name)')
+      .eq('id', id)
+      .single();
+
+    if (error || !report) throw new NotFoundException('Bug report not found');
+
+    if (report.is_security_sensitive && !isSecurityAuthorized) {
+      throw new ForbiddenException('Access denied: Security-sensitive report restriction');
+    }
+
+    const [{ data: comments }, { data: attachments }] = await Promise.all([
+      this.supabase.admin
+        .from('admin_bug_report_comments')
+        .select('*, author:profiles(username, display_name)')
+        .eq('bug_report_id', id)
+        .order('created_at', { ascending: true }),
+      this.supabase.admin
+        .from('admin_bug_report_attachments')
+        .select('*')
+        .eq('bug_report_id', id)
+        .order('created_at', { ascending: true }),
+    ]);
+
+    return { ...report, comments: comments ?? [], attachments: attachments ?? [] };
+  }
+
+  async updateBugReport(actorId: string, id: string, payload: any) {
+    const { data, error } = await this.supabase.admin.rpc('admin_update_bug_report', {
+      p_report_id: id,
+      p_status: payload.status || null,
+      p_severity: payload.severity || null,
+      p_assigned_to_id: payload.assignedToId || null,
+      p_resolution: payload.resolution || null,
+      p_internal_notes: payload.internalNotes || null,
+    });
+
+    if (error) throw new InternalServerErrorException(error.message);
+    if (!data?.success) throw new ForbiddenException(data?.error || 'Failed to update bug report');
+
+    return data;
+  }
+
+  async addBugReportComment(actorId: string, id: string, body: string) {
+    if (!body || !body.trim()) throw new BadRequestException('Comment body is required');
+
+    const { data, error } = await this.supabase.admin
+      .from('admin_bug_report_comments')
+      .insert({
+        bug_report_id: id,
+        author_id: actorId,
+        body: body.trim(),
+      })
+      .select('*, author:profiles(username, display_name)')
+      .single();
+
+    if (error) throw new InternalServerErrorException(error.message);
+    return data;
+  }
 }
