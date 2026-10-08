@@ -43,6 +43,7 @@ import { PreviewProgramSection } from '@/components/PreviewProgramSection'
 import { BadgeManagementSection } from '@/components/BadgeManagementSection'
 import { AppealsSection } from '@/components/AppealsSection'
 import { AuditLogsSection } from '@/components/AuditLogsSection'
+import { SqlConsoleSection } from '@/components/SqlConsoleSection'
 
 type AdminSection =
   | 'overview'
@@ -56,6 +57,7 @@ type AdminSection =
   | 'badges'
   | 'appeals'
   | 'suspended'
+  | 'sql'
   | 'audit'
   | 'settings'
 
@@ -404,6 +406,7 @@ export default function AdminDashboardPage(): React.JSX.Element {
     { id: 'badges', label: 'Badges', icon: Award },
     { id: 'appeals', label: 'Appeals', icon: ShieldAlert },
     { id: 'suspended', label: 'Suspended Users', icon: UserX },
+    { id: 'sql', label: 'SQL Console', icon: Terminal },
     { id: 'audit', label: 'Audit Logs', icon: Lock },
     { id: 'settings', label: 'Settings', icon: Settings },
   ]
@@ -1010,7 +1013,12 @@ export default function AdminDashboardPage(): React.JSX.Element {
           </div>
         )}
 
-        {/* 12. AUDIT LOGS */}
+        {/* 12. SQL QUERY CONSOLE */}
+        {activeSection === 'sql' && (
+          <SqlConsoleSection supabase={supabase} />
+        )}
+
+        {/* 13. AUDIT LOGS */}
         {activeSection === 'audit' && (
           <AuditLogsSection logs={auditLogs} />
         )}
