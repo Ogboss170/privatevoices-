@@ -40,6 +40,7 @@ import {
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { useWebTheme, LANGUAGE_OPTIONS } from '@/context/WebThemeContext'
+import EditProfileModal from '@/components/profile/EditProfileModal'
 
 export default function SettingsPage(): React.JSX.Element {
   const router = useRouter()
@@ -98,6 +99,25 @@ export default function SettingsPage(): React.JSX.Element {
   const [showLogoutAllConfirm, setShowLogoutAllConfirm] = useState(false)
   const [loggingOutAll, setLoggingOutAll] = useState(false)
 
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+
+  // Edit Profile Modal state
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false)
+
+  // Change Username Modal state
+  const [showChangeUsernameModal, setShowChangeUsernameModal] = useState(false)
+  const [newUsername, setNewUsername] = useState('')
+  const [updatingUsername, setUpdatingUsername] = useState(false)
+  const [changeUsernameError, setChangeUsernameError] = useState<string | null>(null)
+  const [changeUsernameSuccess, setChangeUsernameSuccess] = useState(false)
+
+  // Change Email Modal state
+  const [showChangeEmailModal, setShowChangeEmailModal] = useState(false)
+  const [newEmail, setNewEmail] = useState('')
+  const [updatingEmail, setUpdatingEmail] = useState(false)
+  const [changeEmailError, setChangeEmailError] = useState<string | null>(null)
+  const [changeEmailSuccess, setChangeEmailSuccess] = useState(false)
+
   // Change Password Modal state
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false)
   const [newPassword, setNewPassword] = useState('')
@@ -117,6 +137,7 @@ export default function SettingsPage(): React.JSX.Element {
     }
 
     setUserId(userRes.user.id)
+    setUserEmail(userRes.user.email ?? null)
 
     const [{ data: prof }, { data: priv }] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', userRes.user.id).single(),
@@ -293,7 +314,10 @@ export default function SettingsPage(): React.JSX.Element {
           Account
         </h2>
         <div className="space-y-1 text-sm">
-          <div className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors">
+          <div
+            onClick={() => setShowEditProfileModal(true)}
+            className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
+          >
             <div className="flex items-center space-x-3">
               <User size={18} className="text-gray-500" />
               <div>
@@ -304,23 +328,39 @@ export default function SettingsPage(): React.JSX.Element {
             <ChevronRight size={16} className="text-gray-400" />
           </div>
 
-          <div className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors">
+          <div
+            onClick={() => {
+              setNewUsername(profile?.username || '')
+              setChangeUsernameError(null)
+              setChangeUsernameSuccess(false)
+              setShowChangeUsernameModal(true)
+            }}
+            className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
+          >
             <div className="flex items-center space-x-3">
               <AtSign size={18} className="text-gray-500" />
               <div>
                 <span className="font-semibold text-gray-800 block">Change Username</span>
-                <span className="text-xs text-gray-400">@{profile?.username}</span>
+                <span className="text-xs text-gray-400">@{profile?.username || 'username'}</span>
               </div>
             </div>
             <ChevronRight size={16} className="text-gray-400" />
           </div>
 
-          <div className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors">
+          <div
+            onClick={() => {
+              setNewEmail(userEmail || '')
+              setChangeEmailError(null)
+              setChangeEmailSuccess(false)
+              setShowChangeEmailModal(true)
+            }}
+            className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
+          >
             <div className="flex items-center space-x-3">
               <Mail size={18} className="text-gray-500" />
               <div>
                 <span className="font-semibold text-gray-800 block">Change Email</span>
-                <span className="text-xs text-gray-400">Update account email address</span>
+                <span className="text-xs text-gray-400">{userEmail || 'Update account email address'}</span>
               </div>
             </div>
             <ChevronRight size={16} className="text-gray-400" />
@@ -1338,6 +1378,232 @@ export default function SettingsPage(): React.JSX.Element {
                     className="btn-primary text-xs py-2 px-4 rounded-xl disabled:opacity-50"
                   >
                     {updatingPassword ? 'Updating…' : 'Update Password'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── EDIT PROFILE MODAL ── */}
+      {showEditProfileModal && profile && (
+        <EditProfileModal
+          initialProfile={{
+            displayName: profile.display_name,
+            bio: profile.bio,
+            isPrivate: profile.is_private,
+            avatarUrl: profile.avatar_url,
+          }}
+          onClose={() => setShowEditProfileModal(false)}
+          onUpdated={fetchSettings}
+        />
+      )}
+
+      {/* ── CHANGE USERNAME MODAL ── */}
+      {showChangeUsernameModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-xl border border-gray-100">
+            <div className="flex items-center space-x-2 text-brand-600">
+              <AtSign size={22} />
+              <h3 className="font-bold text-gray-900 text-base">Change Username</h3>
+            </div>
+
+            {changeUsernameSuccess ? (
+              <div className="text-center py-4 space-y-3">
+                <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+                  <Check size={24} />
+                </div>
+                <p className="text-sm font-semibold text-gray-900">Username Updated!</p>
+                <p className="text-xs text-gray-500">Your profile handle is now @{newUsername}.</p>
+                <button
+                  type="button"
+                  onClick={() => setShowChangeUsernameModal(false)}
+                  className="btn-primary text-xs py-2 px-5 rounded-xl w-full"
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault()
+                  setChangeUsernameError(null)
+                  const trimmed = newUsername.trim().toLowerCase().replace(/[^a-z0-9_]/g, '')
+                  if (trimmed.length < 3) {
+                    setChangeUsernameError('Username must be at least 3 characters (letters, numbers, underscores).')
+                    return
+                  }
+                  if (trimmed === profile?.username?.toLowerCase()) {
+                    setShowChangeUsernameModal(false)
+                    return
+                  }
+
+                  setUpdatingUsername(true)
+                  const { data: existing } = await supabase
+                    .from('profiles')
+                    .select('id')
+                    .eq('username', trimmed)
+                    .neq('id', userId || '')
+                    .maybeSingle()
+
+                  if (existing) {
+                    setUpdatingUsername(false)
+                    setChangeUsernameError('This username is already taken. Please choose another.')
+                    return
+                  }
+
+                  const { error } = await supabase
+                    .from('profiles')
+                    .update({ username: trimmed })
+                    .eq('id', userId || '')
+
+                  setUpdatingUsername(false)
+                  if (error) {
+                    setChangeUsernameError(error.message)
+                  } else {
+                    setProfile((prev: any) => ({ ...prev, username: trimmed }))
+                    setChangeUsernameSuccess(true)
+                  }
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    New Username
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">@</span>
+                    <input
+                      type="text"
+                      required
+                      value={newUsername}
+                      onChange={(e) => setNewUsername(e.target.value.toLowerCase())}
+                      placeholder="username"
+                      className="input-field text-xs pl-7"
+                      autoFocus
+                      autoCapitalize="none"
+                    />
+                  </div>
+                  <p className="text-[11px] text-gray-400 mt-1">Letters, numbers, and underscores only.</p>
+                </div>
+
+                {changeUsernameError && (
+                  <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2.5">
+                    {changeUsernameError}
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowChangeUsernameModal(false)}
+                    className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={updatingUsername || !newUsername.trim()}
+                    className="btn-primary text-xs py-2 px-4 rounded-xl disabled:opacity-50"
+                  >
+                    {updatingUsername ? 'Saving…' : 'Save Username'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── CHANGE EMAIL MODAL ── */}
+      {showChangeEmailModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-xl border border-gray-100">
+            <div className="flex items-center space-x-2 text-brand-600">
+              <Mail size={22} />
+              <h3 className="font-bold text-gray-900 text-base">Change Email</h3>
+            </div>
+
+            {changeEmailSuccess ? (
+              <div className="text-center py-4 space-y-3">
+                <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+                  <Check size={24} />
+                </div>
+                <p className="text-sm font-semibold text-gray-900">Verification Link Sent</p>
+                <p className="text-xs text-gray-500">
+                  Please check your inbox at <span className="font-medium text-gray-800">{newEmail}</span> to confirm your new email.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowChangeEmailModal(false)}
+                  className="btn-primary text-xs py-2 px-5 rounded-xl w-full"
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault()
+                  setChangeEmailError(null)
+                  const trimmed = newEmail.trim()
+                  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+                  if (!emailRegex.test(trimmed)) {
+                    setChangeEmailError('Please enter a valid email address.')
+                    return
+                  }
+
+                  setUpdatingEmail(true)
+                  const { error } = await supabase.auth.updateUser({
+                    email: trimmed,
+                  })
+                  setUpdatingEmail(false)
+
+                  if (error) {
+                    setChangeEmailError(error.message)
+                  } else {
+                    setChangeEmailSuccess(true)
+                  }
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    New Email Address
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    placeholder="new.email@example.com"
+                    className="input-field text-xs"
+                    autoFocus
+                  />
+                  <p className="text-[11px] text-gray-400 mt-1">We will send a confirmation link to this address.</p>
+                </div>
+
+                {changeEmailError && (
+                  <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2.5">
+                    {changeEmailError}
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowChangeEmailModal(false)}
+                    className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={updatingEmail || !newEmail.trim()}
+                    className="btn-primary text-xs py-2 px-4 rounded-xl disabled:opacity-50"
+                  >
+                    {updatingEmail ? 'Sending…' : 'Send Link'}
                   </button>
                 </div>
               </form>

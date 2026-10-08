@@ -41,11 +41,14 @@ import {
   AlertTriangle,
   UserPlus,
   Bug,
+  Check,
+  EyeOff,
 } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import { supabase } from '../lib/supabase'
 import { colors } from '../constants/colors'
 import { useTheme } from '../context/ThemeContext'
+import { EditProfileModal } from '../components/EditProfileModal'
 
 export default function SettingsScreen() {
   const router = useRouter()
@@ -96,6 +99,18 @@ export default function SettingsScreen() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [deleting, setDeleting] = useState(false)
 
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+
+  // Account Modals State
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false)
+  const [showChangeUsernameModal, setShowChangeUsernameModal] = useState(false)
+  const [newUsername, setNewUsername] = useState('')
+  const [updatingUsername, setUpdatingUsername] = useState(false)
+
+  const [showChangeEmailModal, setShowChangeEmailModal] = useState(false)
+  const [newEmail, setNewEmail] = useState('')
+  const [updatingEmail, setUpdatingEmail] = useState(false)
+
   // Change Password Modal State
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false)
   const [newPassword, setNewPassword] = useState('')
@@ -108,6 +123,7 @@ export default function SettingsScreen() {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) {
         setUserId(data.user.id)
+        setUserEmail(data.user.email ?? null)
         fetchSettings(data.user.id)
       }
     })
@@ -266,6 +282,75 @@ export default function SettingsScreen() {
     }
   }
 
+  async function handleChangeUsername() {
+    const trimmed = newUsername.trim().toLowerCase().replace(/[^a-z0-9_]/g, '')
+    if (trimmed.length < 3) {
+      Alert.alert('Invalid Username', 'Username must be at least 3 characters and contain only letters, numbers, and underscores.')
+      return
+    }
+
+    if (trimmed === profile?.username?.toLowerCase()) {
+      setShowChangeUsernameModal(false)
+      return
+    }
+
+    setUpdatingUsername(true)
+    // Check uniqueness
+    const { data: existing } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('username', trimmed)
+      .neq('id', userId || '')
+      .maybeSingle()
+
+    if (existing) {
+      setUpdatingUsername(false)
+      Alert.alert('Username Taken', 'This username is already taken. Please choose another.')
+      return
+    }
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ username: trimmed })
+      .eq('id', userId || '')
+
+    setUpdatingUsername(false)
+    if (error) {
+      Alert.alert('Update Failed', error.message)
+    } else {
+      setProfile((prev: any) => ({ ...prev, username: trimmed }))
+      Alert.alert('Username Updated', `Your username has been changed to @${trimmed}`)
+      setShowChangeUsernameModal(false)
+      setNewUsername('')
+    }
+  }
+
+  async function handleChangeEmail() {
+    const trimmed = newEmail.trim()
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(trimmed)) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address.')
+      return
+    }
+
+    setUpdatingEmail(true)
+    const { error } = await supabase.auth.updateUser({
+      email: trimmed,
+    })
+    setUpdatingEmail(false)
+
+    if (error) {
+      Alert.alert('Update Failed', error.message)
+    } else {
+      Alert.alert(
+        'Confirmation Link Sent',
+        `A verification link has been sent to ${trimmed}. Please check your inbox to confirm the update.`
+      )
+      setShowChangeEmailModal(false)
+      setNewEmail('')
+    }
+  }
+
   if (loading) {
     return (
       <View style={styles.centered}>
@@ -288,26 +373,53 @@ export default function SettingsScreen() {
       <View style={styles.sectionCard}>
         <Text style={styles.sectionCategoryTitle}>ACCOUNT</Text>
 
-        <TouchableOpacity style={styles.rowItem} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.rowItem}
+          activeOpacity={0.7}
+          onPress={() => setShowEditProfileModal(true)}
+        >
           <View style={styles.rowLeft}>
             <User size={18} color={colors.gray600} />
-            <Text style={styles.rowLabel}>Edit Profile</Text>
+            <View>
+              <Text style={styles.rowLabel}>Edit Profile</Text>
+              <Text style={styles.rowSubLabel}>Display name, bio, avatar</Text>
+            </View>
           </View>
           <ChevronRight size={18} color={colors.gray400} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.rowItem} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.rowItem}
+          activeOpacity={0.7}
+          onPress={() => {
+            setNewUsername(profile?.username || '')
+            setShowChangeUsernameModal(true)
+          }}
+        >
           <View style={styles.rowLeft}>
             <AtSign size={18} color={colors.gray600} />
-            <Text style={styles.rowLabel}>Change Username</Text>
+            <View>
+              <Text style={styles.rowLabel}>Change Username</Text>
+              <Text style={styles.rowSubLabel}>@{profile?.username || 'username'}</Text>
+            </View>
           </View>
           <ChevronRight size={18} color={colors.gray400} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.rowItem} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.rowItem}
+          activeOpacity={0.7}
+          onPress={() => {
+            setNewEmail(userEmail || '')
+            setShowChangeEmailModal(true)
+          }}
+        >
           <View style={styles.rowLeft}>
             <Mail size={18} color={colors.gray600} />
-            <Text style={styles.rowLabel}>Change Email</Text>
+            <View>
+              <Text style={styles.rowLabel}>Change Email</Text>
+              <Text style={styles.rowSubLabel}>{userEmail || 'Update account email address'}</Text>
+            </View>
           </View>
           <ChevronRight size={18} color={colors.gray400} />
         </TouchableOpacity>
@@ -319,7 +431,10 @@ export default function SettingsScreen() {
         >
           <View style={styles.rowLeft}>
             <KeyRound size={18} color={colors.gray600} />
-            <Text style={styles.rowLabel}>Change Password</Text>
+            <View>
+              <Text style={styles.rowLabel}>Change Password</Text>
+              <Text style={styles.rowSubLabel}>Update security password</Text>
+            </View>
           </View>
           <ChevronRight size={18} color={colors.gray400} />
         </TouchableOpacity>
@@ -1093,6 +1208,139 @@ export default function SettingsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ── EDIT PROFILE MODAL ── */}
+      {profile && (
+        <EditProfileModal
+          visible={showEditProfileModal}
+          initialProfile={{
+            displayName: profile.display_name,
+            bio: profile.bio,
+            isPrivate: profile.is_private,
+            avatarUrl: profile.avatar_url,
+          }}
+          onClose={() => setShowEditProfileModal(false)}
+          onUpdated={() => {
+            if (userId) fetchSettings(userId)
+          }}
+        />
+      )}
+
+      {/* ── CHANGE USERNAME MODAL ── */}
+      <Modal visible={showChangeUsernameModal} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }]}>
+            <View style={styles.modalHeaderRow}>
+              <AtSign size={20} color={colors.brand} />
+              <Text style={[styles.modalTitleRed, { color: themeColors.text }]}>Change Username</Text>
+            </View>
+
+            <Text style={[styles.modalBodyText, { color: themeColors.textSecondary }]}>
+              Enter a unique username using letters, numbers, and underscores (min 3 chars).
+            </Text>
+
+            <View style={{ marginVertical: 10 }}>
+              <View style={[styles.changePasswordInputRow, { backgroundColor: themeColors.surfaceBorder, borderColor: themeColors.surfaceBorder }]}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.brand, marginRight: 4 }}>@</Text>
+                <TextInput
+                  style={[styles.changePasswordInput, { color: themeColors.text }]}
+                  placeholder="new_username"
+                  placeholderTextColor={themeColors.textSecondary}
+                  value={newUsername}
+                  onChangeText={(val) => setNewUsername(val.toLowerCase())}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => {
+                  setShowChangeUsernameModal(false)
+                  setNewUsername('')
+                }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.savePasswordBtn,
+                  (!newUsername.trim() || updatingUsername) && styles.disabledBtn,
+                ]}
+                onPress={handleChangeUsername}
+                disabled={!newUsername.trim() || updatingUsername}
+              >
+                {updatingUsername ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={styles.savePasswordBtnText}>Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── CHANGE EMAIL MODAL ── */}
+      <Modal visible={showChangeEmailModal} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }]}>
+            <View style={styles.modalHeaderRow}>
+              <Mail size={20} color={colors.brand} />
+              <Text style={[styles.modalTitleRed, { color: themeColors.text }]}>Change Email</Text>
+            </View>
+
+            <Text style={[styles.modalBodyText, { color: themeColors.textSecondary }]}>
+              Update your account email address. A confirmation link will be sent to the new email.
+            </Text>
+
+            <View style={{ marginVertical: 10 }}>
+              <View style={[styles.changePasswordInputRow, { backgroundColor: themeColors.surfaceBorder, borderColor: themeColors.surfaceBorder }]}>
+                <TextInput
+                  style={[styles.changePasswordInput, { color: themeColors.text }]}
+                  placeholder="new.email@example.com"
+                  placeholderTextColor={themeColors.textSecondary}
+                  value={newEmail}
+                  onChangeText={setNewEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => {
+                  setShowChangeEmailModal(false)
+                  setNewEmail('')
+                }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.savePasswordBtn,
+                  (!newEmail.trim() || updatingEmail) && styles.disabledBtn,
+                ]}
+                onPress={handleChangeEmail}
+                disabled={!newEmail.trim() || updatingEmail}
+              >
+                {updatingEmail ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={styles.savePasswordBtnText}>Send Link</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   )
 }
@@ -1151,8 +1399,9 @@ const styles = StyleSheet.create({
     color: colors.gray800,
   },
   rowSubLabel: {
-    fontSize: 13,
-    color: colors.gray600,
+    fontSize: 11,
+    color: colors.gray400,
+    marginTop: 1,
   },
   valueText: {
     fontSize: 13,
