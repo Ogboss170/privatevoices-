@@ -47,6 +47,7 @@ import { SqlConsoleSection } from '@/components/SqlConsoleSection'
 import { StaffManagementSection } from '@/components/StaffManagementSection'
 import { BugReportManagementSection } from '@/components/BugReportManagementSection'
 import { BugReportFormModal } from '@/components/BugReportFormModal'
+import { ContentReportsSection } from '@/components/ContentReportsSection'
 
 type AdminSection =
   | 'overview'
@@ -939,56 +940,13 @@ export default function AdminDashboardPage(): React.JSX.Element {
           </div>
         )}
 
-        {/* 6. REPORTS & BUGS */}
+        {/* 6. REPORTS & BUGS QUEUE */}
         {activeSection === 'reports' && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              {['all', 'bug_report', 'post', 'comment', 'profile'].map((type) => (
-                <button
-                  key={type}
-                  onClick={() => setReportFilter(type as any)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold capitalize transition-all ${
-                    reportFilter === type ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white bg-slate-900'
-                  }`}
-                >
-                  {type.replace('_', ' ')}
-                </button>
-              ))}
-            </div>
-
-            <div className="space-y-3">
-              {reports
-                .filter((r) => reportFilter === 'all' || r.target_type === reportFilter)
-                .map((r) => (
-                  <div key={r.id} className="p-5 bg-slate-900/60 border border-slate-800/80 rounded-2xl flex items-center justify-between">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-white capitalize">{r.target_type?.replace('_', ' ')}</span>
-                        <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-400 text-[10px] font-mono">
-                          {r.status}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-300 mt-1">{r.reason}</p>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleResolveReport(r.id, 'dismiss')}
-                        className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs"
-                      >
-                        Dismiss
-                      </button>
-                      <button
-                        onClick={() => handleResolveReport(r.id, 'resolve')}
-                        className="px-2.5 py-1 bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-800/60 rounded-lg text-xs"
-                      >
-                        Resolve
-                      </button>
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </div>
+          <ContentReportsSection
+            reports={reports}
+            onRefresh={loadAdminData}
+            onActionReport={handleResolveReport}
+          />
         )}
 
         {/* 7. MODERATION QUEUE */}
