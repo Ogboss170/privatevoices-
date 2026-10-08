@@ -25,15 +25,23 @@ export function PostInsightsModal({ visible, post, currentUserId, onClose }: Pos
   if (!visible) return null
 
   const isAuthor = currentUserId === post.authorId
+
+  // Absolute privacy rule: Only the post author can view Analytics & Insights
+  if (!isAuthor) {
+    onClose()
+    return null
+  }
+
   const [viewCount, setViewCount] = useState<number>(post.viewCount || 0)
   const [viewers, setViewers] = useState<any[]>([])
-  const [loadingViewers, setLoadingViewers] = useState<boolean>(isAuthor)
+  const [loadingViewers, setLoadingViewers] = useState<boolean>(true)
 
   const likeCount = post.likeCount || 0
   const commentCount = post.commentCount || 0
   const repostCount = post.repostCount || 0
-  const pollVotes = post.poll?.totalVotes || 0
-  const totalEngagement = likeCount + commentCount + repostCount
+  const bookmarkCount = post.bookmarkCount || post.saveCount || 0
+  const shareCount = post.shareCount || 0
+  const totalEngagement = likeCount + commentCount + repostCount + bookmarkCount
 
   // Calculate Engagement Rate
   const engagementRate = viewCount > 0 ? Math.min(100, Math.round((totalEngagement / viewCount) * 100)) : 0
@@ -151,6 +159,14 @@ export function PostInsightsModal({ visible, post, currentUserId, onClose }: Pos
               </View>
 
               <View style={styles.metricBox}>
+                <View style={[styles.iconCircle, { backgroundColor: 'rgba(139, 92, 246, 0.12)' }]}>
+                  <Users size={20} color="#8b5cf6" />
+                </View>
+                <Text style={styles.metricValue}>{viewers.length > 0 ? viewers.length : viewCount}</Text>
+                <Text style={styles.metricLabel}>Unique Viewers</Text>
+              </View>
+
+              <View style={styles.metricBox}>
                 <View style={[styles.iconCircle, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}>
                   <Heart size={20} color="#ef4444" />
                 </View>
@@ -172,6 +188,22 @@ export function PostInsightsModal({ visible, post, currentUserId, onClose }: Pos
                 </View>
                 <Text style={styles.metricValue}>{repostCount}</Text>
                 <Text style={styles.metricLabel}>Reposts</Text>
+              </View>
+
+              <View style={styles.metricBox}>
+                <View style={[styles.iconCircle, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
+                  <Bookmark size={20} color="#f59e0b" />
+                </View>
+                <Text style={styles.metricValue}>{bookmarkCount}</Text>
+                <Text style={styles.metricLabel}>Bookmarks</Text>
+              </View>
+
+              <View style={styles.metricBox}>
+                <View style={[styles.iconCircle, { backgroundColor: 'rgba(59, 130, 246, 0.12)' }]}>
+                  <Share2 size={20} color="#3b82f6" />
+                </View>
+                <Text style={styles.metricValue}>{shareCount}</Text>
+                <Text style={styles.metricLabel}>Shares</Text>
               </View>
             </View>
 

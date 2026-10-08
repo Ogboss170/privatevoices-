@@ -56,6 +56,17 @@ export class PostsController {
   }
 
   /**
+   * GET /api/posts/:id/analytics
+   * Get private post analytics & insights. Strictly accessible only by post author.
+   * Returns 403 Forbidden if currentUser is not author.
+   */
+  @Get(':id/analytics')
+  @UseGuards(SupabaseAuthGuard)
+  getAnalytics(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.postsService.getPostAnalytics(user, id);
+  }
+
+  /**
    * DELETE /api/posts/:id
    * Delete own post.
    */

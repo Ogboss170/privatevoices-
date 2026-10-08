@@ -109,6 +109,76 @@ export class PostsService {
     return this.formatPost(post, currentUserId);
   }
 
+  /**
+   * GET /posts/:postId/analytics
+   * Authenticate user -> Check post.author_id === currentUser.id
+   * YES -> return analytics
+   * NO  -> 403 Forbidden
+   */
+  async getPostAnalytics(user: User, postId: string) {
+    const { data: post, error } = await this.supabase.admin
+      .from('posts')
+      .select('id, author_id, created_at')
+      .eq('id', postId)
+      .single();
+
+    if (error || !post) {
+      throw new NotFoundException('Post not found');
+    }
+
+    if (post.author_id !== user.id) {
+      throw new ForbiddenException('Access denied. Post Analytics & Insights are private to the post author.');
+    }
+
+    // 1. Fetch counts
+    const [
+      { count: likeCount },
+      { count: commentCount },
+      { count: repostCount },
+      { count: saveCount },
+      { count: uniqueViewersCount },
+      { data: vCountData },
+    ] = await Promise.all([
+      this.supabase.admin.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', postId),
+      this.supabase.admin.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', postId),
+      this.supabase.admin.from('reposts').select('*', { count: 'exact', head: true }).eq('post_id', postId),
+      this.supabase.admin.from('saved_posts').select('*', { count: 'exact', head: true }).eq('post_id', postId),
+      this.supabase.admin.from('post_views').select('viewer_id', { count: 'exact', head: true }).eq('post_id', postId),
+      this.supabase.admin.rpc('get_post_view_count', { p_post_id: postId }),
+    ]);
+
+    const views = typeof vCountData === 'number' ? vCountData : (uniqueViewersCount ?? 0);
+    const uniqueViewers = uniqueViewersCount ?? 0;
+    const likes = likeCount ?? 0;
+    const comments = commentCount ?? 0;
+    const reposts = repostCount ?? 0;
+    const bookmarks = saveCount ?? 0;
+    const shares = 0; // estimated or tracked shares
+    const totalEngagement = likes + comments + reposts + bookmarks;
+    const engagementRate = views > 0 ? Number(((totalEngagement / views) * 100).toFixed(1)) : 0;
+
+    // 2. Fetch author-only recent viewers
+    const { data: viewers } = await this.supabase.admin
+      .from('post_views')
+      .select('viewed_at, viewer:profiles!post_views_viewer_id_fkey(id, username, display_name, avatar_url)')
+      .eq('post_id', postId)
+      .order('viewed_at', { ascending: false })
+      .limit(50);
+
+    return {
+      postId,
+      views,
+      uniqueViewers,
+      likes,
+      comments,
+      reposts,
+      bookmarks,
+      shares,
+      engagementRate,
+      viewers: viewers ?? [],
+    };
+  }
+
   async deletePost(user: User, postId: string) {
     const { data: post } = await this.supabase.admin
       .from('posts')

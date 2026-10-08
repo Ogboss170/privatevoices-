@@ -410,16 +410,18 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
 
           {showMenu && (
             <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-xl shadow-lg p-1.5 z-20 w-48 space-y-1">
-              <button
-                onClick={() => {
-                  setShowInsightsModal(true)
-                  setShowMenu(false)
-                }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-              >
-                <TrendingUp size={14} />
-                <span>View Progression</span>
-              </button>
+              {isOwner && (
+                <button
+                  onClick={() => {
+                    setShowInsightsModal(true)
+                    setShowMenu(false)
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                >
+                  <TrendingUp size={14} />
+                  <span>Post Analytics & Insights</span>
+                </button>
+              )}
               <button
                 onClick={handleReportPost}
                 className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
@@ -668,20 +670,30 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
           <span className="text-xs font-medium">{likeCount}</span>
         </button>
 
-        {/* 4. Views / Insights */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            setShowInsightsModal(true)
-          }}
-          aria-label={`Views. ${viewCount} views`}
-          title="Views & Progression"
-          className="flex items-center gap-1.5 p-2 -m-2 rounded-full hover:text-purple-600 hover:bg-purple-50/50 transition-colors cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 min-w-[44px] min-h-[44px] justify-center"
-        >
-          <BarChart2 size={18} className="transition-transform group-active:scale-90" />
-          <span className="text-xs font-medium">{viewCount}</span>
-        </button>
+        {/* 4. Views: Author can tap to view Analytics & Insights; Public cannot tap (display-only) */}
+        {isOwner ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowInsightsModal(true)
+            }}
+            aria-label={`Views. ${viewCount} views. Tap to open analytics`}
+            title="Post Analytics & Insights"
+            className="flex items-center gap-1.5 p-2 -m-2 rounded-full text-brand-600 hover:text-brand-700 hover:bg-brand-50/50 transition-colors cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 min-w-[44px] min-h-[44px] justify-center"
+          >
+            <BarChart2 size={18} className="transition-transform group-active:scale-90" />
+            <span className="text-xs font-semibold">{viewCount}</span>
+          </button>
+        ) : (
+          <div
+            aria-label={`Views. ${viewCount} views`}
+            className="flex items-center gap-1.5 p-2 -m-2 rounded-full text-gray-500 min-w-[44px] min-h-[44px] justify-center select-none"
+          >
+            <BarChart2 size={18} />
+            <span className="text-xs font-medium">{viewCount}</span>
+          </div>
+        )}
 
         {/* 5. Bookmark */}
         <button

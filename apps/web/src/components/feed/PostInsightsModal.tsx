@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import Image from 'next/image'
-import { X, TrendingUp, Heart, MessageCircle, Repeat, Bookmark, Award, Zap, Clock, Eye, Users, Shield, Lock } from 'lucide-react'
+import { X, TrendingUp, Heart, MessageCircle, Repeat, Bookmark, Share2, Award, Zap, Clock, Eye, Users, Shield, Lock } from 'lucide-react'
 import type { Post } from '@private-voices/shared'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
@@ -12,19 +12,26 @@ interface PostInsightsModalProps {
   onClose: () => void
 }
 
-export default function PostInsightsModal({ post, currentUserId, onClose }: PostInsightsModalProps): React.JSX.Element {
+export default function PostInsightsModal({ post, currentUserId, onClose }: PostInsightsModalProps): React.JSX.Element | null {
   const supabase = createSupabaseBrowserClient()
   const isAuthor = currentUserId === post.authorId
 
+  // Strict privacy rule: Only the post author can view Analytics & Insights
+  if (!isAuthor) {
+    onClose()
+    return null
+  }
+
   const [viewCount, setViewCount] = useState<number>(post.viewCount || 0)
   const [viewers, setViewers] = useState<any[]>([])
-  const [loadingViewers, setLoadingViewers] = useState<boolean>(isAuthor)
+  const [loadingViewers, setLoadingViewers] = useState<boolean>(true)
 
   const likeCount = post.likeCount || 0
   const commentCount = post.commentCount || 0
   const repostCount = post.repostCount || 0
-  const pollVotes = post.poll?.totalVotes || 0
-  const totalEngagement = likeCount + commentCount + repostCount
+  const bookmarkCount = post.bookmarkCount || post.saveCount || 0
+  const shareCount = post.shareCount || 0
+  const totalEngagement = likeCount + commentCount + repostCount + bookmarkCount
 
   // Calculate Engagement Rate: Total Interactions / Unique Views
   const engagementRate = viewCount > 0 ? Math.min(100, Math.round((totalEngagement / viewCount) * 100)) : 0
@@ -139,7 +146,17 @@ export default function PostInsightsModal({ post, currentUserId, onClose }: Post
               </div>
               <div>
                 <p className="text-lg font-bold text-gray-900 leading-none">{viewCount}</p>
-                <p className="text-xs text-gray-500 mt-0.5">24h Unique Views</p>
+                <p className="text-xs text-gray-500 mt-0.5">24h Views</p>
+              </div>
+            </div>
+
+            <div className="bg-white p-3.5 rounded-xl border border-gray-200 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center flex-shrink-0">
+                <Users size={18} />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-gray-900 leading-none">{viewers.length > 0 ? viewers.length : viewCount}</p>
+                <p className="text-xs text-gray-500 mt-0.5">Unique Viewers</p>
               </div>
             </div>
 
@@ -170,6 +187,26 @@ export default function PostInsightsModal({ post, currentUserId, onClose }: Post
               <div>
                 <p className="text-lg font-bold text-gray-900 leading-none">{repostCount}</p>
                 <p className="text-xs text-gray-500 mt-0.5">Reposts</p>
+              </div>
+            </div>
+
+            <div className="bg-white p-3.5 rounded-xl border border-gray-200 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
+                <Bookmark size={18} />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-gray-900 leading-none">{bookmarkCount}</p>
+                <p className="text-xs text-gray-500 mt-0.5">Bookmarks</p>
+              </div>
+            </div>
+
+            <div className="bg-white p-3.5 rounded-xl border border-gray-200 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+                <Share2 size={18} />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-gray-900 leading-none">{shareCount}</p>
+                <p className="text-xs text-gray-500 mt-0.5">Shares</p>
               </div>
             </div>
           </div>

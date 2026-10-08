@@ -382,11 +382,13 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
       })
     }
 
-    // Allow viewing insights for any post (especially owner's)
-    options.unshift({
-      text: 'View Insights & Progression 📈',
-      onPress: () => setShowInsightsModal(true),
-    })
+    // Post Analytics & Insights: strictly for post author only
+    if (isOwner) {
+      options.unshift({
+        text: 'Post Analytics & Insights 📈',
+        onPress: () => setShowInsightsModal(true),
+      })
+    }
 
     if (isOwner) {
       options.push({
@@ -668,16 +670,31 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
           <Text style={[styles.actionText, isLiked && styles.likedText]}>{likeCount}</Text>
         </TouchableOpacity>
 
-        {/* 4. Views (Display only) */}
-        <View
-          style={styles.actionBtn}
-          accessibilityLabel={`Views. ${viewCount} views`}
-        >
-          <BarChart2 size={18} color={colors.gray500} />
-          <Text style={styles.actionText}>
-            {viewCount}
-          </Text>
-        </View>
+        {/* 4. Views: Author can tap to view Analytics & Insights; Public cannot tap (display-only) */}
+        {isOwner ? (
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => setShowInsightsModal(true)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel={`Views. ${viewCount} views. Tap to open analytics`}
+          >
+            <BarChart2 size={18} color={colors.brand} />
+            <Text style={[styles.actionText, { color: colors.brand, fontWeight: '600' }]}>
+              {viewCount}
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <View
+            style={styles.actionBtn}
+            accessibilityLabel={`Views. ${viewCount} views`}
+          >
+            <BarChart2 size={18} color={colors.gray500} />
+            <Text style={styles.actionText}>
+              {viewCount}
+            </Text>
+          </View>
+        )}
 
         {/* 5. Bookmark */}
         <TouchableOpacity
