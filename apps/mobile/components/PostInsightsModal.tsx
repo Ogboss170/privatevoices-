@@ -39,8 +39,8 @@ export function PostInsightsModal({ visible, post, currentUserId, onClose }: Pos
   const likeCount = post.likeCount || 0
   const commentCount = post.commentCount || 0
   const repostCount = post.repostCount || 0
-  const bookmarkCount = post.bookmarkCount || post.saveCount || 0
-  const shareCount = post.shareCount || 0
+  const bookmarkCount = (post as any).bookmarkCount || (post as any).saveCount || 0
+  const shareCount = (post as any).shareCount || 0
   const totalEngagement = likeCount + commentCount + repostCount + bookmarkCount
 
   // Calculate Engagement Rate

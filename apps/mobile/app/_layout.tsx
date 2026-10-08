@@ -29,7 +29,7 @@ export default function RootLayout() {
 
         const inAuthGroup = segments[0] === '(auth)'
         const inOnboarding = segments[0] === 'onboarding'
-        const inResetPassword = segments.includes('reset-password' as any) || segments.includes('forgot-password' as any)
+        const inResetPassword = (segments as string[]).includes('reset-password') || (segments as string[]).includes('forgot-password')
 
         if (hasCompletedOnboarding !== 'true' && !inOnboarding) {
           router.replace('/onboarding')
@@ -59,7 +59,9 @@ export default function RootLayout() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         const hasCompletedOnboarding = await AsyncStorage.getItem(ONBOARDING_STORAGE_KEY)
-        const inResetPassword = segments.includes('reset-password' as any) || segments.includes('forgot-password' as any)
+        const inAuthGroup = segments[0] === '(auth)'
+        const inOnboarding = segments[0] === 'onboarding'
+        const inResetPassword = (segments as string[]).includes('reset-password') || (segments as string[]).includes('forgot-password')
 
         if (hasCompletedOnboarding !== 'true' && !inOnboarding) {
           router.replace('/onboarding')

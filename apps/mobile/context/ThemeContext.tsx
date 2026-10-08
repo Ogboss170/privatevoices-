@@ -22,6 +22,7 @@ export interface DesignTokens {
   textPrimary: string
   textSecondary: string
   textMuted: string
+  text?: string
   brand: string
   brandLight: string
   inputBg: string
@@ -63,6 +64,7 @@ const DEFAULT_TOKENS_LIGHT: DesignTokens = {
   textPrimary: '#111827',
   textSecondary: '#4b5563',
   textMuted: '#9ca3af',
+  text: '#111827',
   brand: '#7c3aed',
   brandLight: '#ede9fe',
   inputBg: '#f3f4f6',
@@ -81,6 +83,7 @@ const DEFAULT_TOKENS_DARK: DesignTokens = {
   textPrimary: '#f9fafb',
   textSecondary: '#9ca3af',
   textMuted: '#6b7280',
+  text: '#f9fafb',
   brand: '#8b5cf6',
   brandLight: 'rgba(124, 58, 237, 0.2)',
   inputBg: '#1f2937',

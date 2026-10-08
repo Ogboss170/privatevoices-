@@ -1459,7 +1459,7 @@ export default function SettingsScreen() {
                   (!newUsername.trim() || updatingUsername || (usernameCooldown && !usernameCooldown.can_change)) && styles.disabledBtn,
                 ]}
                 onPress={handleChangeUsername}
-                disabled={!newUsername.trim() || updatingUsername || (usernameCooldown && !usernameCooldown.can_change)}
+                disabled={Boolean(!newUsername.trim() || updatingUsername || (usernameCooldown && !usernameCooldown.can_change))}
               >
                 {updatingUsername ? (
                   <ActivityIndicator size="small" color="#ffffff" />

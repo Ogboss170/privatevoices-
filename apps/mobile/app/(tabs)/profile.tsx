@@ -10,6 +10,7 @@ import {
   Share,
 } from 'react-native'
 import { Edit3, Lock, LogOut, Settings, Bookmark, LayoutGrid, Play, Repeat, UserCheck } from 'lucide-react-native'
+import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { colors } from '../../constants/colors'

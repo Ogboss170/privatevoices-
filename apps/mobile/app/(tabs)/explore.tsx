@@ -774,6 +774,15 @@ const styles = StyleSheet.create({
   tagTextSelected: {
     color: '#ffffff',
   },
+  tagCountText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.gray500,
+    marginLeft: 4,
+  },
+  tagCountTextSelected: {
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
   emptyText: {
     fontSize: 12,
     color: colors.gray400,

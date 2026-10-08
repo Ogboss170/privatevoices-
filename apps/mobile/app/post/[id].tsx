@@ -9,10 +9,10 @@ import {
   Alert,
   TextInput,
   Share,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ArrowLeft, Send, Heart, Repeat, Bookmark, Share2, MessageCircle } from 'lucide-react-native'
 import { Image } from 'expo-image'
