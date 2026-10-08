@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { Bell } from 'lucide-react'
+import { Bell, Plus } from 'lucide-react'
 import PostCard from '@/components/feed/PostCard'
 import StoriesTray from '@/components/stories/StoriesTray'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
@@ -231,18 +231,35 @@ export default function FeedPage() {
 
   return (
     <div className="space-y-4 max-w-2xl mx-auto">
-      {/* 1. Header: Left Title + Right Notification Bell */}
-      <header className="flex items-center justify-between py-2 px-1">
-        <h1 className="text-xl font-bold tracking-tight text-gray-900">
-          Private Voices
-        </h1>
+      {/* 1. Header: ＋ left, PRIVATE VOICES center, 🔔 right — scrollable with feed */}
+      <header className="relative flex items-center justify-between py-2 px-1 border-b border-gray-100">
+        {/* Left: ＋ Create */}
+        <Link
+          href="/create"
+          className="p-2 rounded-xl text-brand-600 hover:bg-brand-50 transition-colors flex items-center justify-center z-10"
+          aria-label="Create"
+        >
+          <Plus size={22} strokeWidth={2.4} />
+        </Link>
+
+        {/* Center: PRIVATE VOICES */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <span
+            className="text-sm font-extrabold tracking-[0.16em] text-gray-900 uppercase"
+            style={{ letterSpacing: '1.6px' }}
+          >
+            Private Voices
+          </span>
+        </div>
+
+        {/* Right: 🔔 Notifications */}
         <Link
           href="/notifications"
-          className="relative p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-700"
+          className="relative p-2 rounded-xl hover:bg-gray-100 transition-colors text-gray-700 z-10"
           aria-label="Notifications"
         >
-          <Bell size={22} />
-          <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full ring-2 ring-white" />
+          <Bell size={22} strokeWidth={2} />
+          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white" />
         </Link>
       </header>
 
