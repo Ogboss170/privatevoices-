@@ -1,12 +1,13 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { Lock, UserPlus, UserCheck, MessageSquare, Send } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import type { PublicProfile } from '@private-voices/shared'
 import FollowListModal from './FollowListModal'
+import { UserBadgesRow } from '../common/PlatformBadge'
 
 interface PublicProfileHeaderProps {
   profile: PublicProfile
@@ -26,6 +27,26 @@ export default function PublicProfileHeader({
   const [followerCount, setFollowerCount] = useState(profile.followerCount)
   const [followingCount, setFollowingCount] = useState(profile.followingCount)
   const [isPendingFollow, setIsPendingFollow] = useState(false)
+  const [userBadges, setUserBadges] = useState<string[]>([])
+
+  useEffect(() => {
+    async function loadBadges() {
+      try {
+        const { data } = await supabase
+          .from('user_badges')
+          .select('badge_id')
+          .eq('user_id', profile.id)
+          .is('revoked_at', null)
+
+        if (data) {
+          setUserBadges(data.map((b) => b.badge_id))
+        }
+      } catch {
+        // Safe fallback
+      }
+    }
+    loadBadges()
+  }, [supabase, profile.id])
 
   // Follow Modal State
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -112,8 +133,9 @@ export default function PublicProfileHeader({
           </div>
 
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl font-bold text-gray-900 truncate">{profile.displayName}</h1>
+              <UserBadgesRow badges={userBadges} size={17} />
               {profile.isPrivate && (
                 <span title="Private Account">
                   <Lock size={16} className="text-brand-600 flex-shrink-0" />

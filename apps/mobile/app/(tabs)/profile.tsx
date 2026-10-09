@@ -18,6 +18,7 @@ import { EditProfileModal } from '../../components/EditProfileModal'
 import { FollowListModal } from '../../components/FollowListModal'
 import { MobilePostCard } from '../../components/MobilePostCard'
 import { PublicProfileModal } from '../../components/PublicProfileModal'
+import { UserBadgesRow } from '../../components/PlatformBadge'
 import type { Post } from '@private-voices/shared'
 import { extractPostMediaAndCleanContent } from '@private-voices/shared'
 import type { User } from '@supabase/supabase-js'
@@ -36,6 +37,7 @@ export default function ProfileScreen() {
     avatar_url: string | null
     is_private: boolean
   } | null>(null)
+  const [userBadges, setUserBadges] = useState<string[]>([])
   const [stats, setStats] = useState({ followerCount: 0, followingCount: 0, postCount: 0 })
   const [activeTab, setActiveTab] = useState<'posts' | 'voices' | 'reposts' | 'tagged'>('posts')
   const [posts, setPosts] = useState<Post[]>([])
@@ -72,6 +74,20 @@ export default function ProfileScreen() {
       followingCount: followingCount ?? 0,
       postCount: postCount ?? 0,
     })
+
+    try {
+      const { data: bData } = await supabase
+        .from('user_badges')
+        .select('badge_id')
+        .eq('user_id', userId)
+        .is('revoked_at', null)
+
+      if (bData) {
+        setUserBadges(bData.map((b) => b.badge_id))
+      }
+    } catch {
+      // Safe fallback
+    }
 
     const { data: myPosts } = await supabase
       .from('posts')
@@ -258,6 +274,7 @@ export default function ProfileScreen() {
       <View style={styles.nameGroup}>
         <View style={styles.row}>
           <Text style={[styles.displayName, { color: themeColors.textPrimary }]}>{profile?.display_name}</Text>
+          <UserBadgesRow badges={userBadges} size={16} />
           {profile?.is_private && <Lock size={16} color={colors.brand} />}
         </View>
         <Text style={[styles.username, { color: themeColors.textMuted }]}>@{profile?.username}</Text>

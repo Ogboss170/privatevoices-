@@ -10,6 +10,7 @@ import FormattedText from '../common/FormattedText'
 import MentionAutocomplete from '../common/MentionAutocomplete'
 import InteractivePoll from './InteractivePoll'
 import PostInsightsModal from './PostInsightsModal'
+import { UserBadgesRow } from '../common/PlatformBadge'
 
 interface PostCardProps {
   post: Post
@@ -21,7 +22,28 @@ interface PostCardProps {
 export default function PostCard({ post, currentUserId, onDelete, onToggleSave }: PostCardProps): React.JSX.Element {
   const supabase = createSupabaseBrowserClient()
   const cardRef = useRef<HTMLDivElement>(null)
+  const [authorBadges, setAuthorBadges] = useState<string[]>([])
   const [isLiked, setIsLiked] = useState(post.isLikedByMe)
+
+  useEffect(() => {
+    async function loadAuthorBadges() {
+      if (!post.authorId) return
+      try {
+        const { data } = await supabase
+          .from('user_badges')
+          .select('badge_id')
+          .eq('user_id', post.authorId)
+          .is('revoked_at', null)
+
+        if (data) {
+          setAuthorBadges(data.map((b) => b.badge_id))
+        }
+      } catch {
+        // Safe fallback
+      }
+    }
+    loadAuthorBadges()
+  }, [supabase, post.authorId])
   const [likeCount, setLikeCount] = useState(post.likeCount)
   const [likeBusy, setLikeBusy] = useState(false)
   const [isReposted, setIsReposted] = useState(post.isRepostedByMe || false)
@@ -370,9 +392,12 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
             )}
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900 group-hover:text-brand-600 transition-colors">
-              {post.author.displayName}
-            </h3>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <h3 className="font-semibold text-gray-900 group-hover:text-brand-600 transition-colors">
+                {post.author.displayName}
+              </h3>
+              <UserBadgesRow badges={authorBadges} size={15} />
+            </div>
             <p className="text-xs text-gray-500">@{post.author.username}</p>
             {post.community && (
               <Link

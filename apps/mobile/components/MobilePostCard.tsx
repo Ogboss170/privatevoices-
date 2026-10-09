@@ -39,6 +39,7 @@ import { FormattedText } from './FormattedText'
 import { MentionSuggestions } from './MentionSuggestions'
 import { MobileInteractivePoll } from './MobileInteractivePoll'
 import { PostInsightsModal } from './PostInsightsModal'
+import { UserBadgesRow } from './PlatformBadge'
 import { useTheme } from '../context/ThemeContext'
 
 interface MobilePostCardProps {
@@ -54,7 +55,28 @@ interface MobilePostCardProps {
 export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, onPressMention, onPressHashtag, onToggleSave }: MobilePostCardProps) {
   const router = useRouter()
   const { colors: themeColors, isDark } = useTheme()
+  const [authorBadges, setAuthorBadges] = useState<string[]>([])
   const [isLiked, setIsLiked] = useState(post.isLikedByMe)
+
+  useEffect(() => {
+    async function loadAuthorBadges() {
+      if (!post.authorId) return
+      try {
+        const { data } = await supabase
+          .from('user_badges')
+          .select('badge_id')
+          .eq('user_id', post.authorId)
+          .is('revoked_at', null)
+
+        if (data) {
+          setAuthorBadges(data.map((b) => b.badge_id))
+        }
+      } catch {
+        // Safe fallback
+      }
+    }
+    loadAuthorBadges()
+  }, [post.authorId])
   const [likeCount, setLikeCount] = useState(post.likeCount)
   const [likeBusy, setLikeBusy] = useState(false)
   const [isReposted, setIsReposted] = useState(post.isRepostedByMe || false)
@@ -438,8 +460,11 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
               </Text>
             )}
           </View>
-          <View>
-            <Text style={[styles.displayName, { color: themeColors.textPrimary }]}>{post.author.displayName}</Text>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <Text style={[styles.displayName, { color: themeColors.textPrimary }]}>{post.author.displayName}</Text>
+              <UserBadgesRow badges={authorBadges} size={14} />
+            </View>
             <Text style={[styles.username, { color: themeColors.textMuted }]}>@{post.author.username}</Text>
             {post.community && (
               <TouchableOpacity
