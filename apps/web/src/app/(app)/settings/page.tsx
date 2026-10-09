@@ -91,8 +91,10 @@ export default function SettingsPage(): React.JSX.Element {
   const [followerNotifs, setFollowerNotifs] = useState(true)
   const [whisperNotifs, setWhisperNotifs] = useState(true)
   const [messageNotifs, setMessageNotifs] = useState(true)
+  const [commentsNotifs, setCommentsNotifs] = useState(true)
   const [likeCommentNotifs, setLikeCommentNotifs] = useState(true)
   const [mentionNotifs, setMentionNotifs] = useState(true)
+  const [communityNotifs, setCommunityNotifs] = useState(true)
   const [storyNotifs, setStoryNotifs] = useState(true)
 
   // Delete Account Confirmation Modal states
@@ -242,9 +244,10 @@ export default function SettingsPage(): React.JSX.Element {
     setUserId(userRes.user.id)
     setUserEmail(userRes.user.email ?? null)
 
-    const [{ data: prof }, { data: priv }] = await Promise.all([
+    const [{ data: prof }, { data: priv }, { data: notifPrefs }] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', userRes.user.id).single(),
       supabase.from('privacy_settings').select('*').eq('user_id', userRes.user.id).maybeSingle(),
+      supabase.from('notification_preferences').select('*').eq('user_id', userRes.user.id).maybeSingle(),
     ])
 
     setProfile(prof)
@@ -254,6 +257,17 @@ export default function SettingsPage(): React.JSX.Element {
       show_in_recommendations: true,
       allow_profile_indexing: true,
     })
+
+    if (notifPrefs) {
+      setPushNotifs(notifPrefs.push_enabled ?? true)
+      setCommentsNotifs(notifPrefs.comments_enabled ?? true)
+      setMentionNotifs(notifPrefs.mentions_enabled ?? true)
+      setMessageNotifs(notifPrefs.direct_messages_enabled ?? true)
+      setWhisperNotifs(notifPrefs.whispers_enabled ?? true)
+      setLikeCommentNotifs(notifPrefs.likes_enabled ?? true)
+      setFollowerNotifs(notifPrefs.followers_enabled ?? true)
+      setCommunityNotifs(notifPrefs.community_announcements_enabled ?? true)
+    }
 
     try {
       const { data: cdData } = await supabase.rpc('get_username_cooldown_status', {
@@ -306,6 +320,23 @@ export default function SettingsPage(): React.JSX.Element {
 
     if (!error) {
       setPrivacy((prev: any) => ({ ...prev, [key]: value }))
+      showSavedBadge()
+    }
+    setSaving(false)
+  }
+
+  async function handleUpdateNotifPref(key: string, value: boolean) {
+    if (!userId) return
+    setSaving(true)
+
+    const { error } = await supabase
+      .from('notification_preferences')
+      .upsert(
+        { user_id: userId, [key]: value, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id' }
+      )
+
+    if (!error) {
       showSavedBadge()
     }
     setSaving(false)
@@ -752,72 +783,130 @@ export default function SettingsPage(): React.JSX.Element {
           <div className="flex items-center justify-between p-2">
             <div className="flex items-center space-x-3">
               <Bell size={18} className="text-gray-500" />
-              <span className="font-semibold text-gray-800">Push Notifications</span>
+              <div>
+                <span className="font-semibold text-gray-800 block">Push Notifications</span>
+                <span className="text-xs text-gray-400">Receive alerts on your devices</span>
+              </div>
             </div>
             <input
               type="checkbox"
               checked={pushNotifs}
-              onChange={(e) => setPushNotifs(e.target.checked)}
+              onChange={(e) => {
+                setPushNotifs(e.target.checked)
+                handleUpdateNotifPref('push_enabled', e.target.checked)
+              }}
               className="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500 cursor-pointer"
             />
           </div>
 
           <div className="flex items-center justify-between p-2 border-t border-gray-50 pt-2">
-            <span className="text-gray-700 pl-7">New Followers</span>
+            <div>
+              <span className="text-gray-700 pl-7 font-medium block">Comments & Replies</span>
+              <span className="text-xs text-gray-400 pl-7 block">When someone comments on your Voices</span>
+            </div>
             <input
               type="checkbox"
-              checked={followerNotifs}
-              onChange={(e) => setFollowerNotifs(e.target.checked)}
+              checked={commentsNotifs}
+              onChange={(e) => {
+                setCommentsNotifs(e.target.checked)
+                handleUpdateNotifPref('comments_enabled', e.target.checked)
+              }}
               className="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500 cursor-pointer"
             />
           </div>
 
           <div className="flex items-center justify-between p-2 border-t border-gray-50 pt-2">
-            <span className="text-gray-700 pl-7">Whispers</span>
-            <input
-              type="checkbox"
-              checked={whisperNotifs}
-              onChange={(e) => setWhisperNotifs(e.target.checked)}
-              className="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500 cursor-pointer"
-            />
-          </div>
-
-          <div className="flex items-center justify-between p-2 border-t border-gray-50 pt-2">
-            <span className="text-gray-700 pl-7">Messages</span>
-            <input
-              type="checkbox"
-              checked={messageNotifs}
-              onChange={(e) => setMessageNotifs(e.target.checked)}
-              className="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500 cursor-pointer"
-            />
-          </div>
-
-          <div className="flex items-center justify-between p-2 border-t border-gray-50 pt-2">
-            <span className="text-gray-700 pl-7">Likes & Comments</span>
-            <input
-              type="checkbox"
-              checked={likeCommentNotifs}
-              onChange={(e) => setLikeCommentNotifs(e.target.checked)}
-              className="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500 cursor-pointer"
-            />
-          </div>
-
-          <div className="flex items-center justify-between p-2 border-t border-gray-50 pt-2">
-            <span className="text-gray-700 pl-7">Mentions</span>
+            <div>
+              <span className="text-gray-700 pl-7 font-medium block">Mentions (@you)</span>
+              <span className="text-xs text-gray-400 pl-7 block">When you are mentioned in posts or comments</span>
+            </div>
             <input
               type="checkbox"
               checked={mentionNotifs}
-              onChange={(e) => setMentionNotifs(e.target.checked)}
+              onChange={(e) => {
+                setMentionNotifs(e.target.checked)
+                handleUpdateNotifPref('mentions_enabled', e.target.checked)
+              }}
               className="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500 cursor-pointer"
             />
           </div>
 
           <div className="flex items-center justify-between p-2 border-t border-gray-50 pt-2">
-            <span className="text-gray-700 pl-7">Stories</span>
+            <div>
+              <span className="text-gray-700 pl-7 font-medium block">Direct Messages</span>
+              <span className="text-xs text-gray-400 pl-7 block">When someone sends you a 1-on-1 message</span>
+            </div>
             <input
               type="checkbox"
-              checked={storyNotifs}
-              onChange={(e) => setStoryNotifs(e.target.checked)}
+              checked={messageNotifs}
+              onChange={(e) => {
+                setMessageNotifs(e.target.checked)
+                handleUpdateNotifPref('direct_messages_enabled', e.target.checked)
+              }}
+              className="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500 cursor-pointer"
+            />
+          </div>
+
+          <div className="flex items-center justify-between p-2 border-t border-gray-50 pt-2">
+            <div>
+              <span className="text-gray-700 pl-7 font-medium block">Anonymous Whispers</span>
+              <span className="text-xs text-gray-400 pl-7 block">When you receive an anonymous whisper</span>
+            </div>
+            <input
+              type="checkbox"
+              checked={whisperNotifs}
+              onChange={(e) => {
+                setWhisperNotifs(e.target.checked)
+                handleUpdateNotifPref('whispers_enabled', e.target.checked)
+              }}
+              className="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500 cursor-pointer"
+            />
+          </div>
+
+          <div className="flex items-center justify-between p-2 border-t border-gray-50 pt-2">
+            <div>
+              <span className="text-gray-700 pl-7 font-medium block">Likes & Reactions</span>
+              <span className="text-xs text-gray-400 pl-7 block">When someone likes your voice or comment</span>
+            </div>
+            <input
+              type="checkbox"
+              checked={likeCommentNotifs}
+              onChange={(e) => {
+                setLikeCommentNotifs(e.target.checked)
+                handleUpdateNotifPref('likes_enabled', e.target.checked)
+              }}
+              className="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500 cursor-pointer"
+            />
+          </div>
+
+          <div className="flex items-center justify-between p-2 border-t border-gray-50 pt-2">
+            <div>
+              <span className="text-gray-700 pl-7 font-medium block">New Followers</span>
+              <span className="text-xs text-gray-400 pl-7 block">When someone starts following you</span>
+            </div>
+            <input
+              type="checkbox"
+              checked={followerNotifs}
+              onChange={(e) => {
+                setFollowerNotifs(e.target.checked)
+                handleUpdateNotifPref('followers_enabled', e.target.checked)
+              }}
+              className="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500 cursor-pointer"
+            />
+          </div>
+
+          <div className="flex items-center justify-between p-2 border-t border-gray-50 pt-2">
+            <div>
+              <span className="text-gray-700 pl-7 font-medium block">Community Announcements</span>
+              <span className="text-xs text-gray-400 pl-7 block">Important updates from communities you joined</span>
+            </div>
+            <input
+              type="checkbox"
+              checked={communityNotifs}
+              onChange={(e) => {
+                setCommunityNotifs(e.target.checked)
+                handleUpdateNotifPref('community_announcements_enabled', e.target.checked)
+              }}
               className="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500 cursor-pointer"
             />
           </div>

@@ -92,11 +92,13 @@ export default function SettingsScreen() {
   const [theme, setTheme] = useState<'system' | 'light' | 'dark'>('system')
   const [appLock, setAppLock] = useState(false)
   const [pushNotifs, setPushNotifs] = useState(true)
-  const [followerNotifs, setFollowerNotifs] = useState(true)
-  const [whisperNotifs, setWhisperNotifs] = useState(true)
-  const [messageNotifs, setMessageNotifs] = useState(true)
-  const [likeCommentNotifs, setLikeCommentNotifs] = useState(true)
+  const [commentsNotifs, setCommentsNotifs] = useState(true)
   const [mentionNotifs, setMentionNotifs] = useState(true)
+  const [messageNotifs, setMessageNotifs] = useState(true)
+  const [whisperNotifs, setWhisperNotifs] = useState(true)
+  const [likeCommentNotifs, setLikeCommentNotifs] = useState(true)
+  const [followerNotifs, setFollowerNotifs] = useState(true)
+  const [communityNotifs, setCommunityNotifs] = useState(true)
   const [storyNotifs, setStoryNotifs] = useState(true)
 
   // Delete account confirmation modal step (0=hidden, 1=explanation, 2=type DELETE)
@@ -145,15 +147,38 @@ export default function SettingsScreen() {
   }, [])
 
   async function fetchSettings(uId: string) {
-    const [{ data: prof }, { data: priv }] = await Promise.all([
+    const [{ data: prof }, { data: priv }, { data: notifPrefs }] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', uId).single(),
       supabase.from('privacy_settings').select('*').eq('user_id', uId).maybeSingle(),
+      supabase.from('notification_preferences').select('*').eq('user_id', uId).maybeSingle(),
     ])
 
     setProfile(prof)
     setPrivacy(priv || { whisper_visibility: 'anyone', who_can_message: 'anyone', show_in_recommendations: true })
+
+    if (notifPrefs) {
+      setPushNotifs(notifPrefs.push_enabled ?? true)
+      setCommentsNotifs(notifPrefs.comments_enabled ?? true)
+      setMentionNotifs(notifPrefs.mentions_enabled ?? true)
+      setMessageNotifs(notifPrefs.direct_messages_enabled ?? true)
+      setWhisperNotifs(notifPrefs.whispers_enabled ?? true)
+      setLikeCommentNotifs(notifPrefs.likes_enabled ?? true)
+      setFollowerNotifs(notifPrefs.followers_enabled ?? true)
+      setCommunityNotifs(notifPrefs.community_announcements_enabled ?? true)
+    }
+
     setLoading(false)
     fetchSavedPosts(uId)
+  }
+
+  async function handleUpdateNotifPref(key: string, value: boolean) {
+    if (!userId) return
+    await supabase
+      .from('notification_preferences')
+      .upsert(
+        { user_id: userId, [key]: value, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id' }
+      )
   }
 
   async function fetchSavedPosts(uId: string) {
@@ -791,7 +816,70 @@ export default function SettingsScreen() {
           </View>
           <Switch
             value={pushNotifs}
-            onValueChange={setPushNotifs}
+            onValueChange={(val) => {
+              setPushNotifs(val)
+              handleUpdateNotifPref('push_enabled', val)
+            }}
+            trackColor={{ false: '#e2e8f0', true: colors.brand }}
+          />
+        </View>
+
+        <View style={styles.rowItemNoClickSub}>
+          <Text style={styles.rowSubLabel}>Comments & Replies</Text>
+          <Switch
+            value={commentsNotifs}
+            onValueChange={(val) => {
+              setCommentsNotifs(val)
+              handleUpdateNotifPref('comments_enabled', val)
+            }}
+            trackColor={{ false: '#e2e8f0', true: colors.brand }}
+          />
+        </View>
+
+        <View style={styles.rowItemNoClickSub}>
+          <Text style={styles.rowSubLabel}>Mentions (@you)</Text>
+          <Switch
+            value={mentionNotifs}
+            onValueChange={(val) => {
+              setMentionNotifs(val)
+              handleUpdateNotifPref('mentions_enabled', val)
+            }}
+            trackColor={{ false: '#e2e8f0', true: colors.brand }}
+          />
+        </View>
+
+        <View style={styles.rowItemNoClickSub}>
+          <Text style={styles.rowSubLabel}>Direct Messages</Text>
+          <Switch
+            value={messageNotifs}
+            onValueChange={(val) => {
+              setMessageNotifs(val)
+              handleUpdateNotifPref('direct_messages_enabled', val)
+            }}
+            trackColor={{ false: '#e2e8f0', true: colors.brand }}
+          />
+        </View>
+
+        <View style={styles.rowItemNoClickSub}>
+          <Text style={styles.rowSubLabel}>Anonymous Whispers</Text>
+          <Switch
+            value={whisperNotifs}
+            onValueChange={(val) => {
+              setWhisperNotifs(val)
+              handleUpdateNotifPref('whispers_enabled', val)
+            }}
+            trackColor={{ false: '#e2e8f0', true: colors.brand }}
+          />
+        </View>
+
+        <View style={styles.rowItemNoClickSub}>
+          <Text style={styles.rowSubLabel}>Likes & Reactions</Text>
+          <Switch
+            value={likeCommentNotifs}
+            onValueChange={(val) => {
+              setLikeCommentNotifs(val)
+              handleUpdateNotifPref('likes_enabled', val)
+            }}
             trackColor={{ false: '#e2e8f0', true: colors.brand }}
           />
         </View>
@@ -800,52 +888,22 @@ export default function SettingsScreen() {
           <Text style={styles.rowSubLabel}>New Followers</Text>
           <Switch
             value={followerNotifs}
-            onValueChange={setFollowerNotifs}
+            onValueChange={(val) => {
+              setFollowerNotifs(val)
+              handleUpdateNotifPref('followers_enabled', val)
+            }}
             trackColor={{ false: '#e2e8f0', true: colors.brand }}
           />
         </View>
 
         <View style={styles.rowItemNoClickSub}>
-          <Text style={styles.rowSubLabel}>Whispers</Text>
+          <Text style={styles.rowSubLabel}>Community Announcements</Text>
           <Switch
-            value={whisperNotifs}
-            onValueChange={setWhisperNotifs}
-            trackColor={{ false: '#e2e8f0', true: colors.brand }}
-          />
-        </View>
-
-        <View style={styles.rowItemNoClickSub}>
-          <Text style={styles.rowSubLabel}>Messages</Text>
-          <Switch
-            value={messageNotifs}
-            onValueChange={setMessageNotifs}
-            trackColor={{ false: '#e2e8f0', true: colors.brand }}
-          />
-        </View>
-
-        <View style={styles.rowItemNoClickSub}>
-          <Text style={styles.rowSubLabel}>Likes & Comments</Text>
-          <Switch
-            value={likeCommentNotifs}
-            onValueChange={setLikeCommentNotifs}
-            trackColor={{ false: '#e2e8f0', true: colors.brand }}
-          />
-        </View>
-
-        <View style={styles.rowItemNoClickSub}>
-          <Text style={styles.rowSubLabel}>Mentions</Text>
-          <Switch
-            value={mentionNotifs}
-            onValueChange={setMentionNotifs}
-            trackColor={{ false: '#e2e8f0', true: colors.brand }}
-          />
-        </View>
-
-        <View style={styles.rowItemNoClickSub}>
-          <Text style={styles.rowSubLabel}>Stories</Text>
-          <Switch
-            value={storyNotifs}
-            onValueChange={setStoryNotifs}
+            value={communityNotifs}
+            onValueChange={(val) => {
+              setCommunityNotifs(val)
+              handleUpdateNotifPref('community_announcements_enabled', val)
+            }}
             trackColor={{ false: '#e2e8f0', true: colors.brand }}
           />
         </View>
