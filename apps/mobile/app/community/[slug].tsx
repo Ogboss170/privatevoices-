@@ -41,6 +41,9 @@ import {
   ImageIcon,
   ChevronDown,
   VolumeX,
+  UserPlus,
+  AlertTriangle,
+  Trash2,
 } from 'lucide-react-native'
 import { Image as ExpoImage } from 'expo-image'
 import * as ImagePicker from 'expo-image-picker'
@@ -934,6 +937,136 @@ export default function CommunityDetailScreen() {
                   }}
                 >
                   <Text style={styles.joinBtnText}>{savingRules ? 'Saving Rules...' : 'Save Rules'}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Danger Zone: Transfer Ownership & Delete (Owner Only) */}
+            {userRole === 'owner' && (
+              <View style={[styles.card, { borderColor: '#fca5a5', backgroundColor: '#fef2f2' }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <AlertTriangle size={18} color="#dc2626" />
+                  <Text style={[styles.cardTitle, { color: '#991b1b' }]}>Ownership & Danger Zone</Text>
+                </View>
+
+                {/* Transfer Ownership */}
+                <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#fee2e2' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <UserPlus size={16} color={colors.brand} />
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.gray900 }}>Transfer Ownership</Text>
+                  </View>
+                  <Text style={{ fontSize: 11, color: colors.gray500, marginBottom: 10 }}>
+                    Select an active member to pass ownership to. You will become a Moderator.
+                  </Text>
+
+                  {members.filter((m) => m.user_id !== currentUserId).length === 0 ? (
+                    <Text style={{ fontSize: 12, color: colors.gray400, fontStyle: 'italic' }}>
+                      No other members available to transfer ownership to.
+                    </Text>
+                  ) : (
+                    members
+                      .filter((m) => m.user_id !== currentUserId)
+                      .map((m) => {
+                        const u = m.user
+                        const name = u?.display_name || u?.username || 'Member'
+                        return (
+                          <TouchableOpacity
+                            key={m.user_id}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              paddingVertical: 8,
+                              borderTopWidth: 1,
+                              borderTopColor: '#f3f4f6',
+                            }}
+                            onPress={() => {
+                              Alert.alert(
+                                'Transfer Ownership',
+                                `Transfer ownership of ${community.name} to @${u?.username}? You will be stepped down to Moderator.`,
+                                [
+                                  { text: 'Cancel', style: 'cancel' },
+                                  {
+                                    text: 'Transfer',
+                                    style: 'destructive',
+                                    onPress: async () => {
+                                      // 1. Promote new owner
+                                      await supabase
+                                        .from('community_members')
+                                        .update({ role: 'owner' })
+                                        .match({ community_id: community.id, user_id: m.user_id })
+
+                                      // 2. Step down current owner
+                                      await supabase
+                                        .from('community_members')
+                                        .update({ role: 'moderator' })
+                                        .match({ community_id: community.id, user_id: currentUserId })
+
+                                      // 3. Update creator_id
+                                      await supabase
+                                        .from('communities')
+                                        .update({ creator_id: m.user_id })
+                                        .eq('id', community.id)
+
+                                      Alert.alert('Ownership Transferred', `@${u?.username} is now the primary owner.`)
+                                      fetchCommunityData()
+                                    },
+                                  },
+                                ]
+                              )
+                            }}
+                          >
+                            <View>
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.gray900 }}>{name}</Text>
+                              <Text style={{ fontSize: 11, color: colors.gray400 }}>@{u?.username} • {m.role}</Text>
+                            </View>
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: colors.brand }}>Make Owner</Text>
+                          </TouchableOpacity>
+                        )
+                      })
+                  )}
+                </View>
+
+                {/* Disband Community */}
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: '#dc2626',
+                    paddingVertical: 12,
+                    borderRadius: 12,
+                    alignItems: 'center',
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    gap: 6,
+                  }}
+                  onPress={() => {
+                    Alert.alert(
+                      'Disband Community',
+                      `Permanently delete "${community.name}"? All posts, discussions, and member associations will be erased. This action cannot be undone.`,
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Delete Forever',
+                          style: 'destructive',
+                          onPress: async () => {
+                            const { error } = await supabase
+                              .from('communities')
+                              .delete()
+                              .eq('id', community.id)
+
+                            if (error) {
+                              Alert.alert('Error', error.message)
+                            } else {
+                              Alert.alert('Disbanded', 'The community has been deleted.')
+                              router.replace('/communities' as any)
+                            }
+                          },
+                        },
+                      ]
+                    )
+                  }}
+                >
+                  <Trash2 size={16} color="#fff" />
+                  <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>Permanently Delete Community</Text>
                 </TouchableOpacity>
               </View>
             )}

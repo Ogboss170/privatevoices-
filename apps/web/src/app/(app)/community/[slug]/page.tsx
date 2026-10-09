@@ -26,6 +26,9 @@ import {
   FileText,
   VolumeX,
   AlertCircle,
+  Trash2,
+  UserPlus,
+  AlertTriangle,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import PostCard from '@/components/feed/PostCard'
@@ -874,6 +877,127 @@ export default function CommunityDetailPage(): React.JSX.Element {
               >
                 {savingRules ? 'Saving Rules...' : 'Save All Rules'}
               </button>
+            </div>
+          )}
+
+          {/* 4. Danger Zone (Owner Only): Transfer Ownership & Delete Community */}
+          {userRole === 'owner' && (
+            <div className="card p-6 space-y-5 border border-red-200 bg-red-50/20">
+              <div className="flex items-center gap-2 border-b border-red-100 pb-3">
+                <AlertTriangle size={18} className="text-red-600" />
+                <div>
+                  <h3 className="font-bold text-red-900 text-base">Community Ownership & Danger Zone</h3>
+                  <p className="text-xs text-red-600/80">Irreversible actions that affect this entire community.</p>
+                </div>
+              </div>
+
+              {/* Transfer Ownership */}
+              <div className="p-4 bg-white rounded-xl border border-gray-200 space-y-3">
+                <div className="flex items-center gap-2">
+                  <UserPlus size={16} className="text-brand-600" />
+                  <h4 className="text-xs font-bold text-gray-900">Transfer Community Ownership</h4>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Select an active member or moderator to become the new primary Owner of @{community.slug}. You will be reassigned as a Moderator.
+                </p>
+
+                <div className="flex items-center gap-3">
+                  <select
+                    id="transferOwnerSelect"
+                    className="input-field text-xs flex-1"
+                    defaultValue=""
+                  >
+                    <option value="" disabled>Select new owner...</option>
+                    {members
+                      .filter((m) => m.user_id !== currentUserId)
+                      .map((m) => (
+                        <option key={m.user_id} value={m.user_id}>
+                          @{m.user?.username} ({m.user?.display_name}) - {m.role}
+                        </option>
+                      ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const selectEl = document.getElementById('transferOwnerSelect') as HTMLSelectElement
+                      const targetNewOwnerId = selectEl?.value
+                      if (!targetNewOwnerId) {
+                        alert('Please select a member to transfer ownership to.')
+                        return
+                      }
+                      const targetMember = members.find((m) => m.user_id === targetNewOwnerId)
+                      if (!confirm(`Are you absolutely sure you want to transfer ownership of ${community.name} to @${targetMember?.user?.username}? You will be stepped down to Moderator.`)) {
+                        return
+                      }
+
+                      // 1. Promote new owner
+                      const { error: err1 } = await supabase
+                        .from('community_members')
+                        .update({ role: 'owner' })
+                        .match({ community_id: community.id, user_id: targetNewOwnerId })
+
+                      // 2. Step down current owner to moderator
+                      const { error: err2 } = await supabase
+                        .from('community_members')
+                        .update({ role: 'moderator' })
+                        .match({ community_id: community.id, user_id: currentUserId })
+
+                      // 3. Update community creator_id
+                      await supabase
+                        .from('communities')
+                        .update({ creator_id: targetNewOwnerId })
+                        .eq('id', community.id)
+
+                      if (err1 || err2) {
+                        alert(`Error transferring ownership: ${err1?.message || err2?.message}`)
+                      } else {
+                        alert(`Ownership transferred to @${targetMember?.user?.username} successfully!`)
+                        fetchCommunityData()
+                      }
+                    }}
+                    className="px-4 py-2 text-xs font-bold rounded-lg bg-gray-900 hover:bg-black text-white transition-colors flex-shrink-0"
+                  >
+                    Transfer
+                  </button>
+                </div>
+              </div>
+
+              {/* Delete / Disband Community */}
+              <div className="p-4 bg-white rounded-xl border border-red-200 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Trash2 size={16} className="text-red-600" />
+                  <h4 className="text-xs font-bold text-red-900">Disband & Delete Community</h4>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Permanently delete @{community.slug}, all discussions, and all member associations. This cannot be undone.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const promptConfirm = prompt(`CRITICAL CONFIRMATION: Type "${community.slug}" to permanently disband and delete this community:`)
+                    if (promptConfirm !== community.slug) {
+                      if (promptConfirm !== null) alert('Slug did not match. Deletion aborted.')
+                      return
+                    }
+
+                    const { error } = await supabase
+                      .from('communities')
+                      .delete()
+                      .eq('id', community.id)
+
+                    if (error) {
+                      alert(`Failed to delete community: ${error.message}`)
+                    } else {
+                      alert(`Community @${community.slug} has been permanently disbanded.`)
+                      router.push('/communities')
+                    }
+                  }}
+                  className="px-4 py-2 text-xs font-bold rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors"
+                >
+                  Permanently Delete Community
+                </button>
+              </div>
             </div>
           )}
         </div>
