@@ -218,6 +218,9 @@ export default function CommunityDetailScreen() {
             content: p.content, imageUrls: p.image_urls ?? [], hashtags: [],
             likeCount, commentCount, repostCount: 0,
             isLikedByMe: false, isSavedByMe: false, isRepostedByMe: false,
+            isPinned: p.is_pinned || false,
+            pinnedAt: p.pinned_at || null,
+            pinnedBy: p.pinned_by || null,
             createdAt: p.created_at, updatedAt: p.updated_at,
           }
         })
@@ -619,6 +622,10 @@ export default function CommunityDetailScreen() {
                   key={post.id}
                   post={post}
                   currentUserId={currentUserId || undefined}
+                  communityRole={userRole}
+                  onTogglePin={() => {
+                    fetchCommunityData()
+                  }}
                   onPressAuthor={(id) => setSelectedProfileTarget({ userId: id })}
                   onPressMention={(u) => setSelectedProfileTarget({ username: u })}
                 />

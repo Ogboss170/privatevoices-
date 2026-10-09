@@ -99,6 +99,9 @@ export interface Post {
   isSavedByMe: boolean;
   isRepostedByMe: boolean;
   poll?: Poll | null;
+  isPinned?: boolean;
+  pinnedAt?: string | null;
+  pinnedBy?: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Heart, MessageCircle, Repeat, Bookmark, Share2, Trash2, MoreVertical, Flag, ShieldOff, ChevronLeft, ChevronRight, X, TrendingUp, BarChart2 } from 'lucide-react'
+import { Heart, MessageCircle, Repeat, Bookmark, Share2, Trash2, MoreVertical, Flag, ShieldOff, ChevronLeft, ChevronRight, X, TrendingUp, BarChart2, Pin } from 'lucide-react'
 import type { Post } from '@private-voices/shared'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import FormattedText from '../common/FormattedText'
@@ -15,15 +15,22 @@ import { UserBadgesRow } from '../common/PlatformBadge'
 interface PostCardProps {
   post: Post
   currentUserId?: string
+  communityRole?: 'owner' | 'moderator' | 'member' | null
   onDelete?: (postId: string) => void
   onToggleSave?: (postId: string, isSaved: boolean) => void
+  onTogglePin?: (postId: string, isPinned: boolean) => void
 }
 
-export default function PostCard({ post, currentUserId, onDelete, onToggleSave }: PostCardProps): React.JSX.Element {
+export default function PostCard({ post, currentUserId, communityRole, onDelete, onToggleSave, onTogglePin }: PostCardProps): React.JSX.Element {
   const supabase = createSupabaseBrowserClient()
   const cardRef = useRef<HTMLDivElement>(null)
   const [authorBadges, setAuthorBadges] = useState<string[]>([])
   const [isLiked, setIsLiked] = useState(post.isLikedByMe)
+  const [isPinned, setIsPinned] = useState(post.isPinned || false)
+  const [pinBusy, setPinBusy] = useState(false)
+  const [canModerateCommunity, setCanModerateCommunity] = useState(
+    communityRole === 'owner' || communityRole === 'moderator'
+  )
 
   useEffect(() => {
     async function loadAuthorBadges() {
@@ -44,6 +51,35 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
     }
     loadAuthorBadges()
   }, [supabase, post.authorId])
+
+  useEffect(() => {
+    async function checkCommunityModStatus() {
+      if (communityRole !== undefined) {
+        setCanModerateCommunity(communityRole === 'owner' || communityRole === 'moderator')
+        return
+      }
+      if (!currentUserId || !post.communityId) {
+        setCanModerateCommunity(false)
+        return
+      }
+      try {
+        const { data } = await supabase
+          .from('community_members')
+          .select('role')
+          .match({ community_id: post.communityId, user_id: currentUserId })
+          .maybeSingle()
+
+        if (data && (data.role === 'owner' || data.role === 'moderator')) {
+          setCanModerateCommunity(true)
+        } else {
+          setCanModerateCommunity(false)
+        }
+      } catch {
+        setCanModerateCommunity(false)
+      }
+    }
+    checkCommunityModStatus()
+  }, [supabase, currentUserId, post.communityId, communityRole])
   const [likeCount, setLikeCount] = useState(post.likeCount)
   const [likeBusy, setLikeBusy] = useState(false)
   const [isReposted, setIsReposted] = useState(post.isRepostedByMe || false)
@@ -373,6 +409,37 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
     }
   }
 
+  async function handleTogglePin() {
+    if (pinBusy) return
+    setPinBusy(true)
+    const nextPinned = !isPinned
+    setIsPinned(nextPinned)
+
+    try {
+      const { error } = await supabase
+        .from('posts')
+        .update({
+          is_pinned: nextPinned,
+          pinned_at: nextPinned ? new Date().toISOString() : null,
+          pinned_by: nextPinned ? currentUserId : null,
+        })
+        .eq('id', post.id)
+
+      if (error) {
+        setIsPinned(!nextPinned)
+        alert(`Failed to ${nextPinned ? 'pin' : 'unpin'} post: ${error.message}`)
+      } else {
+        onTogglePin?.(post.id, nextPinned)
+      }
+    } catch (err: any) {
+      setIsPinned(!nextPinned)
+      alert(`Error updating post pin: ${err.message}`)
+    } finally {
+      setPinBusy(false)
+      setShowMenu(false)
+    }
+  }
+
   return (
     <article ref={cardRef} className="card p-5 space-y-4 hover:border-gray-300 transition-colors">
       {/* Header */}
@@ -435,6 +502,20 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
 
           {showMenu && (
             <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-xl shadow-lg p-1.5 z-20 w-48 space-y-1">
+              {canModerateCommunity && (
+                <button
+                  onClick={handleTogglePin}
+                  disabled={pinBusy}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg transition-colors ${
+                    isPinned
+                      ? 'text-purple-700 bg-purple-50 hover:bg-purple-100'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <Pin size={14} className={isPinned ? 'text-purple-600 fill-purple-600' : 'text-gray-500'} />
+                  <span>{isPinned ? 'Unpin from Community' : 'Pin to Community'}</span>
+                </button>
+              )}
               {isOwner && (
                 <button
                   onClick={() => {
@@ -467,6 +548,14 @@ export default function PostCard({ post, currentUserId, onDelete, onToggleSave }
           )}
         </div>
       </div>
+
+      {/* Pinned Badge Banner */}
+      {isPinned && (
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200/60 px-3 py-1.5 rounded-lg w-fit">
+          <Pin size={13} className="fill-purple-600 text-purple-600" />
+          <span>Pinned Post</span>
+        </div>
+      )}
 
       {/* Content */}
       <div className="text-gray-800 text-sm whitespace-pre-line leading-relaxed">

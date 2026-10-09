@@ -151,6 +151,9 @@ export default function CommunityDetailPage(): React.JSX.Element {
         isLikedByMe: false,
         isSavedByMe: false,
         isRepostedByMe: false,
+        isPinned: p.is_pinned || false,
+        pinnedAt: p.pinned_at || null,
+        pinnedBy: p.pinned_by || null,
         createdAt: p.created_at,
         updatedAt: p.updated_at,
       }))
@@ -456,7 +459,15 @@ export default function CommunityDetailPage(): React.JSX.Element {
           ) : (
             <div className="space-y-4">
               {posts.map((post) => (
-                <PostCard key={post.id} post={post} currentUserId={currentUserId || undefined} />
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  currentUserId={currentUserId || undefined}
+                  communityRole={userRole}
+                  onTogglePin={() => {
+                    fetchCommunityData()
+                  }}
+                />
               ))}
             </div>
           )}

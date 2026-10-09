@@ -29,6 +29,7 @@ import {
   ChevronLeft,
   ChevronRight,
   TrendingUp,
+  Pin,
 } from 'lucide-react-native'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
@@ -45,18 +46,25 @@ import { useTheme } from '../context/ThemeContext'
 interface MobilePostCardProps {
   post: Post
   currentUserId?: string
+  communityRole?: 'owner' | 'moderator' | 'member' | null
   onDelete?: (postId: string) => void
   onPressAuthor?: (userId: string) => void
   onPressMention?: (username: string) => void
   onPressHashtag?: (hashtag: string) => void
   onToggleSave?: (postId: string, isSaved: boolean) => void
+  onTogglePin?: (postId: string, isPinned: boolean) => void
 }
 
-export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, onPressMention, onPressHashtag, onToggleSave }: MobilePostCardProps) {
+export function MobilePostCard({ post, currentUserId, communityRole, onDelete, onPressAuthor, onPressMention, onPressHashtag, onToggleSave, onTogglePin }: MobilePostCardProps) {
   const router = useRouter()
   const { colors: themeColors, isDark } = useTheme()
   const [authorBadges, setAuthorBadges] = useState<string[]>([])
   const [isLiked, setIsLiked] = useState(post.isLikedByMe)
+  const [isPinned, setIsPinned] = useState(post.isPinned || false)
+  const [pinBusy, setPinBusy] = useState(false)
+  const [canModerateCommunity, setCanModerateCommunity] = useState(
+    communityRole === 'owner' || communityRole === 'moderator'
+  )
 
   useEffect(() => {
     async function loadAuthorBadges() {
@@ -77,6 +85,66 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
     }
     loadAuthorBadges()
   }, [post.authorId])
+
+  useEffect(() => {
+    async function checkCommunityModStatus() {
+      if (communityRole !== undefined) {
+        setCanModerateCommunity(communityRole === 'owner' || communityRole === 'moderator')
+        return
+      }
+      if (!currentUserId || !post.communityId) {
+        setCanModerateCommunity(false)
+        return
+      }
+      try {
+        const { data } = await supabase
+          .from('community_members')
+          .select('role')
+          .match({ community_id: post.communityId, user_id: currentUserId })
+          .maybeSingle()
+
+        if (data && (data.role === 'owner' || data.role === 'moderator')) {
+          setCanModerateCommunity(true)
+        } else {
+          setCanModerateCommunity(false)
+        }
+      } catch {
+        setCanModerateCommunity(false)
+      }
+    }
+    checkCommunityModStatus()
+  }, [currentUserId, post.communityId, communityRole])
+
+  async function handleTogglePin() {
+    if (pinBusy) return
+    setPinBusy(true)
+    const nextPinned = !isPinned
+    setIsPinned(nextPinned)
+
+    try {
+      const { error } = await supabase
+        .from('posts')
+        .update({
+          is_pinned: nextPinned,
+          pinned_at: nextPinned ? new Date().toISOString() : null,
+          pinned_by: nextPinned ? currentUserId : null,
+        })
+        .eq('id', post.id)
+
+      if (error) {
+        setIsPinned(!nextPinned)
+        Alert.alert('Error', `Failed to ${nextPinned ? 'pin' : 'unpin'} post: ${error.message}`)
+      } else {
+        onTogglePin?.(post.id, nextPinned)
+        Alert.alert('Success', `Post ${nextPinned ? 'pinned to community top' : 'unpinned'}`)
+      }
+    } catch (err: any) {
+      setIsPinned(!nextPinned)
+      Alert.alert('Error', `Pin update failed: ${err.message}`)
+    } finally {
+      setPinBusy(false)
+    }
+  }
   const [likeCount, setLikeCount] = useState(post.likeCount)
   const [likeBusy, setLikeBusy] = useState(false)
   const [isReposted, setIsReposted] = useState(post.isRepostedByMe || false)
@@ -404,6 +472,14 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
       })
     }
 
+    // Community Moderation: Pin / Unpin post
+    if (canModerateCommunity) {
+      options.unshift({
+        text: isPinned ? 'Unpin from Community 📌' : 'Pin to Community 📌',
+        onPress: handleTogglePin,
+      })
+    }
+
     // Post Analytics & Insights: strictly for post author only
     if (isOwner) {
       options.unshift({
@@ -485,6 +561,14 @@ export function MobilePostCard({ post, currentUserId, onDelete, onPressAuthor, o
           <MoreVertical size={20} color="#9ca3af" />
         </TouchableOpacity>
       </View>
+
+      {/* Pinned Post Badge Banner */}
+      {isPinned && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#f3e8ff', alignSelf: 'flex-start', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8, marginBottom: 8 }}>
+          <Pin size={12} color="#7e22ce" />
+          <Text style={{ fontSize: 11, fontWeight: '700', color: '#7e22ce' }}>Pinned Post</Text>
+        </View>
+      )}
 
       {/* Body — Tapping opens full Post Detail Thread */}
       <TouchableOpacity
