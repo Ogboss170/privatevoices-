@@ -142,7 +142,16 @@ export default function AdminDashboardPage(): React.JSX.Element {
         return false
       }
 
-      setCurrentAdminUser({ ...authData.user, ...profile })
+      // Fetch admin roles
+      const { data: adminRoles } = await supabase
+        .from('admin_roles')
+        .select('role')
+        .eq('user_id', authData.user.id)
+
+      const roles = (adminRoles ?? []).map((r: any) => r.role)
+      const isSuperAdmin = roles.includes('SUPER_ADMIN')
+
+      setCurrentAdminUser({ ...authData.user, ...profile, roles, is_super_admin: isSuperAdmin })
       setAuthChecked(true)
       return true
     } catch (err: any) {
