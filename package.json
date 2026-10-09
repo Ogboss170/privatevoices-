@@ -12,9 +12,11 @@
     "build:admin": "pnpm --filter @private-voices/admin build",
     "build:api": "pnpm --filter @private-voices/api build",
     "lint": "pnpm -r lint",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.0",
     "typescript": "^5.4.5"
   },
   "engines": {
