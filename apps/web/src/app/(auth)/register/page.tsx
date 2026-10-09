@@ -24,6 +24,7 @@ export default function RegisterPage() {
   const [legalModal, setLegalModal] = useState<'terms' | 'privacy' | null>(null)
 
   const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -149,9 +150,9 @@ export default function RegisterPage() {
       }
     }
 
-    // Check if session was granted or requires verification
+    // Check if session was granted or requires email verification
     if (!data.session) {
-      setError('Account created! Please check your email to confirm your account before logging in.')
+      setSuccessMessage('Account created! Please check your email to confirm your account before logging in.')
       setLoading(false)
       return
     }
@@ -243,6 +244,15 @@ export default function RegisterPage() {
           <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
             {error}
           </p>
+        )}
+
+        {successMessage && (
+          <div className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-1">
+            <p className="font-semibold flex items-center gap-1.5 text-emerald-900">
+              <Check className="w-4 h-4 text-emerald-600" /> Confirm your email address
+            </p>
+            <p>{successMessage}</p>
+          </div>
         )}
 
         {/* Consent Checkbox */}
