@@ -221,6 +221,112 @@ export default function PostDetailScreen() {
     fetchPostDetail()
   }, [fetchPostDetail])
 
+  // Real-Time Comments & Reaction Updates
+  useEffect(() => {
+    if (!postId) return
+
+    const channel = supabase
+      .channel(`post-detail-realtime:${postId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'comments',
+          filter: `post_id=eq.${postId}`,
+        },
+        async (payload) => {
+          const newComm = payload.new as any
+          let authorData = null
+          if (newComm.author_id) {
+            const { data } = await supabase
+              .from('profiles')
+              .select('id, username, display_name, avatar_url')
+              .eq('id', newComm.author_id)
+              .maybeSingle()
+            authorData = data
+          }
+
+          setComments((prev) => {
+            if (prev.some((c) => c.id === newComm.id)) return prev
+            return [
+              ...prev,
+              {
+                ...newComm,
+                author: authorData || { id: newComm.author_id, username: 'anonymous', display_name: 'Anonymous' },
+                likeCount: 0,
+                isLikedByMe: false,
+              },
+            ]
+          })
+          setPost((prev) => (prev ? { ...prev, commentCount: (prev.commentCount || 0) + 1 } : null))
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'comments',
+          filter: `post_id=eq.${postId}`,
+        },
+        (payload) => {
+          setComments((prev) => prev.filter((c) => c.id !== payload.old.id && c.parent_id !== payload.old.id))
+          setPost((prev) => (prev ? { ...prev, commentCount: Math.max(0, (prev.commentCount || 0) - 1) } : null))
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'likes',
+          filter: `post_id=eq.${postId}`,
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            if ((payload.new as any)?.user_id !== currentUserId) {
+              setPost((prev) => (prev ? { ...prev, likeCount: (prev.likeCount || 0) + 1 } : null))
+            }
+          } else if (payload.eventType === 'DELETE') {
+            if ((payload.old as any)?.user_id !== currentUserId) {
+              setPost((prev) => (prev ? { ...prev, likeCount: Math.max(0, (prev.likeCount || 0) - 1) } : null))
+            }
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'comment_likes',
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const row = payload.new as any
+            if (row.user_id !== currentUserId) {
+              setComments((prev) =>
+                prev.map((c) => (c.id === row.comment_id ? { ...c, likeCount: (c.likeCount || 0) + 1 } : c))
+              )
+            }
+          } else if (payload.eventType === 'DELETE') {
+            const row = payload.old as any
+            if (row.user_id !== currentUserId) {
+              setComments((prev) =>
+                prev.map((c) => (c.id === row.comment_id ? { ...c, likeCount: Math.max(0, (c.likeCount || 0) - 1) } : c))
+              )
+            }
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [postId, currentUserId])
+
   async function handleAddComment() {
     if (!commentText.trim() || !post) return
     if (!currentUserId) {

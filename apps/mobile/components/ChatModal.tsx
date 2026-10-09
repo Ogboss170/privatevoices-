@@ -111,7 +111,7 @@ export function ChatModal({
     loadMessages()
 
     // Realtime channel with Broadcast & Presence
-    const channel = supabase.channel(`chat-mobile:${conversationId}`, {
+    const channel = supabase.channel(`chat:${conversationId}`, {
       config: {
         broadcast: { self: false },
         presence: { key: currentUserId },

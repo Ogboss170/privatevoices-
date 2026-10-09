@@ -141,6 +141,111 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
     }
   }, [post.id, currentUserId, isOwner, supabase])
 
+  // Real-Time Comments & Reaction Updates
+  useEffect(() => {
+    const channel = supabase
+      .channel(`post-realtime:${post.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'comments',
+          filter: `post_id=eq.${post.id}`,
+        },
+        async (payload) => {
+          // Fetch author profile if comment is from another user
+          const newComm = payload.new as any
+          let authorData = null
+          if (newComm.author_id) {
+            const { data } = await supabase
+              .from('profiles')
+              .select('id, username, display_name, avatar_url')
+              .eq('id', newComm.author_id)
+              .maybeSingle()
+            authorData = data
+          }
+
+          setComments((prev) => {
+            if (prev.some((c) => c.id === newComm.id)) return prev
+            return [
+              ...prev,
+              {
+                ...newComm,
+                author: authorData || { id: newComm.author_id, username: 'anonymous', display_name: 'Anonymous' },
+                likeCount: 0,
+                isLikedByMe: false,
+              },
+            ]
+          })
+          post.commentCount = (post.commentCount || 0) + 1
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'comments',
+          filter: `post_id=eq.${post.id}`,
+        },
+        (payload) => {
+          setComments((prev) => prev.filter((c) => c.id !== payload.old.id && c.parent_id !== payload.old.id))
+          post.commentCount = Math.max(0, (post.commentCount || 0) - 1)
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'likes',
+          filter: `post_id=eq.${post.id}`,
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            if ((payload.new as any)?.user_id !== currentUserId) {
+              setLikeCount((prev) => prev + 1)
+            }
+          } else if (payload.eventType === 'DELETE') {
+            if ((payload.old as any)?.user_id !== currentUserId) {
+              setLikeCount((prev) => Math.max(0, prev - 1))
+            }
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'comment_likes',
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const row = payload.new as any
+            if (row.user_id !== currentUserId) {
+              setComments((prev) =>
+                prev.map((c) => (c.id === row.comment_id ? { ...c, likeCount: (c.likeCount || 0) + 1 } : c))
+              )
+            }
+          } else if (payload.eventType === 'DELETE') {
+            const row = payload.old as any
+            if (row.user_id !== currentUserId) {
+              setComments((prev) =>
+                prev.map((c) => (c.id === row.comment_id ? { ...c, likeCount: Math.max(0, (c.likeCount || 0) - 1) } : c))
+              )
+            }
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [post.id, currentUserId, supabase])
+
   const mentionMatch = commentText.match(/(?:^|\s)@([a-zA-Z0-9_]*)$/)
   const mentionQuery = mentionMatch ? mentionMatch[1] : null
   const isMentioning = mentionQuery !== null
