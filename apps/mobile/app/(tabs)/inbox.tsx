@@ -38,11 +38,44 @@ export default function InboxScreen() {
   } | null>(null)
   const [chatModalVisible, setChatModalVisible] = useState(false)
 
+  // Inbox Search state
+  const [isSearchActive, setIsSearchActive] = useState(false)
+  const [inboxSearchQuery, setInboxSearchQuery] = useState('')
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+
   // New Chat modal state
   const [showNewChatModal, setShowNewChatModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [searching, setSearching] = useState(false)
+
+  const handleInboxSearchChange = (text: string) => {
+    setInboxSearchQuery(text)
+    setSearchError(null)
+    if (text.trim()) {
+      setSearchLoading(true)
+      const timer = setTimeout(() => {
+        setSearchLoading(false)
+      }, 150)
+      return () => clearTimeout(timer)
+    } else {
+      setSearchLoading(false)
+    }
+  }
+
+  const handleClearInboxSearch = () => {
+    setInboxSearchQuery('')
+    setSearchLoading(false)
+    setSearchError(null)
+  }
+
+  const handleCloseInboxSearch = () => {
+    setIsSearchActive(false)
+    setInboxSearchQuery('')
+    setSearchLoading(false)
+    setSearchError(null)
+  }
 
   const handleSearchUsers = async (query: string) => {
     setSearchQuery(query)
@@ -253,54 +286,103 @@ export default function InboxScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: themeColors.background }]}>
-      {/* Tab Switcher */}
-      <View style={[styles.tabRow, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.surfaceBorder, paddingTop: insets.top + 6 }]}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'whispers' && styles.tabActive]}
-          onPress={() => setActiveTab('whispers')}
-        >
-          <Text
-            style={[
-              styles.tabText,
-              { color: activeTab === 'whispers' ? colors.brand : themeColors.textSecondary },
-              activeTab === 'whispers' && styles.tabTextActive,
-            ]}
-          >
-            Whispers ({whispers.length})
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'messages' && styles.tabActive]}
-          onPress={() => setActiveTab('messages')}
-        >
-          <View style={styles.tabBadgeRow}>
-            <Text
-              style={[
-                styles.tabText,
-                { color: activeTab === 'messages' ? colors.brand : themeColors.textSecondary },
-                activeTab === 'messages' && styles.tabTextActive,
-              ]}
+      {/* Header / Tab Switcher */}
+      <View style={[styles.headerContainer, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.surfaceBorder, paddingTop: insets.top + 6 }]}>
+        {isSearchActive ? (
+          <View style={styles.searchHeaderRow}>
+            <View style={[styles.inlineSearchBar, { backgroundColor: themeColors.surfaceBorder, borderColor: colors.brandLight }]}>
+              <Search size={16} color={themeColors.textSecondary} />
+              <TextInput
+                style={[styles.inlineSearchInput, { color: themeColors.text }]}
+                placeholder="Search conversations or people..."
+                placeholderTextColor={themeColors.textSecondary}
+                value={inboxSearchQuery}
+                onChangeText={handleInboxSearchChange}
+                autoFocus
+                returnKeyType="search"
+                accessibilityLabel="Search conversations or people"
+              />
+              {inboxSearchQuery ? (
+                <TouchableOpacity
+                  onPress={handleClearInboxSearch}
+                  style={styles.inlineClearBtn}
+                  accessibilityLabel="Clear search input"
+                >
+                  <X size={15} color={themeColors.textSecondary} />
+                </TouchableOpacity>
+              ) : searchLoading ? (
+                <ActivityIndicator size="small" color={colors.brand} style={{ marginRight: 6 }} />
+              ) : null}
+            </View>
+            <TouchableOpacity
+              onPress={handleCloseInboxSearch}
+              style={styles.cancelSearchBtn}
+              accessibilityLabel="Cancel search"
             >
-              Direct Messages
-            </Text>
-            {totalUnreadDirect > 0 && (
-              <View style={styles.tabPill}>
-                <Text style={styles.tabPillText}>{totalUnreadDirect}</Text>
+              <Text style={[styles.cancelSearchText, { color: themeColors.textSecondary }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.tabRow}>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'whispers' && styles.tabActive]}
+              onPress={() => setActiveTab('whispers')}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  { color: activeTab === 'whispers' ? colors.brand : themeColors.textSecondary },
+                  activeTab === 'whispers' && styles.tabTextActive,
+                ]}
+              >
+                Whispers ({whispers.length})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'messages' && styles.tabActive]}
+              onPress={() => setActiveTab('messages')}
+            >
+              <View style={styles.tabBadgeRow}>
+                <Text
+                  style={[
+                    styles.tabText,
+                    { color: activeTab === 'messages' ? colors.brand : themeColors.textSecondary },
+                    activeTab === 'messages' && styles.tabTextActive,
+                  ]}
+                >
+                  Direct Messages
+                </Text>
+                {totalUnreadDirect > 0 && (
+                  <View style={styles.tabPill}>
+                    <Text style={styles.tabPillText}>{totalUnreadDirect}</Text>
+                  </View>
+                )}
+              </View>
+            </TouchableOpacity>
+
+            {activeTab === 'messages' && (
+              <View style={styles.headerActionsRight}>
+                <TouchableOpacity
+                  style={styles.iconSearchBtn}
+                  onPress={() => setIsSearchActive(true)}
+                  activeOpacity={0.7}
+                  accessibilityLabel="Search conversations"
+                >
+                  <Search size={18} color={themeColors.textSecondary} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.newChatBtn}
+                  onPress={() => setShowNewChatModal(true)}
+                  activeOpacity={0.7}
+                  accessibilityLabel="New direct message"
+                >
+                  <UserPlus size={16} color={colors.brand} />
+                  <Text style={styles.newChatBtnText}>New</Text>
+                </TouchableOpacity>
               </View>
             )}
           </View>
-        </TouchableOpacity>
-
-        {activeTab === 'messages' && (
-          <TouchableOpacity
-            style={styles.newChatBtn}
-            onPress={() => setShowNewChatModal(true)}
-            activeOpacity={0.7}
-          >
-            <UserPlus size={16} color={colors.brand} />
-            <Text style={styles.newChatBtnText}>New Chat</Text>
-          </TouchableOpacity>
         )}
       </View>
 
@@ -359,91 +441,169 @@ export default function InboxScreen() {
         )
       ) : (
         /* Direct Messages */
-        conversations.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyEmoji}>💬</Text>
-            <Text style={styles.emptyTitle}>No Direct Conversations</Text>
-            <Text style={styles.emptyBody}>
-              Start a direct conversation with users from their public profiles.
-            </Text>
-          </View>
-        ) : (
-          <FlatList
-            data={conversations}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.listContent}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.brand} />
-            }
-            renderItem={({ item }) => {
-              const partner = item.user_a?.id === currentUserId ? item.user_b : item.user_a
-              const unread = unreadCounts[item.id] || 0
-              const partnerName = partner?.display_name || partner?.username || 'User'
-              const avatar = partner?.avatar_url
-              const isVoiceNote = item.last_message?.includes('Voice note')
+        (() => {
+          const cleanQuery = inboxSearchQuery.trim().toLowerCase().replace(/^@/, '')
+          const filteredConversations = cleanQuery
+            ? conversations.filter((conv) => {
+                const partner = conv.user_a?.id === currentUserId ? conv.user_b : conv.user_a
+                if (!partner) return false
+                const name = (partner.display_name || '').toLowerCase()
+                const username = (partner.username || '').toLowerCase()
+                return name.includes(cleanQuery) || username.includes(cleanQuery)
+              })
+            : conversations
 
-              return (
+          if (conversations.length === 0) {
+            return (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyEmoji}>💬</Text>
+                <Text style={[styles.emptyTitle, { color: themeColors.text }]}>No Direct Conversations</Text>
+                <Text style={[styles.emptyBody, { color: themeColors.textSecondary }]}>
+                  Start a direct conversation with users from their public profiles or with the New Chat button.
+                </Text>
                 <TouchableOpacity
-                  style={[
-                    styles.convCard,
-                    {
-                      backgroundColor: themeColors.surface,
-                      borderColor: unread > 0 ? colors.brand : themeColors.surfaceBorder,
-                    },
-                    unread > 0 && styles.convCardUnread,
-                  ]}
-                  onPress={() => openChat(item)}
-                  activeOpacity={0.7}
+                  style={[styles.startChatActionBtn, { backgroundColor: colors.brand }]}
+                  onPress={() => setShowNewChatModal(true)}
+                  activeOpacity={0.8}
                 >
-                  <View style={[styles.avatarCircle, { backgroundColor: colors.brandLight }]}>
-                    {avatar ? (
-                      <Image source={{ uri: avatar }} style={styles.avatarImg} />
-                    ) : (
-                      <Text style={styles.avatarText}>{partnerName.charAt(0).toUpperCase()}</Text>
-                    )}
-                  </View>
+                  <UserPlus size={16} color="#ffffff" />
+                  <Text style={styles.startChatActionText}>Start New Chat</Text>
+                </TouchableOpacity>
+              </View>
+            )
+          }
 
-                  <View style={styles.convInfo}>
-                    <View style={styles.convTopRow}>
-                      <Text
-                        style={[
-                          styles.convName,
-                          { color: themeColors.text },
-                          unread > 0 && styles.convNameUnread,
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {partnerName}
-                      </Text>
-                      <Text style={[styles.convTime, { color: themeColors.textSecondary }]}>
-                        {formatTime(item.last_message_at || item.created_at)}
-                      </Text>
-                    </View>
+          if (searchError) {
+            return (
+              <View style={[styles.emptyContainer, { paddingHorizontal: 24 }]}>
+                <Text style={[styles.emptyTitle, { color: colors.red500 }]}>Search Error</Text>
+                <Text style={[styles.emptyBody, { color: themeColors.textSecondary }]}>{searchError}</Text>
+                <TouchableOpacity
+                  style={[styles.retryBtn, { backgroundColor: themeColors.surfaceBorder }]}
+                  onPress={() => handleInboxSearchChange(inboxSearchQuery)}
+                >
+                  <Text style={[styles.retryBtnText, { color: themeColors.text }]}>Retry Search</Text>
+                </TouchableOpacity>
+              </View>
+            )
+          }
 
-                    <View style={styles.convBottomRow}>
-                      <Text
-                        style={[
-                          styles.convMsg,
-                          { color: isVoiceNote ? colors.brand : unread > 0 ? themeColors.text : themeColors.textSecondary },
-                          unread > 0 && styles.convMsgUnread,
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {item.last_message || 'Tap to start chatting'}
-                      </Text>
+          if (cleanQuery && filteredConversations.length === 0) {
+            return (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyEmoji}>🔍</Text>
+                <Text style={[styles.emptyTitle, { color: themeColors.text }]}>No conversations found</Text>
+                <Text style={[styles.emptyBody, { color: themeColors.textSecondary }]}>
+                  We couldn't find any chats matching "{inboxSearchQuery}". Check the spelling or search for people to start a new chat.
+                </Text>
+                <View style={styles.emptyActionRow}>
+                  <TouchableOpacity
+                    style={[styles.clearFilterBtn, { backgroundColor: themeColors.surfaceBorder }]}
+                    onPress={handleClearInboxSearch}
+                  >
+                    <Text style={[styles.clearFilterBtnText, { color: themeColors.text }]}>Clear Search</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.peopleSearchBtn, { backgroundColor: colors.brand }]}
+                    onPress={() => {
+                      setShowNewChatModal(true)
+                      setSearchQuery(inboxSearchQuery)
+                      handleSearchUsers(inboxSearchQuery)
+                    }}
+                  >
+                    <UserPlus size={14} color="#ffffff" />
+                    <Text style={styles.peopleSearchBtnText}>Search People</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )
+          }
 
-                      {unread > 0 && (
-                        <View style={styles.unreadBadge}>
-                          <Text style={styles.unreadBadgeText}>{unread}</Text>
-                        </View>
+          return (
+            <FlatList
+              data={filteredConversations}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.listContent}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.brand} />
+              }
+              renderItem={({ item }) => {
+                const partner = item.user_a?.id === currentUserId ? item.user_b : item.user_a
+                const unread = unreadCounts[item.id] || 0
+                const partnerName = partner?.display_name || partner?.username || 'User'
+                const avatar = partner?.avatar_url
+                const isVoiceNote = item.last_message?.includes('Voice note')
+
+                return (
+                  <TouchableOpacity
+                    style={[
+                      styles.convCard,
+                      {
+                        backgroundColor: themeColors.surface,
+                        borderColor: unread > 0 ? colors.brand : themeColors.surfaceBorder,
+                      },
+                      unread > 0 && styles.convCardUnread,
+                    ]}
+                    onPress={() => openChat(item)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.avatarCircle, { backgroundColor: colors.brandLight }]}>
+                      {avatar ? (
+                        <Image source={{ uri: avatar }} style={styles.avatarImg} />
+                      ) : (
+                        <Text style={styles.avatarText}>{partnerName.charAt(0).toUpperCase()}</Text>
                       )}
                     </View>
-                  </View>
-                </TouchableOpacity>
-              )
-            }}
-          />
-        )
+
+                    <View style={styles.convInfo}>
+                      <View style={styles.convTopRow}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, marginRight: 8 }}>
+                          <Text
+                            style={[
+                              styles.convName,
+                              { color: themeColors.text },
+                              unread > 0 && styles.convNameUnread,
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {partnerName}
+                          </Text>
+                          {partner?.username && (
+                            <Text style={[styles.convUsername, { color: themeColors.textSecondary }]} numberOfLines={1}>
+                              @{partner.username}
+                            </Text>
+                          )}
+                        </View>
+                        <Text style={[styles.convTime, { color: themeColors.textSecondary }]}>
+                          {formatTime(item.last_message_at || item.created_at)}
+                        </Text>
+                      </View>
+
+                      <View style={styles.convBottomRow}>
+                        <Text
+                          style={[
+                            styles.convMsg,
+                            { color: isVoiceNote ? colors.brand : unread > 0 ? themeColors.text : themeColors.textSecondary },
+                            unread > 0 && styles.convMsgUnread,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {item.last_message || 'Tap to start chatting'}
+                        </Text>
+
+                        {unread > 0 && (
+                          <View style={styles.unreadBadge}>
+                            <Text style={styles.unreadBadgeText}>{unread}</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                )
+              }}
+            />
+          )
+        })()
       )}
 
       {/* 1-on-1 Chat Modal */}
@@ -643,12 +803,60 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
+  headerContainer: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray200,
+  },
+  searchHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  inlineSearchBar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    height: 38,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  inlineSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    marginLeft: 6,
+    paddingVertical: 0,
+  },
+  inlineClearBtn: {
+    padding: 4,
+  },
+  cancelSearchBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+  },
+  cancelSearchText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  headerActionsRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginLeft: 'auto',
+    alignSelf: 'center',
+  },
+  iconSearchBtn: {
+    padding: 6,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   newChatBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginLeft: 'auto',
-    alignSelf: 'center',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 16,
@@ -658,6 +866,63 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: colors.brand,
+  },
+  convUsername: {
+    fontSize: 12,
+    fontWeight: '400',
+    maxWidth: 90,
+  },
+  startChatActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginTop: 14,
+  },
+  startChatActionText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  emptyActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 14,
+  },
+  clearFilterBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  clearFilterBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  peopleSearchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  peopleSearchBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  retryBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    marginTop: 10,
+  },
+  retryBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,

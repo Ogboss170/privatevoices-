@@ -14,18 +14,20 @@ export async function GET(request: NextRequest) {
   redirectTo.searchParams.delete('type')
 
   if (token_hash && type) {
+    let response = NextResponse.redirect(redirectTo)
+
     const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://trwraypolgqhkrxlijql.supabase.co',
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyd3JheXBvbGdxaGtyeGxpanFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA5NDYyNjQsImV4cCI6MjEwNjUyMjI2NH0.PyOJX0issEMtgs80pWdcsFIzb-MaGwgdLoPEJYkRWBw',
       {
         cookies: {
           getAll() {
             return request.cookies.getAll()
           },
-          setAll(cookiesToSet) {
+          setAll(cookiesToSet: Array<{ name: string; value: string; options?: any }>) {
             cookiesToSet.forEach(({ name, value, options }) => {
               request.cookies.set(name, value)
-              redirectTo.cookies.set(name, value, options)
+              response.cookies.set(name, value, options)
             })
           },
         },
@@ -39,7 +41,7 @@ export async function GET(request: NextRequest) {
 
     if (!error) {
       redirectTo.searchParams.delete('next')
-      return NextResponse.redirect(redirectTo)
+      return response
     }
   }
 

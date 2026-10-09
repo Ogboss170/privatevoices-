@@ -23,6 +23,13 @@ function InboxContent(): React.JSX.Element {
   const [shareStatus, setShareStatus] = useState<{ [id: string]: 'copied' | 'shared' | 'error' | null }>({})
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({})
 
+  // Inbox Conversations Search state
+  const [inboxSearchQuery, setInboxSearchQuery] = useState('')
+  const [isSearchActive, setIsSearchActive] = useState(false)
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const searchInputRef = React.useRef<HTMLInputElement | null>(null)
+
   // New Chat Modal state
   const [showNewChatModal, setShowNewChatModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -36,6 +43,44 @@ function InboxContent(): React.JSX.Element {
       }
     })
   }, [supabase])
+
+  // Focus search input when search mode is opened
+  useEffect(() => {
+    if (isSearchActive) {
+      setTimeout(() => {
+        searchInputRef.current?.focus()
+      }, 50)
+    }
+  }, [isSearchActive])
+
+  // Handle typing in inbox search with debounce simulation for searching indicator
+  const handleInboxSearchChange = (query: string) => {
+    setInboxSearchQuery(query)
+    setSearchError(null)
+    if (query.trim()) {
+      setSearchLoading(true)
+      const timer = setTimeout(() => {
+        setSearchLoading(false)
+      }, 150)
+      return () => clearTimeout(timer)
+    } else {
+      setSearchLoading(false)
+    }
+  }
+
+  const handleClearInboxSearch = () => {
+    setInboxSearchQuery('')
+    setSearchLoading(false)
+    setSearchError(null)
+    searchInputRef.current?.focus()
+  }
+
+  const handleCloseInboxSearch = () => {
+    setIsSearchActive(false)
+    setInboxSearchQuery('')
+    setSearchLoading(false)
+    setSearchError(null)
+  }
 
   const handleSearchUsers = async (query: string) => {
     setSearchQuery(query)
@@ -255,20 +300,83 @@ function InboxContent(): React.JSX.Element {
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">Inbox</h1>
-          <p className="text-xs text-gray-500">One-way anonymous Whispers & direct 1-on-1 chats</p>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          {!isSearchActive ? (
+            <>
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">Inbox</h1>
+                <p className="text-xs text-gray-500">One-way anonymous Whispers & direct 1-on-1 chats</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {activeTab === 'messages' && (
+                  <>
+                    <button
+                      onClick={() => setIsSearchActive(true)}
+                      className="btn-secondary text-xs py-2 px-3 flex items-center gap-1.5 shadow-xs hover:border-brand-300 hover:text-brand-700 transition-all"
+                      aria-label="Search conversations or people"
+                      title="Search conversations"
+                    >
+                      <Search size={14} className="text-gray-500" />
+                      <span className="hidden sm:inline">Search</span>
+                    </button>
+                    <button
+                      onClick={() => setShowNewChatModal(true)}
+                      className="btn-primary text-xs py-2 px-3 flex items-center gap-1.5 shadow-sm"
+                      aria-label="Start new chat"
+                    >
+                      <UserPlus size={14} />
+                      <span>New Chat</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="w-full flex items-center gap-2 animate-in fade-in duration-150">
+              <div className="relative flex-1">
+                <Search
+                  size={16}
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={inboxSearchQuery}
+                  onChange={(e) => handleInboxSearchChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      handleCloseInboxSearch()
+                    }
+                  }}
+                  placeholder="Search conversations or people..."
+                  aria-label="Search conversations or people"
+                  className="w-full pl-10 pr-9 py-2 text-sm bg-white border border-brand-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 shadow-xs text-gray-900 placeholder-gray-400"
+                />
+                {inboxSearchQuery ? (
+                  <button
+                    onClick={handleClearInboxSearch}
+                    aria-label="Clear search input"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5 rounded-full hover:bg-gray-100 transition-colors"
+                  >
+                    <X size={15} />
+                  </button>
+                ) : searchLoading ? (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <Loader2 size={15} className="animate-spin text-brand-600" />
+                  </div>
+                ) : null}
+              </div>
+              <button
+                onClick={handleCloseInboxSearch}
+                aria-label="Close search"
+                className="btn-secondary text-xs py-2 px-3 text-gray-600 hover:text-gray-900 whitespace-nowrap"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
-        {activeTab === 'messages' && (
-          <button
-            onClick={() => setShowNewChatModal(true)}
-            className="btn-primary text-xs py-2 px-3 flex items-center gap-1.5 shadow-sm"
-          >
-            <UserPlus size={14} />
-            <span>New Chat</span>
-          </button>
-        )}
       </div>
 
       {/* Tab Filter */}
@@ -410,94 +518,159 @@ function InboxContent(): React.JSX.Element {
         )
       ) : (
         /* Direct Messages List */
-        conversations.length === 0 ? (
-          <div className="card p-12 text-center space-y-3">
-            <div className="text-5xl">💬</div>
-            <h3 className="font-bold text-gray-900">No Direct Conversations</h3>
-            <p className="text-xs text-gray-500 max-w-xs mx-auto">
-              Start an identity-verified chat with users directly or search for a user with the New Chat button.
-            </p>
-            <button
-              onClick={() => setShowNewChatModal(true)}
-              className="btn-primary text-xs py-2 px-4 inline-flex items-center gap-1.5 shadow-sm mt-2"
-            >
-              <UserPlus size={14} />
-              <span>Start New Chat</span>
-            </button>
-          </div>
-        ) : (
-          <div className="card divide-y divide-gray-100 overflow-hidden shadow-xs">
-            {conversations.map((conv) => {
-              const partner = conv.user_a?.id === currentUserId ? conv.user_b : conv.user_a
-              if (!partner) return null
+        (() => {
+          const cleanQuery = inboxSearchQuery.trim().toLowerCase().replace(/^@/, '')
+          const filteredConversations = cleanQuery
+            ? conversations.filter((conv) => {
+                const partner = conv.user_a?.id === currentUserId ? conv.user_b : conv.user_a
+                if (!partner) return false
+                const name = (partner.display_name || '').toLowerCase()
+                const username = (partner.username || '').toLowerCase()
+                return name.includes(cleanQuery) || username.includes(cleanQuery)
+              })
+            : conversations
 
-              const unread = unreadCounts[conv.id] || 0
-
-              return (
-                <div
-                  key={conv.id}
-                  onClick={() => {
-                    setActiveConversation({
-                      id: conv.id,
-                      partner: {
-                        id: partner.id,
-                        username: partner.username,
-                        displayName: partner.display_name,
-                        avatarUrl: partner.avatar_url,
-                      },
-                    })
-                    // Clear unread badge locally
-                    setUnreadCounts((prev) => ({ ...prev, [conv.id]: 0 }))
-                  }}
-                  className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors cursor-pointer group"
+          if (conversations.length === 0) {
+            return (
+              <div className="card p-12 text-center space-y-3">
+                <div className="text-5xl">💬</div>
+                <h3 className="font-bold text-gray-900">No Direct Conversations</h3>
+                <p className="text-xs text-gray-500 max-w-xs mx-auto">
+                  Start an identity-verified chat with users directly or search for a user with the New Chat button.
+                </p>
+                <button
+                  onClick={() => setShowNewChatModal(true)}
+                  className="btn-primary text-xs py-2 px-4 inline-flex items-center gap-1.5 shadow-sm mt-2"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-12 h-12 rounded-full bg-brand-100 flex items-center justify-center font-bold text-brand-600 flex-shrink-0 overflow-hidden border border-gray-100">
-                      {partner.avatar_url ? (
-                        <Image
-                          src={partner.avatar_url}
-                          alt={partner.display_name}
-                          width={48}
-                          height={48}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        partner.display_name?.charAt(0)?.toUpperCase() || '?'
+                  <UserPlus size={14} />
+                  <span>Start New Chat</span>
+                </button>
+              </div>
+            )
+          }
+
+          if (searchError) {
+            return (
+              <div className="card p-8 text-center space-y-3 border-red-100 bg-red-50/30">
+                <p className="text-sm text-red-600 font-medium">{searchError}</p>
+                <button
+                  onClick={() => {
+                    setSearchError(null)
+                    handleInboxSearchChange(inboxSearchQuery)
+                  }}
+                  className="btn-secondary text-xs py-1.5 px-3 mx-auto"
+                >
+                  Retry Search
+                </button>
+              </div>
+            )
+          }
+
+          if (cleanQuery && filteredConversations.length === 0) {
+            return (
+              <div className="card p-12 text-center space-y-3">
+                <div className="text-4xl text-gray-400">🔍</div>
+                <h3 className="font-bold text-gray-900">No conversations found</h3>
+                <p className="text-xs text-gray-500 max-w-xs mx-auto">
+                  We couldn't find any chats matching &ldquo;{inboxSearchQuery}&rdquo;. Check the spelling or start a new chat with them.
+                </p>
+                <div className="pt-2 flex items-center justify-center gap-2">
+                  <button
+                    onClick={handleClearInboxSearch}
+                    className="btn-secondary text-xs py-1.5 px-3"
+                  >
+                    Clear Search
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowNewChatModal(true)
+                      setSearchQuery(inboxSearchQuery)
+                      handleSearchUsers(inboxSearchQuery)
+                    }}
+                    className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5 shadow-sm"
+                  >
+                    <UserPlus size={13} />
+                    <span>Search People</span>
+                  </button>
+                </div>
+              </div>
+            )
+          }
+
+          return (
+            <div className="card divide-y divide-gray-100 overflow-hidden shadow-xs">
+              {filteredConversations.map((conv) => {
+                const partner = conv.user_a?.id === currentUserId ? conv.user_b : conv.user_a
+                if (!partner) return null
+
+                const unread = unreadCounts[conv.id] || 0
+
+                return (
+                  <div
+                    key={conv.id}
+                    onClick={() => {
+                      setActiveConversation({
+                        id: conv.id,
+                        partner: {
+                          id: partner.id,
+                          username: partner.username,
+                          displayName: partner.display_name,
+                          avatarUrl: partner.avatar_url,
+                        },
+                      })
+                      // Clear unread badge locally
+                      setUnreadCounts((prev) => ({ ...prev, [conv.id]: 0 }))
+                    }}
+                    className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-12 h-12 rounded-full bg-brand-100 flex items-center justify-center font-bold text-brand-600 flex-shrink-0 overflow-hidden border border-gray-100">
+                        {partner.avatar_url ? (
+                          <Image
+                            src={partner.avatar_url}
+                            alt={partner.display_name || partner.username || 'User'}
+                            width={48}
+                            height={48}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          partner.display_name?.charAt(0)?.toUpperCase() || '?'
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-gray-900 truncate group-hover:text-brand-600 transition-colors">
+                            {partner.display_name}
+                          </h4>
+                          <span className="text-xs text-gray-400">@{partner.username}</span>
+                        </div>
+                        <p className="text-xs text-gray-500 truncate max-w-sm mt-0.5">
+                          {conv.last_message || 'Tap to start chatting'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                      <span className="text-[11px] text-gray-400">
+                        {conv.last_message_at
+                          ? new Date(conv.last_message_at).toLocaleDateString([], {
+                              month: 'short',
+                              day: 'numeric',
+                            })
+                          : ''}
+                      </span>
+                      {unread > 0 && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] bg-brand-600 text-white font-bold">
+                          {unread}
+                        </span>
                       )}
                     </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-bold text-gray-900 truncate group-hover:text-brand-600 transition-colors">
-                          {partner.display_name}
-                        </h4>
-                        <span className="text-xs text-gray-400">@{partner.username}</span>
-                      </div>
-                      <p className="text-xs text-gray-500 truncate max-w-sm mt-0.5">
-                        {conv.last_message || 'Tap to start chatting'}
-                      </p>
-                    </div>
                   </div>
-
-                  <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                    <span className="text-[11px] text-gray-400">
-                      {conv.last_message_at
-                        ? new Date(conv.last_message_at).toLocaleDateString([], {
-                            month: 'short',
-                            day: 'numeric',
-                          })
-                        : ''}
-                    </span>
-                    {unread > 0 && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] bg-brand-600 text-white font-bold">
-                        {unread}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )
+                )
+              })}
+            </div>
+          )
+        })()
       )}
 
       {/* Active Chat Drawer */}
