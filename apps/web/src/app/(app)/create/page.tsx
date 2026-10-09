@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { ModerationService } from '@/lib/moderation/moderation.service'
+import { compressImage } from '@/lib/media/imageCompression'
 
 const SAMPLE_GIFS = [
   'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM2Q1Y2E0MmE5OWIyZTZjNmEzZTVjMjIxM2ZhMWRlYTUwNmNlZjJjZCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0HlHJGHe3yAMhdQY/giphy.gif',
@@ -148,7 +149,13 @@ export default function CreatePostPage(): React.JSX.Element {
     if (imageFiles.length > 0) {
       setUploadProgress(10)
       for (let i = 0; i < imageFiles.length; i++) {
-        const file = imageFiles[i]
+        let file = imageFiles[i]
+        try {
+          file = await compressImage(file, { maxWidth: 1920, maxHeight: 1920, quality: 0.82 })
+        } catch (compErr) {
+          console.warn('Image compression fallback to original:', compErr)
+        }
+
         const fileExt = file.name.split('.').pop() || 'jpg'
         const fileName = `${userRes.user.id}/${Date.now()}_${i}.${fileExt}`
 

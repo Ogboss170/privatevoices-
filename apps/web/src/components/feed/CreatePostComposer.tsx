@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { Image as ImageIcon, Send, X, BarChart2, Plus, Trash2 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import MentionAutocomplete from '../common/MentionAutocomplete'
+import { compressImage } from '@/lib/media/imageCompression'
 
 interface CreatePostComposerProps {
   onPostCreated?: () => void
@@ -78,7 +79,13 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
     let uploadedUrls: string[] = []
     if (imageFiles.length > 0) {
       for (let i = 0; i < imageFiles.length; i++) {
-        const file = imageFiles[i]
+        let file = imageFiles[i]
+        try {
+          file = await compressImage(file, { maxWidth: 1920, maxHeight: 1920, quality: 0.82 })
+        } catch (compErr) {
+          console.warn('Image compression fallback to original:', compErr)
+        }
+
         const fileExt = file.name.split('.').pop() || 'jpg'
         const fileName = `${user.user.id}/${Date.now()}_${i}.${fileExt}`
 

@@ -63,6 +63,9 @@ export function ChatModal({
   const [recordingDuration, setRecordingDuration] = useState(0)
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null)
   const [soundObject, setSoundObject] = useState<Audio.Sound | null>(null)
+  const [playbackSpeed, setPlaybackSpeed] = useState<1 | 1.5 | 2>(1)
+  const [playbackPosition, setPlaybackPosition] = useState<number>(0)
+  const [playbackDuration, setPlaybackDuration] = useState<number>(1)
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const flatListRef = useRef<FlatList>(null)
@@ -378,6 +381,7 @@ export function ChatModal({
         }
         setSoundObject(null)
         setPlayingAudioId(null)
+        setPlaybackPosition(0)
         return
       }
 
@@ -386,23 +390,34 @@ export function ChatModal({
         await soundObject.unloadAsync()
       }
 
+      // Configure background playback & interruption mode
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
         playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
       })
 
       const { sound } = await Audio.Sound.createAsync(
         { uri: audioUrl },
-        { shouldPlay: true }
+        { shouldPlay: true, rate: playbackSpeed, shouldCorrectPitch: true }
       )
 
       setSoundObject(sound)
       setPlayingAudioId(msgId)
 
       sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          setPlayingAudioId(null)
-          setSoundObject(null)
+        if (status.isLoaded) {
+          if (status.durationMillis) {
+            setPlaybackDuration(status.durationMillis)
+            setPlaybackPosition(status.positionMillis)
+          }
+          if (status.didJustFinish) {
+            setPlayingAudioId(null)
+            setSoundObject(null)
+            setPlaybackPosition(0)
+          }
         }
       })
     } catch (err) {
@@ -410,7 +425,23 @@ export function ChatModal({
       Alert.alert('Playback Error', 'Could not play audio message.')
       setPlayingAudioId(null)
       setSoundObject(null)
+      setPlaybackPosition(0)
     }
+  }
+
+  async function handleTogglePlaybackSpeed() {
+    const nextSpeed: 1 | 1.5 | 2 = playbackSpeed === 1 ? 1.5 : playbackSpeed === 1.5 ? 2 : 1
+    setPlaybackSpeed(nextSpeed)
+    if (soundObject) {
+      await soundObject.setRateAsync(nextSpeed, true).catch(() => {})
+    }
+  }
+
+  async function handleScrubWaveform(fraction: number) {
+    if (!soundObject || !playbackDuration) return
+    const targetMs = Math.round(fraction * playbackDuration)
+    setPlaybackPosition(targetMs)
+    await soundObject.setPositionAsync(targetMs).catch(() => {})
   }
 
   function formatAudioDuration(sec: number) {
@@ -768,25 +799,59 @@ export function ChatModal({
 
                               <View style={styles.audioWaveformSection}>
                                 <View style={styles.waveformBars}>
-                                  {[40, 70, 45, 90, 60, 100, 75, 50, 85, 40, 65, 95, 55, 30].map((h, idx) => (
-                                    <View
-                                      key={idx}
-                                      style={[
-                                        styles.waveformBar,
-                                        { height: `${h}%` },
-                                        isPlayingThisAudio && styles.waveformBarPlaying,
-                                        isMe ? styles.waveformBarMe : styles.waveformBarThem,
-                                      ]}
-                                    />
-                                  ))}
+                                  {[40, 70, 45, 90, 60, 100, 75, 50, 85, 40, 65, 95, 55, 30].map((h, idx) => {
+                                    const barFraction = idx / 14
+                                    const currentFraction = isPlayingThisAudio && playbackDuration > 0
+                                      ? playbackPosition / playbackDuration
+                                      : 0
+                                    const isPast = barFraction <= currentFraction
+
+                                    return (
+                                      <TouchableOpacity
+                                        key={idx}
+                                        activeOpacity={0.7}
+                                        onPress={() => {
+                                          if (isPlayingThisAudio) {
+                                            handleScrubWaveform((idx + 1) / 14)
+                                          }
+                                        }}
+                                        style={styles.waveformBarTouch}
+                                      >
+                                        <View
+                                          style={[
+                                            styles.waveformBar,
+                                            { height: `${h}%` },
+                                            isPast && styles.waveformBarPlayed,
+                                            isMe ? styles.waveformBarMe : styles.waveformBarThem,
+                                          ]}
+                                        />
+                                      </TouchableOpacity>
+                                    )
+                                  })}
                                 </View>
                                 <View style={styles.audioMetaRow}>
                                   <Text style={[styles.audioDurationText, isMe ? styles.audioDurationMe : styles.audioDurationThem]}>
+                                    {isPlayingThisAudio && playbackPosition > 0
+                                      ? `${formatAudioDuration(Math.floor(playbackPosition / 1000))} / `
+                                      : ''}
                                     {formatAudioDuration(item.audio_duration || 0)}
                                   </Text>
-                                  <Text style={[styles.audioTagText, isMe ? styles.audioTagMe : styles.audioTagThem]}>
-                                    Audio Whisper
-                                  </Text>
+                                  <View style={styles.audioControlsRight}>
+                                    {isPlayingThisAudio && (
+                                      <TouchableOpacity
+                                        onPress={handleTogglePlaybackSpeed}
+                                        style={[styles.speedBadge, isMe ? styles.speedBadgeMe : styles.speedBadgeThem]}
+                                        activeOpacity={0.8}
+                                      >
+                                        <Text style={[styles.speedBadgeText, isMe ? styles.speedBadgeTextMe : styles.speedBadgeTextThem]}>
+                                          {playbackSpeed}x
+                                        </Text>
+                                      </TouchableOpacity>
+                                    )}
+                                    <Text style={[styles.audioTagText, isMe ? styles.audioTagMe : styles.audioTagThem]}>
+                                      Audio Whisper
+                                    </Text>
+                                  </View>
                                 </View>
                               </View>
                             </View>
@@ -1359,6 +1424,42 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.7)',
   },
   audioTagThem: {
+    color: colors.brand,
+  },
+  waveformBarTouch: {
+    paddingVertical: 4,
+    paddingHorizontal: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  waveformBarPlayed: {
+    opacity: 1,
+    transform: [{ scaleY: 1.15 }],
+  },
+  audioControlsRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  speedBadge: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 6,
+  },
+  speedBadgeMe: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  speedBadgeThem: {
+    backgroundColor: colors.brandLight,
+  },
+  speedBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  speedBadgeTextMe: {
+    color: '#ffffff',
+  },
+  speedBadgeTextThem: {
     color: colors.brand,
   },
   recordingBar: {

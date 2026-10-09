@@ -40,6 +40,9 @@ export default function ChatDrawer({
   const [isRecording, setIsRecording] = useState(false)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null)
+  const [audioSpeed, setAudioSpeed] = useState<1 | 1.5 | 2>(1)
+  const [audioCurrentTime, setAudioCurrentTime] = useState<number>(0)
+  const [audioDuration, setAudioDuration] = useState<number>(0)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -322,6 +325,7 @@ export default function ChatDrawer({
         currentAudioElementRef.current = null
       }
       setPlayingAudioId(null)
+      setAudioCurrentTime(0)
       return
     }
 
@@ -330,24 +334,56 @@ export default function ChatDrawer({
     }
 
     const audio = new window.Audio(audioUrl)
+    audio.playbackRate = audioSpeed
     currentAudioElementRef.current = audio
     setPlayingAudioId(msgId)
 
+    audio.ontimeupdate = () => {
+      setAudioCurrentTime(audio.currentTime)
+      if (audio.duration && !isNaN(audio.duration)) {
+        setAudioDuration(audio.duration)
+      }
+    }
+
+    audio.onloadedmetadata = () => {
+      if (audio.duration && !isNaN(audio.duration)) {
+        setAudioDuration(audio.duration)
+      }
+    }
+
     audio.onended = () => {
       setPlayingAudioId(null)
+      setAudioCurrentTime(0)
       currentAudioElementRef.current = null
     }
 
     audio.onerror = () => {
       alert('Could not play audio message.')
       setPlayingAudioId(null)
+      setAudioCurrentTime(0)
       currentAudioElementRef.current = null
     }
 
     audio.play().catch((err) => {
       console.error('Audio play error:', err)
       setPlayingAudioId(null)
+      setAudioCurrentTime(0)
     })
+  }
+
+  function handleToggleWebAudioSpeed() {
+    const nextSpeed: 1 | 1.5 | 2 = audioSpeed === 1 ? 1.5 : audioSpeed === 1.5 ? 2 : 1
+    setAudioSpeed(nextSpeed)
+    if (currentAudioElementRef.current) {
+      currentAudioElementRef.current.playbackRate = nextSpeed
+    }
+  }
+
+  function handleScrubWebAudio(fraction: number) {
+    if (!currentAudioElementRef.current || !audioDuration) return
+    const targetSec = fraction * audioDuration
+    currentAudioElementRef.current.currentTime = targetSec
+    setAudioCurrentTime(targetSec)
   }
 
   function formatAudioDuration(sec: number) {
@@ -675,25 +711,67 @@ export default function ChatDrawer({
 
                           <div className="flex-1 space-y-1">
                             <div className="flex items-center gap-1 h-5">
-                              {[35, 60, 45, 90, 65, 100, 75, 45, 80, 50, 70, 95, 40].map((h, idx) => (
-                                <span
-                                  key={idx}
-                                  className={`w-1 rounded-full transition-all duration-150 ${
-                                    isMe
-                                      ? isPlayingThis
-                                        ? 'bg-white animate-pulse'
-                                        : 'bg-white/70'
-                                      : isPlayingThis
-                                      ? 'bg-brand-600 animate-pulse'
-                                      : 'bg-brand-500/60'
-                                  }`}
-                                  style={{ height: `${h}%` }}
-                                />
-                              ))}
+                              {[35, 60, 45, 90, 65, 100, 75, 45, 80, 50, 70, 95, 40].map((h, idx) => {
+                                const barFraction = idx / 13
+                                const currentFraction = isPlayingThis && audioDuration > 0
+                                  ? audioCurrentTime / audioDuration
+                                  : 0
+                                const isPlayed = barFraction <= currentFraction
+
+                                return (
+                                  <button
+                                    key={idx}
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      if (isPlayingThis) {
+                                        handleScrubWebAudio((idx + 1) / 13)
+                                      }
+                                    }}
+                                    className="h-full flex items-center justify-center p-0.5 hover:scale-110 transition-transform cursor-pointer"
+                                    title="Scrub audio"
+                                  >
+                                    <span
+                                      className={`w-1 rounded-full transition-all duration-150 block ${
+                                        isMe
+                                          ? isPlayed
+                                            ? 'bg-white'
+                                            : 'bg-white/40'
+                                          : isPlayed
+                                          ? 'bg-brand-600'
+                                          : 'bg-brand-300'
+                                      }`}
+                                      style={{ height: `${h}%` }}
+                                    />
+                                  </button>
+                                )
+                              })}
                             </div>
                             <div className="flex items-center justify-between text-[10px] opacity-80">
-                              <span>{formatAudioDuration(msg.audio_duration || 0)}</span>
-                              <span className="font-semibold uppercase tracking-wider text-[9px]">Audio Whisper</span>
+                              <span>
+                                {isPlayingThis && audioCurrentTime > 0
+                                  ? `${formatAudioDuration(Math.floor(audioCurrentTime))} / `
+                                  : ''}
+                                {formatAudioDuration(msg.audio_duration || 0)}
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                {isPlayingThis && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleToggleWebAudioSpeed()
+                                    }}
+                                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-transform hover:scale-105 active:scale-95 ${
+                                      isMe ? 'bg-white/20 text-white' : 'bg-brand-100 text-brand-700'
+                                    }`}
+                                    title="Toggle playback speed"
+                                  >
+                                    {audioSpeed}x
+                                  </button>
+                                )}
+                                <span className="font-semibold uppercase tracking-wider text-[9px]">Audio Whisper</span>
+                              </div>
                             </div>
                           </div>
                         </div>
