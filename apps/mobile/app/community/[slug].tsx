@@ -168,15 +168,16 @@ export default function CommunityDetailScreen() {
       setMembers(mems)
     }
 
-    // Posts
+    // Posts (pinned posts stay at top)
     let { data: rawPosts } = await supabase
       .from('posts')
       .select('*, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url)')
       .eq('community_id', comm.id)
+      .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false })
 
     if (!rawPosts) {
-      const fb = await supabase.from('posts').select('*').eq('community_id', comm.id).order('created_at', { ascending: false })
+      const fb = await supabase.from('posts').select('*').eq('community_id', comm.id).order('is_pinned', { ascending: false }).order('created_at', { ascending: false })
       rawPosts = fb.data
     }
 
