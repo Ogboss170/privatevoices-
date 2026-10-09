@@ -3,17 +3,16 @@ import { useColorScheme } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '../lib/supabase'
 
-export type ThemeMode = 'system' | 'light' | 'dark'
+import {
+  type SupportedLanguage,
+  LANGUAGE_OPTIONS,
+  TRANSLATIONS,
+  getTranslation,
+  type TranslationDictionary,
+} from '@private-voices/shared'
 
-export type SupportedLanguage =
-  | 'en'
-  | 'es'
-  | 'fr'
-  | 'de'
-  | 'pt'
-  | 'ja'
-  | 'ar'
-  | 'zh'
+export type ThemeMode = 'system' | 'light' | 'dark'
+export { LANGUAGE_OPTIONS, TRANSLATIONS, type SupportedLanguage, type TranslationDictionary }
 
 export interface DesignTokens {
   background: string
@@ -39,6 +38,7 @@ interface ThemeContextType {
   setThemeMode: (mode: ThemeMode) => Promise<void>
   language: SupportedLanguage
   setLanguage: (lang: SupportedLanguage) => Promise<void>
+  t: TranslationDictionary
   reduceMotion: boolean
   setReduceMotion: (val: boolean) => Promise<void>
   highContrast: boolean
@@ -124,6 +124,7 @@ export const ThemeContext = createContext<ThemeContextType>({
   setThemeMode: async () => {},
   language: 'en',
   setLanguage: async () => {},
+  t: getTranslation('en'),
   reduceMotion: false,
   setReduceMotion: async () => {},
   highContrast: false,
@@ -279,6 +280,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     themeColors = isDark ? DEFAULT_TOKENS_DARK : DEFAULT_TOKENS_LIGHT
   }
 
+  const t = getTranslation(language)
+
   return (
     <ThemeContext.Provider
       value={{
@@ -286,6 +289,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         setThemeMode,
         language,
         setLanguage,
+        t,
         reduceMotion,
         setReduceMotion,
         highContrast,

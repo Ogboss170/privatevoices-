@@ -3,28 +3,16 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
+import {
+  type SupportedLanguage,
+  LANGUAGE_OPTIONS,
+  TRANSLATIONS,
+  getTranslation,
+  type TranslationDictionary,
+} from '@private-voices/shared'
+
 export type ThemeMode = 'system' | 'light' | 'dark'
-
-export type SupportedLanguage =
-  | 'en'
-  | 'es'
-  | 'fr'
-  | 'de'
-  | 'pt'
-  | 'ja'
-  | 'ar'
-  | 'zh'
-
-export const LANGUAGE_OPTIONS: { code: SupportedLanguage; label: string; nativeName: string }[] = [
-  { code: 'en' as SupportedLanguage, label: 'English', nativeName: 'English (US)' },
-  { code: 'es' as SupportedLanguage, label: 'Spanish', nativeName: 'Español' },
-  { code: 'fr' as SupportedLanguage, label: 'French', nativeName: 'Français' },
-  { code: 'de' as SupportedLanguage, label: 'German', nativeName: 'Deutsch' },
-  { code: 'pt' as SupportedLanguage, label: 'Portuguese', nativeName: 'Português' },
-  { code: 'ja' as SupportedLanguage, label: 'Japanese', nativeName: '日本語' },
-  { code: 'ar' as SupportedLanguage, label: 'Arabic', nativeName: 'العربية' },
-  { code: 'zh' as SupportedLanguage, label: 'Chinese', nativeName: '简体中文' },
-]
+export { LANGUAGE_OPTIONS, TRANSLATIONS, type SupportedLanguage, type TranslationDictionary }
 
 export interface WebDesignTokens {
   background: string
@@ -45,6 +33,7 @@ interface WebThemeContextType {
   setThemeMode: (mode: ThemeMode) => Promise<void>
   language: SupportedLanguage
   setLanguage: (lang: SupportedLanguage) => Promise<void>
+  t: TranslationDictionary
   reduceMotion: boolean
   setReduceMotion: (val: boolean) => Promise<void>
   highContrast: boolean
@@ -96,6 +85,7 @@ export const WebThemeContext = createContext<WebThemeContextType>({
   setThemeMode: async () => {},
   language: 'en',
   setLanguage: async () => {},
+  t: getTranslation('en'),
   reduceMotion: false,
   setReduceMotion: async () => {},
   highContrast: false,
@@ -294,6 +284,7 @@ export function WebThemeProvider({ children }: { children: React.ReactNode }): R
   }, [isDark, reduceMotion, highContrast, compactMode, language])
 
   const tokens = isDark ? TOKENS_DARK : TOKENS_LIGHT
+  const t = getTranslation(language)
 
   return (
     <WebThemeContext.Provider
@@ -302,6 +293,7 @@ export function WebThemeProvider({ children }: { children: React.ReactNode }): R
         setThemeMode,
         language,
         setLanguage,
+        t,
         reduceMotion,
         setReduceMotion,
         highContrast,

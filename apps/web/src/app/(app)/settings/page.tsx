@@ -54,6 +54,7 @@ export default function SettingsPage(): React.JSX.Element {
     setThemeMode,
     language,
     setLanguage,
+    t,
     reduceMotion,
     setReduceMotion,
     highContrast,
@@ -412,13 +413,13 @@ export default function SettingsPage(): React.JSX.Element {
           >
             <ArrowLeft size={20} />
           </Link>
-          <h1 className="text-xl font-bold text-gray-900">Settings</h1>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{t.settings}</h1>
         </div>
 
         {saved && (
           <span className="flex items-center space-x-1 text-xs text-emerald-600 font-semibold bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
             <Check size={14} />
-            <span>Saved</span>
+            <span>{t.saved}</span>
           </span>
         )}
       </div>
@@ -426,7 +427,7 @@ export default function SettingsPage(): React.JSX.Element {
       {/* ── 1. ACCOUNT ── */}
       <section className="card p-6 space-y-4">
         <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 pb-2">
-          Account
+          {t.account}
         </h2>
         <div className="space-y-1 text-sm">
           <div
@@ -506,14 +507,14 @@ export default function SettingsPage(): React.JSX.Element {
       {/* ── 2. PRIVACY ── */}
       <section className="card p-6 space-y-4">
         <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 pb-2">
-          Privacy
+          {t.privacy}
         </h2>
         <div className="space-y-3 text-sm">
           <div className="flex items-center justify-between p-2">
             <div className="flex items-center space-x-3">
               <MessageSquare size={18} className="text-gray-500" />
               <div>
-                <span className="font-semibold text-gray-800 block">Anonymous Whispers</span>
+                <span className="font-semibold text-gray-800 dark:text-gray-100 block">{t.anonymousWhispers}</span>
                 <span className="text-xs text-gray-400">Who can send you Whispers</span>
               </div>
             </div>
@@ -826,14 +827,14 @@ export default function SettingsPage(): React.JSX.Element {
       {/* ── 6. APPEARANCE ── */}
       <section className="card p-6 space-y-4">
         <h2 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider border-b border-gray-100 dark:border-slate-800 pb-2">
-          Appearance
+          {t.appearance}
         </h2>
         <div className="space-y-4 text-sm">
           {/* Premium Theme Selector Cards */}
           <div className="space-y-3 pb-2">
             <div>
-              <span className="font-semibold text-gray-900 dark:text-gray-100 block">Theme</span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">Choose how Private Voices looks on your device</span>
+              <span className="font-semibold text-gray-900 dark:text-gray-100 block">{t.theme}</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">{t.themeDesc}</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
@@ -862,8 +863,8 @@ export default function SettingsPage(): React.JSX.Element {
 
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="text-xs font-bold text-gray-900 dark:text-gray-100 block">Light</span>
-                    <span className="text-[11px] text-gray-500 dark:text-gray-400">Clean & bright</span>
+                    <span className="text-xs font-bold text-gray-900 dark:text-gray-100 block">{t.themeLight}</span>
+                    <span className="text-[11px] text-gray-500 dark:text-gray-400">{t.themeLightDesc}</span>
                   </div>
                   <div
                     className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
@@ -902,8 +903,8 @@ export default function SettingsPage(): React.JSX.Element {
 
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="text-xs font-bold text-gray-900 dark:text-gray-100 block">Dark</span>
-                    <span className="text-[11px] text-gray-500 dark:text-gray-400">Refined charcoal</span>
+                    <span className="text-xs font-bold text-gray-900 dark:text-gray-100 block">{t.themeDark}</span>
+                    <span className="text-[11px] text-gray-500 dark:text-gray-400">{t.themeDarkDesc}</span>
                   </div>
                   <div
                     className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
@@ -945,8 +946,8 @@ export default function SettingsPage(): React.JSX.Element {
 
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="text-xs font-bold text-gray-900 dark:text-gray-100 block">System</span>
-                    <span className="text-[11px] text-gray-500 dark:text-gray-400">Follows device</span>
+                    <span className="text-xs font-bold text-gray-900 dark:text-gray-100 block">{t.themeSystem}</span>
+                    <span className="text-[11px] text-gray-500 dark:text-gray-400">{t.themeSystemDesc}</span>
                   </div>
                   <div
                     className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
@@ -967,8 +968,8 @@ export default function SettingsPage(): React.JSX.Element {
             <div className="flex items-center space-x-3">
               <Globe size={18} className="text-gray-500 dark:text-gray-400" />
               <div>
-                <span className="font-semibold text-gray-800 dark:text-gray-100 block">Language</span>
-                <span className="text-xs text-gray-400 dark:text-gray-500">Select language for interface and content</span>
+                <span className="font-semibold text-gray-800 dark:text-gray-100 block">{t.language}</span>
+                <span className="text-xs text-gray-400 dark:text-gray-500">{t.languageDesc}</span>
               </div>
             </div>
             <select
@@ -989,8 +990,8 @@ export default function SettingsPage(): React.JSX.Element {
             <div className="flex items-center space-x-3">
               <Sliders size={18} className="text-gray-500 dark:text-gray-400" />
               <div>
-                <span className="font-semibold text-gray-800 dark:text-gray-100 block">Reduce Motion</span>
-                <span className="text-xs text-gray-400 dark:text-gray-500">Disable animations, bouncy springs, and transitions</span>
+                <span className="font-semibold text-gray-800 dark:text-gray-100 block">{t.reduceMotion}</span>
+                <span className="text-xs text-gray-400 dark:text-gray-500">{t.reduceMotionDesc}</span>
               </div>
             </div>
             <input
@@ -1006,8 +1007,8 @@ export default function SettingsPage(): React.JSX.Element {
             <div className="flex items-center space-x-3">
               <Eye size={18} className="text-gray-500 dark:text-gray-400" />
               <div>
-                <span className="font-semibold text-gray-800 dark:text-gray-100 block">High Contrast</span>
-                <span className="text-xs text-gray-400 dark:text-gray-500">Enhance borders and card visibility for high legibility</span>
+                <span className="font-semibold text-gray-800 dark:text-gray-100 block">{t.highContrast}</span>
+                <span className="text-xs text-gray-400 dark:text-gray-500">{t.highContrastDesc}</span>
               </div>
             </div>
             <input
@@ -1023,8 +1024,8 @@ export default function SettingsPage(): React.JSX.Element {
             <div className="flex items-center space-x-3">
               <Smartphone size={18} className="text-gray-500 dark:text-gray-400" />
               <div>
-                <span className="font-semibold text-gray-800 dark:text-gray-100 block">Compact Mode</span>
-                <span className="text-xs text-gray-400 dark:text-gray-500">Reduce spacing to display more content per screen</span>
+                <span className="font-semibold text-gray-800 dark:text-gray-100 block">{t.compactMode}</span>
+                <span className="text-xs text-gray-400 dark:text-gray-500">{t.compactModeDesc}</span>
               </div>
             </div>
             <input

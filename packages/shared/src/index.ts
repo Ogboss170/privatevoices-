@@ -454,15 +454,8 @@ export function calculateUserGamification(xp: number, userBadges: UserBadge[] = 
 
 export type ThemeMode = 'system' | 'light' | 'dark';
 
-export type SupportedLanguage = 
-  | 'en' // English
-  | 'es' // Spanish
-  | 'fr' // French
-  | 'de' // German
-  | 'pt' // Portuguese
-  | 'ja' // Japanese
-  | 'ar' // Arabic
-  | 'zh'; // Chinese (Simplified)
+export * from './i18n';
+import type { SupportedLanguage } from './i18n';
 
 export interface AppearancePreferences {
   theme: ThemeMode;

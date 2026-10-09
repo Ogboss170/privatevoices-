@@ -48,7 +48,7 @@ import {
 import { useRouter } from 'expo-router'
 import { supabase } from '../lib/supabase'
 import { colors } from '../constants/colors'
-import { useTheme } from '../context/ThemeContext'
+import { useTheme, LANGUAGE_OPTIONS } from '../context/ThemeContext'
 import { EditProfileModal } from '../components/EditProfileModal'
 import { MobilePostCard } from '../components/MobilePostCard'
 import type { Post } from '@private-voices/shared'
@@ -61,6 +61,7 @@ export default function SettingsScreen() {
     setThemeMode,
     language,
     setLanguage,
+    t,
     reduceMotion,
     setReduceMotion,
     highContrast,
@@ -506,12 +507,12 @@ export default function SettingsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <ArrowLeft size={22} color={colors.gray800} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Settings</Text>
+        <Text style={styles.headerTitle}>{t.settings}</Text>
       </View>
 
       {/* ── 1. ACCOUNT ── */}
       <View style={styles.sectionCard}>
-        <Text style={styles.sectionCategoryTitle}>ACCOUNT</Text>
+        <Text style={styles.sectionCategoryTitle}>{t.account.toUpperCase()}</Text>
 
         <TouchableOpacity
           style={styles.rowItem}
@@ -583,12 +584,12 @@ export default function SettingsScreen() {
 
       {/* ── 2. PRIVACY ── */}
       <View style={styles.sectionCard}>
-        <Text style={styles.sectionCategoryTitle}>PRIVACY</Text>
+        <Text style={styles.sectionCategoryTitle}>{t.privacy.toUpperCase()}</Text>
 
         <View style={styles.rowItemNoClick}>
           <View style={styles.rowLeft}>
             <MessageSquare size={18} color={colors.gray600} />
-            <Text style={styles.rowLabel}>Anonymous Whispers</Text>
+            <Text style={styles.rowLabel}>{t.anonymousWhispers}</Text>
           </View>
         </View>
         <View style={styles.optionsGroup}>
@@ -852,13 +853,13 @@ export default function SettingsScreen() {
 
       {/* ── 6. APPEARANCE ── */}
       <View style={styles.sectionCard}>
-        <Text style={styles.sectionCategoryTitle}>APPEARANCE</Text>
+        <Text style={styles.sectionCategoryTitle}>{t.appearance.toUpperCase()}</Text>
 
         {/* Theme: System | Light | Dark */}
         <View style={styles.rowItemNoClick}>
           <View style={styles.rowLeft}>
             <SunMoon size={18} color={themeColors.textSecondary} />
-            <Text style={[styles.rowLabel, { color: themeColors.textPrimary }]}>Theme</Text>
+            <Text style={[styles.rowLabel, { color: themeColors.textPrimary }]}>{t.theme}</Text>
           </View>
         </View>
         {/* Instagram-style Visual Theme Preview Selector */}
@@ -876,7 +877,7 @@ export default function SettingsScreen() {
             onPress={() => setThemeMode('light')}
             activeOpacity={0.75}
             accessibilityRole="radio"
-            accessibilityLabel="Light theme"
+            accessibilityLabel={t.themeLight}
             accessibilityState={{ selected: themeMode === 'light' }}
           >
             {/* Visual mini-mockup */}
@@ -897,7 +898,7 @@ export default function SettingsScreen() {
                   themeMode === 'light' && { color: colors.brand, fontWeight: '700' },
                 ]}
               >
-                Light
+                {t.themeLight}
               </Text>
               <View
                 style={[
@@ -924,7 +925,7 @@ export default function SettingsScreen() {
             onPress={() => setThemeMode('dark')}
             activeOpacity={0.75}
             accessibilityRole="radio"
-            accessibilityLabel="Dark theme"
+            accessibilityLabel={t.themeDark}
             accessibilityState={{ selected: themeMode === 'dark' }}
           >
             {/* Visual mini-mockup */}
@@ -945,7 +946,7 @@ export default function SettingsScreen() {
                   themeMode === 'dark' && { color: colors.brand, fontWeight: '700' },
                 ]}
               >
-                Dark
+                {t.themeDark}
               </Text>
               <View
                 style={[
@@ -972,7 +973,7 @@ export default function SettingsScreen() {
             onPress={() => setThemeMode('system')}
             activeOpacity={0.75}
             accessibilityRole="radio"
-            accessibilityLabel="System theme"
+            accessibilityLabel={t.themeSystem}
             accessibilityState={{ selected: themeMode === 'system' }}
           >
             {/* Split visual mini-mockup */}
@@ -998,7 +999,7 @@ export default function SettingsScreen() {
                   themeMode === 'system' && { color: colors.brand, fontWeight: '700' },
                 ]}
               >
-                System
+                {t.themeSystem}
               </Text>
               <View
                 style={[
@@ -1018,18 +1019,14 @@ export default function SettingsScreen() {
           style={styles.rowItem}
           onPress={() => {
             Alert.alert(
-              'Select Language',
-              'Choose your preferred language for Private Voices:',
+              t.language,
+              t.languageDesc,
               [
-                { text: 'English (US)', onPress: () => setLanguage('en') },
-                { text: 'Español (Spanish)', onPress: () => setLanguage('es') },
-                { text: 'Français (French)', onPress: () => setLanguage('fr') },
-                { text: 'Deutsch (German)', onPress: () => setLanguage('de') },
-                { text: 'Português (Portuguese)', onPress: () => setLanguage('pt') },
-                { text: '日本語 (Japanese)', onPress: () => setLanguage('ja') },
-                { text: 'العربية (Arabic)', onPress: () => setLanguage('ar') },
-                { text: '简体中文 (Chinese)', onPress: () => setLanguage('zh') },
-                { text: 'Cancel', style: 'cancel' },
+                ...LANGUAGE_OPTIONS.map((opt) => ({
+                  text: `${opt.nativeName} (${opt.label})`,
+                  onPress: () => setLanguage(opt.code),
+                })),
+                { text: t.cancel, style: 'cancel' as const },
               ]
             )
           }}
@@ -1037,20 +1034,14 @@ export default function SettingsScreen() {
         >
           <View style={styles.rowLeft}>
             <Globe size={18} color={themeColors.textSecondary} />
-            <div>
-              <Text style={[styles.rowLabel, { color: themeColors.textPrimary }]}>Language</Text>
-            </div>
+            <View>
+              <Text style={[styles.rowLabel, { color: themeColors.textPrimary }]}>{t.language}</Text>
+              <Text style={[styles.rowSubLabel, { color: themeColors.textMuted }]}>{t.languageDesc}</Text>
+            </View>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Text style={[styles.valueText, { color: colors.brand, fontWeight: '600' }]}>
-              {language === 'en' ? 'English (US)' :
-               language === 'es' ? 'Español' :
-               language === 'fr' ? 'Français' :
-               language === 'de' ? 'Deutsch' :
-               language === 'pt' ? 'Português' :
-               language === 'ja' ? '日本語' :
-               language === 'ar' ? 'العربية' :
-               language === 'zh' ? '简体中文' : 'English'}
+              {LANGUAGE_OPTIONS.find((opt) => opt.code === language)?.nativeName || 'English (US)'}
             </Text>
             <ChevronRight size={16} color={themeColors.textMuted} />
           </View>
@@ -1061,8 +1052,8 @@ export default function SettingsScreen() {
           <View style={styles.rowLeft}>
             <Sliders size={18} color={themeColors.textSecondary} />
             <View>
-              <Text style={[styles.rowLabel, { color: themeColors.textPrimary }]}>Reduce Motion</Text>
-              <Text style={[styles.rowSubLabel, { color: themeColors.textMuted }]}>Minimize interface animations and transitions</Text>
+              <Text style={[styles.rowLabel, { color: themeColors.textPrimary }]}>{t.reduceMotion}</Text>
+              <Text style={[styles.rowSubLabel, { color: themeColors.textMuted }]}>{t.reduceMotionDesc}</Text>
             </View>
           </View>
           <Switch
@@ -1077,8 +1068,8 @@ export default function SettingsScreen() {
           <View style={styles.rowLeft}>
             <Eye size={18} color={themeColors.textSecondary} />
             <View>
-              <Text style={[styles.rowLabel, { color: themeColors.textPrimary }]}>High Contrast</Text>
-              <Text style={[styles.rowSubLabel, { color: themeColors.textMuted }]}>Increase visual borders and text sharpness</Text>
+              <Text style={[styles.rowLabel, { color: themeColors.textPrimary }]}>{t.highContrast}</Text>
+              <Text style={[styles.rowSubLabel, { color: themeColors.textMuted }]}>{t.highContrastDesc}</Text>
             </View>
           </View>
           <Switch
@@ -1093,8 +1084,8 @@ export default function SettingsScreen() {
           <View style={styles.rowLeft}>
             <Smartphone size={18} color={themeColors.textSecondary} />
             <View>
-              <Text style={[styles.rowLabel, { color: themeColors.textPrimary }]}>Compact Mode</Text>
-              <Text style={[styles.rowSubLabel, { color: themeColors.textMuted }]}>Fit more posts and cards on smaller screens</Text>
+              <Text style={[styles.rowLabel, { color: themeColors.textPrimary }]}>{t.compactMode}</Text>
+              <Text style={[styles.rowSubLabel, { color: themeColors.textMuted }]}>{t.compactModeDesc}</Text>
             </View>
           </View>
           <Switch

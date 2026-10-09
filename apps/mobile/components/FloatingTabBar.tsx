@@ -33,7 +33,17 @@ const easing        = Easing.out(Easing.cubic)
 const TAB_ORDER = ['index', 'explore', 'communities', 'inbox', 'profile'] as const
 type TabName = (typeof TAB_ORDER)[number]
 
-function getLabel(name: string): string {
+function getLabel(name: string, t?: any): string {
+  if (t) {
+    switch (name) {
+      case 'index':       return t.home || 'Home'
+      case 'explore':     return t.explore || 'Explore'
+      case 'communities': return t.community || 'Community'
+      case 'inbox':       return t.inbox || 'Chat'
+      case 'profile':     return t.profile || 'Profile'
+      default:            return name
+    }
+  }
   switch (name) {
     case 'index':       return 'Home'
     case 'explore':     return 'Explore'
@@ -73,13 +83,15 @@ function AnimatedTabItem({
   onPress,
   isDark,
   themeColors,
+  t,
 }: {
   routeName: string
   isFocused: boolean
-  hasBadge?: boolean
+  hasBadge: boolean
   onPress: () => void
   isDark: boolean
   themeColors: any
+  t: any
 }) {
   const progress = useSharedValue(isFocused ? 1 : 0)
 
@@ -110,6 +122,8 @@ function AnimatedTabItem({
   const iconColor   = isFocused ? ACCENT : inactiveColor
   const strokeWidth = isFocused ? 2.3    : 1.8
 
+  const labelText = getLabel(routeName, t)
+
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -117,7 +131,7 @@ function AnimatedTabItem({
       style={styles.tabOuter}
       accessible
       accessibilityRole="button"
-      accessibilityLabel={getLabel(routeName)}
+      accessibilityLabel={labelText}
       accessibilityState={{ selected: isFocused }}
     >
       <Animated.View style={[styles.tabInner, pillStyle]}>
@@ -126,7 +140,7 @@ function AnimatedTabItem({
           {hasBadge && <View style={[styles.dot, { borderColor: isDark ? '#121212' : '#ffffff' }]} />}
         </Animated.View>
         <Animated.Text style={[styles.label, labelStyle]}>
-          {getLabel(routeName)}
+          {labelText}
         </Animated.Text>
       </Animated.View>
     </TouchableOpacity>
@@ -136,7 +150,7 @@ function AnimatedTabItem({
 // ─── FloatingTabBar ───────────────────────────────────────────────────────────
 export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets()
-  const { colors: themeColors, isDark } = useTheme()
+  const { colors: themeColors, isDark, t } = useTheme()
 
   // Never render during the create tab (full-screen modal behaviour)
   const activeRouteName = state.routes[state.index]?.name
@@ -211,6 +225,7 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
                     onPress={() => handlePress(route)}
                     isDark={isDark}
                     themeColors={themeColors}
+                    t={t}
                   />
                 )
               })}

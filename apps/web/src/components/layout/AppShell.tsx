@@ -6,29 +6,31 @@ import { usePathname } from 'next/navigation'
 import { Home, Search, PlusSquare, Inbox, Users, User, Bell } from 'lucide-react'
 import RightSidebar from '@/components/layout/RightSidebar'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-
-const DESKTOP_NAV_ITEMS = [
-  { href: '/feed',        label: 'Home',        Icon: Home },
-  { href: '/explore',     label: 'Explore',     Icon: Search },
-  { href: '/create',      label: 'Create',      Icon: PlusSquare },
-  { href: '/inbox',       label: 'Inbox',       Icon: Inbox },
-  { href: '/communities', label: 'Communities', Icon: Users },
-  { href: '/notifications', label: 'Notifications', Icon: Bell },
-  { href: '/profile',     label: 'Profile',     Icon: User },
-]
-
-const MOBILE_BOTTOM_NAV_ITEMS = [
-  { href: '/feed',        label: 'Home',      Icon: Home },
-  { href: '/explore',     label: 'Explore',   Icon: Search },
-  { href: '/communities', label: 'Community', Icon: Users },
-  { href: '/inbox',       label: 'Chat',      Icon: Inbox },
-  { href: '/profile',     label: 'Profile',   Icon: User },
-]
+import { useWebTheme } from '@/context/WebThemeContext'
 
 export default function AppShell({ children }: { children: React.ReactNode }): React.JSX.Element {
   const pathname = usePathname()
+  const { t } = useWebTheme()
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [unreadMessages, setUnreadMessages] = useState(0)
+
+  const desktopNavItems = [
+    { href: '/feed',          label: t.home,          Icon: Home },
+    { href: '/explore',       label: t.explore,       Icon: Search },
+    { href: '/create',        label: t.create,        Icon: PlusSquare },
+    { href: '/inbox',         label: t.inbox,         Icon: Inbox },
+    { href: '/communities',   label: t.community,     Icon: Users },
+    { href: '/notifications', label: t.notifications, Icon: Bell },
+    { href: '/profile',       label: t.profile,       Icon: User },
+  ]
+
+  const mobileBottomNavItems = [
+    { href: '/feed',        label: t.home,      Icon: Home },
+    { href: '/explore',     label: t.explore,   Icon: Search },
+    { href: '/communities', label: t.community, Icon: Users },
+    { href: '/inbox',       label: t.inbox,     Icon: Inbox },
+    { href: '/profile',     label: t.profile,   Icon: User },
+  ]
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient()
@@ -123,7 +125,7 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
 
           {/* Nav links */}
           <nav className="flex-1 space-y-1.5">
-            {DESKTOP_NAV_ITEMS.map(({ href, label, Icon }) => {
+            {desktopNavItems.map(({ href, label, Icon }) => {
               const isActive = pathname === href || pathname.startsWith(href + '/')
               const badgeCount =
                 href === '/notifications' ? unreadNotifications : href === '/inbox' ? unreadMessages : 0
@@ -166,7 +168,7 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
               className="w-full py-3 bg-gradient-to-r from-brand-600 to-purple-600 text-white font-bold rounded-xl shadow-md hover:shadow-lg hover:brightness-105 transition-all flex items-center justify-center gap-2 text-sm"
             >
               <PlusSquare size={18} />
-              <span>Create Voice</span>
+              <span>{t.create}</span>
             </Link>
           </div>
         </aside>
@@ -184,7 +186,7 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
 
         {/* ── Bottom tab bar (mobile view on web) ── */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-gray-200 dark:border-slate-800 flex items-center justify-around px-2 py-2 z-20 shadow-lg">
-        {MOBILE_BOTTOM_NAV_ITEMS.map(({ href, label, Icon }) => {
+        {mobileBottomNavItems.map(({ href, label, Icon }) => {
           const isActive = pathname === href || pathname.startsWith(href + '/')
           const badgeCount =
             href === '/notifications' ? unreadNotifications : href === '/inbox' ? unreadMessages : 0
