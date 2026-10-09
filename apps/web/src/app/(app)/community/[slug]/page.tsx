@@ -32,6 +32,7 @@ import {
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import PostCard from '@/components/feed/PostCard'
+import { CommunityRoleBadge } from '@/components/common/PlatformBadge'
 import type { Post } from '@private-voices/shared'
 
 export default function CommunityDetailPage(): React.JSX.Element {
@@ -687,36 +688,31 @@ export default function CommunityDetailPage(): React.JSX.Element {
 
                     <div className="flex items-center gap-2">
                       {/* Current role badge */}
-                      {m.role === 'moderator' ? (
-                        <span className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
-                          <UserCheck size={11} />
-                          Mod
-                        </span>
-                      ) : (
+                      <CommunityRoleBadge role={m.role} />
+                      {m.role === 'member' && (
                         <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
                           Member
                         </span>
                       )}
 
-                      {/* Promote / Demote */}
+                      {/* Explicit Role Assignment (Owner Only) */}
                       {userRole === 'owner' && (
-                        <button
-                          onClick={async () => {
-                            const newRole = m.role === 'moderator' ? 'member' : 'moderator'
+                        <select
+                          value={m.role}
+                          onChange={async (e) => {
+                            const newRole = e.target.value
                             await supabase
                               .from('community_members')
                               .update({ role: newRole })
                               .match({ community_id: community.id, user_id: m.user_id })
                             fetchCommunityData()
                           }}
-                          className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-colors ${
-                            m.role === 'moderator'
-                              ? 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                              : 'bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200'
-                          }`}
+                          className="text-[11px] font-semibold px-2 py-1 rounded-lg border border-gray-200 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
                         >
-                          {m.role === 'moderator' ? 'Demote' : 'Make Mod'}
-                        </button>
+                          <option value="member">Member</option>
+                          <option value="vip">⭐ VIP</option>
+                          <option value="moderator">🛡️ Moderator</option>
+                        </select>
                       )}
 
                       {/* Mute / Unmute Button */}

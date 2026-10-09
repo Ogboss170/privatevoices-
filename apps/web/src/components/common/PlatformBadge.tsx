@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { CheckCircle2, Sparkles, FlaskConical } from 'lucide-react'
+import { CheckCircle2, Sparkles, FlaskConical, Crown, ShieldCheck, Award } from 'lucide-react'
 
 export type BadgeType = 'verified' | 'early_supporter' | 'beta_tester' | string
 
@@ -59,9 +59,61 @@ export function PlatformBadge({
         </span>
       )
 
+    case 'owner':
+      return (
+        <span
+          title="Community Owner"
+          className={`inline-flex items-center gap-1 text-amber-500 flex-shrink-0 cursor-default select-none ${className}`}
+        >
+          <span className="p-0.5 rounded-full bg-amber-500/10 border border-amber-500/25">
+            <Crown size={size - 2} className="text-amber-500 fill-amber-500/30" />
+          </span>
+          {showLabel && <span className="text-[10px] font-bold text-amber-600">Owner</span>}
+        </span>
+      )
+
+    case 'moderator':
+      return (
+        <span
+          title="Community Moderator"
+          className={`inline-flex items-center gap-1 text-purple-600 flex-shrink-0 cursor-default select-none ${className}`}
+        >
+          <span className="p-0.5 rounded-full bg-purple-500/10 border border-purple-500/25">
+            <ShieldCheck size={size - 2} className="text-purple-600 fill-purple-500/20" />
+          </span>
+          {showLabel && <span className="text-[10px] font-bold text-purple-600">Mod</span>}
+        </span>
+      )
+
+    case 'vip':
+      return (
+        <span
+          title="VIP Member"
+          className={`inline-flex items-center gap-1 text-emerald-600 flex-shrink-0 cursor-default select-none ${className}`}
+        >
+          <span className="p-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/25">
+            <Award size={size - 2} className="text-emerald-600 fill-emerald-500/30" />
+          </span>
+          {showLabel && <span className="text-[10px] font-bold text-emerald-600">VIP</span>}
+        </span>
+      )
+
     default:
       return null
   }
+}
+
+export function CommunityRoleBadge({
+  role,
+  size = 14,
+  showLabel = true,
+}: {
+  role?: 'owner' | 'moderator' | 'vip' | 'member' | string | null
+  size?: number
+  showLabel?: boolean
+}) {
+  if (!role || role === 'member') return null
+  return <PlatformBadge badgeId={role} size={size} showLabel={showLabel} />
 }
 
 interface UserBadgesRowProps {

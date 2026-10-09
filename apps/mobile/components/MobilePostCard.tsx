@@ -40,13 +40,13 @@ import { FormattedText } from './FormattedText'
 import { MentionSuggestions } from './MentionSuggestions'
 import { MobileInteractivePoll } from './MobileInteractivePoll'
 import { PostInsightsModal } from './PostInsightsModal'
-import { UserBadgesRow } from './PlatformBadge'
+import { UserBadgesRow, CommunityRoleBadge } from './PlatformBadge'
 import { useTheme } from '../context/ThemeContext'
 
 interface MobilePostCardProps {
   post: Post
   currentUserId?: string
-  communityRole?: 'owner' | 'moderator' | 'member' | null
+  communityRole?: 'owner' | 'moderator' | 'vip' | 'member' | null
   onDelete?: (postId: string) => void
   onPressAuthor?: (userId: string) => void
   onPressMention?: (username: string) => void
@@ -59,6 +59,7 @@ export function MobilePostCard({ post, currentUserId, communityRole, onDelete, o
   const router = useRouter()
   const { colors: themeColors, isDark } = useTheme()
   const [authorBadges, setAuthorBadges] = useState<string[]>([])
+  const [authorCommunityRole, setAuthorCommunityRole] = useState<string | null>(null)
   const [isLiked, setIsLiked] = useState(post.isLikedByMe)
   const [isPinned, setIsPinned] = useState(post.isPinned || false)
   const [pinBusy, setPinBusy] = useState(false)
@@ -85,6 +86,31 @@ export function MobilePostCard({ post, currentUserId, communityRole, onDelete, o
     }
     loadAuthorBadges()
   }, [post.authorId])
+
+  useEffect(() => {
+    async function loadAuthorCommunityRole() {
+      if (!post.authorId || !post.communityId) {
+        setAuthorCommunityRole(null)
+        return
+      }
+      try {
+        const { data } = await supabase
+          .from('community_members')
+          .select('role')
+          .match({ community_id: post.communityId, user_id: post.authorId })
+          .maybeSingle()
+
+        if (data?.role) {
+          setAuthorCommunityRole(data.role)
+        } else {
+          setAuthorCommunityRole(null)
+        }
+      } catch {
+        setAuthorCommunityRole(null)
+      }
+    }
+    loadAuthorCommunityRole()
+  }, [post.authorId, post.communityId])
 
   useEffect(() => {
     async function checkCommunityModStatus() {
@@ -751,6 +777,9 @@ export function MobilePostCard({ post, currentUserId, communityRole, onDelete, o
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               <Text style={[styles.displayName, { color: themeColors.textPrimary }]}>{post.author.displayName}</Text>
               <UserBadgesRow badges={authorBadges} size={14} />
+              {post.communityId && authorCommunityRole && (
+                <CommunityRoleBadge role={authorCommunityRole} size={14} showLabel={false} />
+              )}
             </View>
             <Text style={[styles.username, { color: themeColors.textMuted }]}>@{post.author.username}</Text>
             {post.community && (

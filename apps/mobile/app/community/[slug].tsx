@@ -51,6 +51,7 @@ import { supabase } from '../../lib/supabase'
 import { colors } from '../../constants/colors'
 import { MobilePostCard } from '../../components/MobilePostCard'
 import { PublicProfileModal } from '../../components/PublicProfileModal'
+import { CommunityRoleBadge } from '../../components/PlatformBadge'
 import type { Post } from '@private-voices/shared'
 
 // ─── Settings sheet options ──────────────────────────────────────────────────
@@ -718,10 +719,15 @@ export default function CommunityDetailScreen() {
                       }
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.memberName}>{displayName}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={styles.memberName}>{displayName}</Text>
+                        <CommunityRoleBadge role={m.role} size={13} showLabel={false} />
+                      </View>
                       <Text style={styles.memberHandle}>@{username}</Text>
                     </View>
-                    <Text style={styles.roleTag}>{m.role || 'Member'}</Text>
+                    <Text style={[styles.roleTag, m.role === 'owner' && { color: '#d97706', backgroundColor: '#fef3c7' }, m.role === 'vip' && { color: '#059669', backgroundColor: '#d1fae5' }, m.role === 'moderator' && { color: '#7c3aed', backgroundColor: '#ede9fe' }]}>
+                      {m.role ? m.role.toUpperCase() : 'MEMBER'}
+                    </Text>
                   </TouchableOpacity>
                 )
               })
@@ -777,7 +783,7 @@ export default function CommunityDetailScreen() {
                 <Shield size={18} color={colors.brand} />
                 <Text style={styles.cardTitle}>Member Roles & Moderation</Text>
               </View>
-              <Text style={[styles.descText, { marginBottom: 12 }]}>Promote members to Moderator or remove them.</Text>
+              <Text style={[styles.descText, { marginBottom: 12 }]}>Assign roles (Member, VIP, Moderator) or moderate members.</Text>
 
               {members.filter((m) => m.role !== 'owner').map((m) => {
                 const u = m.user
@@ -786,21 +792,49 @@ export default function CommunityDetailScreen() {
                 return (
                   <View key={m.id || m.user_id} style={[styles.memberRow, { paddingVertical: 8 }]}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.memberName}>{displayName}</Text>
-                      <Text style={styles.memberHandle}>@{username} • {m.role}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={styles.memberName}>{displayName}</Text>
+                        <CommunityRoleBadge role={m.role} size={13} showLabel={false} />
+                      </View>
+                      <Text style={styles.memberHandle}>@{username} • {m.role || 'member'}</Text>
                     </View>
-                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                    <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
                       {userRole === 'owner' && (
                         <TouchableOpacity
-                          style={[styles.modBtn, { backgroundColor: m.role === 'moderator' ? colors.gray200 : '#f3e8ff' }]}
-                          onPress={async () => {
-                            const newRole = m.role === 'moderator' ? 'member' : 'moderator'
-                            await supabase.from('community_members').update({ role: newRole }).match({ community_id: community.id, user_id: m.user_id })
-                            fetchCommunityData()
+                          style={[styles.modBtn, { backgroundColor: '#f1f5f9' }]}
+                          onPress={() => {
+                            Alert.alert(
+                              `Change Role for @${username}`,
+                              'Select a community role:',
+                              [
+                                { text: 'Cancel', style: 'cancel' },
+                                {
+                                  text: 'Member',
+                                  onPress: async () => {
+                                    await supabase.from('community_members').update({ role: 'member' }).match({ community_id: community.id, user_id: m.user_id })
+                                    fetchCommunityData()
+                                  },
+                                },
+                                {
+                                  text: '⭐ VIP',
+                                  onPress: async () => {
+                                    await supabase.from('community_members').update({ role: 'vip' }).match({ community_id: community.id, user_id: m.user_id })
+                                    fetchCommunityData()
+                                  },
+                                },
+                                {
+                                  text: '🛡️ Moderator',
+                                  onPress: async () => {
+                                    await supabase.from('community_members').update({ role: 'moderator' }).match({ community_id: community.id, user_id: m.user_id })
+                                    fetchCommunityData()
+                                  },
+                                },
+                              ]
+                            )
                           }}
                         >
-                          <Text style={[styles.modBtnText, { color: m.role === 'moderator' ? colors.gray800 : '#7e22ce' }]}>
-                            {m.role === 'moderator' ? 'Demote' : 'Make Mod'}
+                          <Text style={[styles.modBtnText, { color: colors.gray800 }]}>
+                            Role: {m.role === 'moderator' ? 'Mod' : m.role === 'vip' ? 'VIP' : 'Member'}
                           </Text>
                         </TouchableOpacity>
                       )}

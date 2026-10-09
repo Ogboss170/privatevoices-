@@ -42,6 +42,9 @@ export default function ExploreScreen() {
   const [activeTab, setActiveTab] = useState<SearchTab>((params.tab as SearchTab) || 'all')
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
+  const [selectedCategory, setSelectedCategory] = useState<string>('All')
+  const COMMUNITY_CATEGORIES = ['All', 'Technology', 'Privacy', 'Crypto', 'Creative', 'Life', 'Gaming', 'Music']
+
   // Data states
   const [profiles, setProfiles] = useState<any[]>([])
   const [voices, setVoices] = useState<Post[]>([])
@@ -202,9 +205,11 @@ export default function ExploreScreen() {
 
           // Fetch matching Communities
           if (tab === 'all' || tab === 'communities') {
-            const { data: matchedCommunities } = await supabase
-              .from('communities')
-              .select('*')
+            let commsQuery = supabase.from('communities').select('*')
+            if (selectedCategory !== 'All') {
+              commsQuery = commsQuery.or(`category.ilike.%${selectedCategory}%,tags.cs.{${selectedCategory.toLowerCase()}}`)
+            }
+            const { data: matchedCommunities } = await commsQuery
               .or(`name.ilike.%${keyword}%,slug.ilike.%${keyword}%,description.ilike.%${keyword}%`)
               .limit(tab === 'communities' ? 20 : 4)
             setCommunities(matchedCommunities ?? [])
@@ -237,12 +242,12 @@ export default function ExploreScreen() {
         setLoading(false)
       }
     },
-    [formatPosts]
+    [formatPosts, selectedCategory]
   )
 
   useEffect(() => {
     executeSearch(searchTerm, activeTab)
-  }, [searchTerm, activeTab, executeSearch])
+  }, [searchTerm, activeTab, selectedCategory, executeSearch])
 
   function handleTagPress(tagName: string) {
     const query = `#${tagName}`
@@ -629,12 +634,37 @@ export default function ExploreScreen() {
           {/* ════════════════════ TAB: COMMUNITIES ════════════════════ */}
           {activeTab === 'communities' && (
             <View style={styles.tabContent}>
+              {/* Category selector pills */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoryScroll}
+              >
+                {COMMUNITY_CATEGORIES.map((cat) => {
+                  const isSelected = selectedCategory === cat
+                  return (
+                    <TouchableOpacity
+                      key={cat}
+                      style={[styles.categoryPill, isSelected && styles.categoryPillActive]}
+                      onPress={() => setSelectedCategory(cat)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.categoryPillText, isSelected && styles.categoryPillTextActive]}>
+                        {cat}
+                      </Text>
+                    </TouchableOpacity>
+                  )
+                })}
+              </ScrollView>
+
               {communities.length === 0 ? (
                 <View style={styles.emptyCard}>
                   <Users size={36} color={colors.gray300} style={styles.emptyIcon} />
                   <Text style={styles.emptyTitle}>No Communities Found</Text>
                   <Text style={styles.emptySubtitle}>
-                    No communities match "{searchTerm}". Create a community or explore existing ones.
+                    {selectedCategory !== 'All'
+                      ? `No communities found in category "${selectedCategory}". Try selecting another category.`
+                      : `No communities match "${searchTerm}". Create a community or explore existing ones.`}
                   </Text>
                 </View>
               ) : (
@@ -656,12 +686,28 @@ export default function ExploreScreen() {
                         )}
                       </View>
                       <View style={styles.userInfo}>
-                        <Text style={styles.displayName}>{comm.name}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <Text style={styles.displayName}>{comm.name}</Text>
+                          {comm.category && (
+                            <View style={styles.categoryTagBadge}>
+                              <Text style={styles.categoryTagBadgeText}>{comm.category}</Text>
+                            </View>
+                          )}
+                        </View>
                         <Text style={styles.username}>c/{comm.slug} • {comm.privacy || 'public'}</Text>
                         {comm.description && (
                           <Text style={styles.bioText} numberOfLines={2}>
                             {comm.description}
                           </Text>
+                        )}
+                        {Array.isArray(comm.tags) && comm.tags.length > 0 && (
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                            {comm.tags.slice(0, 3).map((tag: string) => (
+                              <View key={tag} style={styles.subTagChip}>
+                                <Text style={styles.subTagChipText}>#{tag}</Text>
+                              </View>
+                            ))}
+                          </View>
                         )}
                       </View>
                       <Text style={[styles.cardActionText, { color: '#7c3aed' }]}>View</Text>
@@ -969,5 +1015,51 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
     paddingHorizontal: 12,
+  },
+  categoryScroll: {
+    paddingVertical: 4,
+    gap: 8,
+  },
+  categoryPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 9999,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: colors.gray200,
+  },
+  categoryPillActive: {
+    backgroundColor: colors.gray900,
+    borderColor: colors.gray900,
+  },
+  categoryPillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.gray600,
+  },
+  categoryPillTextActive: {
+    color: '#ffffff',
+  },
+  categoryTagBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: '#f3e8ff',
+  },
+  categoryTagBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#7c3aed',
+  },
+  subTagChip: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    backgroundColor: '#f1f5f9',
+  },
+  subTagChipText: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '500',
   },
 })

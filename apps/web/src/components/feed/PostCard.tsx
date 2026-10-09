@@ -10,7 +10,7 @@ import FormattedText from '../common/FormattedText'
 import MentionAutocomplete from '../common/MentionAutocomplete'
 import InteractivePoll from './InteractivePoll'
 import PostInsightsModal from './PostInsightsModal'
-import { UserBadgesRow } from '../common/PlatformBadge'
+import { UserBadgesRow, CommunityRoleBadge } from '../common/PlatformBadge'
 
 interface PostCardProps {
   post: Post
@@ -25,6 +25,7 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
   const supabase = createSupabaseBrowserClient()
   const cardRef = useRef<HTMLDivElement>(null)
   const [authorBadges, setAuthorBadges] = useState<string[]>([])
+  const [authorCommunityRole, setAuthorCommunityRole] = useState<string | null>(null)
   const [isLiked, setIsLiked] = useState(post.isLikedByMe)
   const [isPinned, setIsPinned] = useState(post.isPinned || false)
   const [pinBusy, setPinBusy] = useState(false)
@@ -45,12 +46,23 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
         if (data) {
           setAuthorBadges(data.map((b) => b.badge_id))
         }
+
+        if (post.communityId) {
+          const { data: memberData } = await supabase
+            .from('community_members')
+            .select('role')
+            .match({ community_id: post.communityId, user_id: post.authorId })
+            .maybeSingle()
+          if (memberData?.role) {
+            setAuthorCommunityRole(memberData.role)
+          }
+        }
       } catch {
         // Safe fallback
       }
     }
     loadAuthorBadges()
-  }, [supabase, post.authorId])
+  }, [supabase, post.authorId, post.communityId])
 
   useEffect(() => {
     async function checkCommunityModStatus() {
@@ -669,6 +681,7 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
                 {post.author.displayName}
               </h3>
               <UserBadgesRow badges={authorBadges} size={15} />
+              {authorCommunityRole && <CommunityRoleBadge role={authorCommunityRole} size={14} />}
             </div>
             <p className="text-xs text-gray-500">@{post.author.username}</p>
             {post.community && (

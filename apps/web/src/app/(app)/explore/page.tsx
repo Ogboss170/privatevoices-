@@ -34,6 +34,10 @@ function ExploreContent(): React.JSX.Element {
   const [searchTerm, setSearchTerm] = useState(initialQuery)
   const [activeTab, setActiveTab] = useState<SearchTab>(initialTab)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState<string>('All')
+
+  // Community Topics / Categories
+  const COMMUNITY_CATEGORIES = ['All', 'Technology', 'Privacy', 'Crypto', 'Creative', 'Life', 'Gaming', 'Music']
 
   // Data states
   const [trendingHashtags, setTrendingHashtags] = useState<any[]>([])
@@ -171,9 +175,11 @@ function ExploreContent(): React.JSX.Element {
 
           // Fetch Communities
           if (tab === 'all' || tab === 'communities') {
-            const { data: matchedCommunities } = await supabase
-              .from('communities')
-              .select('*')
+            let commsQuery = supabase.from('communities').select('*')
+            if (selectedCategory !== 'All') {
+              commsQuery = commsQuery.or(`category.ilike.%${selectedCategory}%,tags.cs.{${selectedCategory.toLowerCase()}}`)
+            }
+            const { data: matchedCommunities } = await commsQuery
               .or(`name.ilike.%${keyword}%,slug.ilike.%${keyword}%,description.ilike.%${keyword}%`)
               .limit(tab === 'communities' ? 20 : 4)
             setCommunities(matchedCommunities ?? [])
@@ -207,12 +213,12 @@ function ExploreContent(): React.JSX.Element {
         setLoading(false)
       }
     },
-    [supabase, formatPosts]
+    [supabase, formatPosts, selectedCategory]
   )
 
   useEffect(() => {
     executeSearch(searchTerm, activeTab)
-  }, [searchTerm, activeTab, executeSearch])
+  }, [searchTerm, activeTab, selectedCategory, executeSearch])
 
   // Update URL params smoothly
   function updateUrl(query: string, tab: SearchTab) {
@@ -604,11 +610,29 @@ function ExploreContent(): React.JSX.Element {
 
           {/* ════════════════════ TAB: COMMUNITIES ════════════════════ */}
           {activeTab === 'communities' && (
-            <div className="space-y-3">
+            <div className="space-y-4">
+              {/* Category Topics Filter */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                {COMMUNITY_CATEGORIES.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCategory(cat)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
+                      selectedCategory === cat
+                        ? 'bg-purple-600 text-white shadow-xs'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+
               {isSearching && (
                 <div className="flex items-center justify-between text-xs text-gray-500 px-1">
                   <span>
                     Communities matching <strong className="text-gray-900">"{searchTerm}"</strong>
+                    {selectedCategory !== 'All' && <span> in <strong>{selectedCategory}</strong></span>}
                   </span>
                   <span>{communities.length} result{communities.length === 1 ? '' : 's'}</span>
                 </div>
@@ -659,6 +683,18 @@ function ExploreContent(): React.JSX.Element {
                           <p className="text-xs text-gray-600 truncate mt-0.5">
                             {comm.description || 'Private Voices Community'}
                           </p>
+                          {comm.category && (
+                            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                              <span className="text-[10px] font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md">
+                                {comm.category}
+                              </span>
+                              {comm.tags && comm.tags.length > 0 && comm.tags.slice(0, 3).map((t: string) => (
+                                <span key={t} className="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                                  #{t}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                       <span className="text-xs font-semibold text-purple-600 group-hover:underline flex-shrink-0">
