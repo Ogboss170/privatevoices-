@@ -101,6 +101,11 @@ export default function CommunityDetailScreen() {
   // Public Profile Modal
   const [selectedProfileTarget, setSelectedProfileTarget] = useState<{ userId?: string; username?: string } | null>(null)
 
+  // Rules state
+  const [rules, setRules] = useState<any[]>([])
+  const [editingRules, setEditingRules] = useState<any[]>([])
+  const [savingRules, setSavingRules] = useState(false)
+
   // ── Settings sheet animation ─────────────────────────────────────────────────
   function openSettings() {
     setSettingsVisible(true)
@@ -131,6 +136,15 @@ export default function CommunityDetailScreen() {
     setEditDesc(comm.description || '')
     setEditCoverUrl(comm.avatar_url || '')
     setEditPrivacy(comm.privacy || 'public')
+
+    const customRules = Array.isArray(comm.rules) && comm.rules.length > 0 ? comm.rules : [
+      { id: 1, title: 'Be respectful', desc: 'Treat all members with courtesy and kindness.' },
+      { id: 2, title: 'No harassment or hate speech', desc: 'Bullying, discrimination, and hate speech are strictly prohibited.' },
+      { id: 3, title: 'Stay on topic', desc: 'Keep posts relevant to the community category and purpose.' },
+      { id: 4, title: 'No spam or self-promotion', desc: 'Avoid unauthorized advertising or duplicate postings.' },
+    ]
+    setRules(customRules)
+    setEditingRules(customRules)
 
     if (uId) {
       const { data: member } = await supabase
@@ -620,8 +634,11 @@ export default function CommunityDetailScreen() {
             <Text style={styles.descText}>{community.description || 'Welcome to this community! Share posts, discuss ideas, and connect.'}</Text>
 
             <Text style={[styles.cardTitle, { marginTop: 14 }]}>Community Guidelines</Text>
-            {['Be respectful to all fellow members.', 'No harassment, hate speech, or abuse.', 'Keep posts and discussions on topic.', 'No spam, link farming, or unauthorized promos.'].map((rule, i) => (
-              <Text key={i} style={styles.ruleItem}>{i + 1}. {rule}</Text>
+            {rules.map((rule, i) => (
+              <View key={rule.id || i} style={{ marginBottom: 10 }}>
+                <Text style={styles.ruleItem}>{i + 1}. {rule.title}</Text>
+                {rule.desc ? <Text style={[styles.descText, { marginLeft: 16, marginTop: 2, fontSize: 13 }]}>{rule.desc}</Text> : null}
+              </View>
             ))}
           </View>
         )}
@@ -751,6 +768,84 @@ export default function CommunityDetailScreen() {
                 )
               })}
             </View>
+
+            {/* Rules Editor (Owner Only) */}
+            {userRole === 'owner' && (
+              <View style={styles.card}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Settings size={18} color={colors.brand} />
+                    <Text style={styles.cardTitle}>Community Rules Editor</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#f0fdf4', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }}
+                    onPress={() => {
+                      const newId = editingRules.length > 0 ? Math.max(...editingRules.map((r: any) => Number(r.id) || 0)) + 1 : 1
+                      setEditingRules([...editingRules, { id: newId, title: '', desc: '' }])
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#16a34a' }}>+ Add Rule</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {editingRules.map((rule, index) => (
+                  <View key={index} style={{ backgroundColor: '#f9fafb', borderRadius: 10, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: '#e5e7eb' }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: colors.gray700 }}>Rule #{index + 1}</Text>
+                      <TouchableOpacity onPress={() => setEditingRules(editingRules.filter((_, i) => i !== index))}>
+                        <X size={14} color="#ef4444" />
+                      </TouchableOpacity>
+                    </View>
+                    <TextInput
+                      style={[styles.fieldInput, { marginBottom: 6, backgroundColor: '#fff' }]}
+                      placeholder="Rule Title"
+                      placeholderTextColor={colors.gray400}
+                      value={rule.title}
+                      onChangeText={(t) => {
+                        const updated = [...editingRules]
+                        updated[index] = { ...updated[index], title: t }
+                        setEditingRules(updated)
+                      }}
+                    />
+                    <TextInput
+                      style={[styles.fieldInput, { minHeight: 45, backgroundColor: '#fff' }]}
+                      placeholder="Rule Details"
+                      placeholderTextColor={colors.gray400}
+                      multiline
+                      value={rule.desc}
+                      onChangeText={(d) => {
+                        const updated = [...editingRules]
+                        updated[index] = { ...updated[index], desc: d }
+                        setEditingRules(updated)
+                      }}
+                    />
+                  </View>
+                ))}
+
+                <TouchableOpacity
+                  style={[styles.joinBtn, savingRules && { opacity: 0.5 }]}
+                  disabled={savingRules}
+                  onPress={async () => {
+                    if (!community) return
+                    setSavingRules(true)
+                    const cleaned = editingRules
+                      .filter((r) => r.title.trim())
+                      .map((r, i) => ({ id: i + 1, title: r.title.trim(), desc: (r.desc || '').trim() }))
+
+                    const { error } = await supabase.from('communities').update({ rules: cleaned }).eq('id', community.id)
+                    setSavingRules(false)
+                    if (error) {
+                      Alert.alert('Save Failed', error.message)
+                    } else {
+                      Alert.alert('Success', 'Community rules updated!')
+                      fetchCommunityData()
+                    }
+                  }}
+                >
+                  <Text style={styles.joinBtnText}>{savingRules ? 'Saving Rules...' : 'Save Rules'}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         )}
       </ScrollView>

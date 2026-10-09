@@ -62,6 +62,10 @@ export default function CommunityDetailPage(): React.JSX.Element {
   const [newPostContent, setNewPostContent] = useState('')
   const [posting, setPosting] = useState(false)
 
+  // Rules editor state
+  const [editingRules, setEditingRules] = useState<any[]>([])
+  const [savingRules, setSavingRules] = useState(false)
+
   const fetchCommunityData = useCallback(async () => {
     setLoading(true)
     const { data: userRes } = await supabase.auth.getUser()
@@ -85,13 +89,15 @@ export default function CommunityDetailPage(): React.JSX.Element {
     setEditCoverUrl(comm.avatar_url || '')
     setEditPrivacy(comm.privacy || 'public')
 
-    // Default rules if none defined
-    setRules([
+    // Load custom rules from database if present, else fallback
+    const customRules = Array.isArray(comm.rules) && comm.rules.length > 0 ? comm.rules : [
       { id: 1, title: 'Be respectful', desc: 'Treat all members with courtesy and kindness.' },
       { id: 2, title: 'No harassment or hate speech', desc: 'Bullying, discrimination, and hate speech are strictly prohibited.' },
       { id: 3, title: 'Stay on topic', desc: 'Keep posts relevant to the community category and purpose.' },
       { id: 4, title: 'No spam or self-promotion', desc: 'Avoid unauthorized advertising or duplicate postings.' },
-    ])
+    ]
+    setRules(customRules)
+    setEditingRules(customRules)
 
     // 2. Fetch membership status for current user
     if (uId) {
@@ -675,6 +681,108 @@ export default function CommunityDetailPage(): React.JSX.Element {
                 ))}
             </div>
           </div>
+
+          {/* 3. Community Rules Editor (Owner Only) */}
+          {userRole === 'owner' && (
+            <div className="card p-6 space-y-4">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <BookOpen size={18} className="text-brand-600" />
+                  <div>
+                    <h3 className="font-bold text-gray-900 text-base">Community Rules Editor</h3>
+                    <p className="text-xs text-gray-500">Define custom rules displayed on your community about page.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newId = editingRules.length > 0 ? Math.max(...editingRules.map((r: any) => Number(r.id) || 0)) + 1 : 1
+                    setEditingRules([...editingRules, { id: newId, title: '', desc: '' }])
+                  }}
+                  className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg bg-brand-50 hover:bg-brand-100 text-brand-700 transition-colors"
+                >
+                  <Plus size={14} /> Add Rule
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {editingRules.map((rule, index) => (
+                  <div key={index} className="p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-gray-700">Rule #{index + 1}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingRules(editingRules.filter((_, i) => i !== index))
+                        }}
+                        className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete rule"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+
+                    <input
+                      type="text"
+                      placeholder="Rule Title (e.g., No spam or promotion)"
+                      value={rule.title}
+                      onChange={(e) => {
+                        const updated = [...editingRules]
+                        updated[index] = { ...updated[index], title: e.target.value }
+                        setEditingRules(updated)
+                      }}
+                      className="input-field text-xs bg-white"
+                    />
+
+                    <textarea
+                      rows={2}
+                      placeholder="Rule details and expectations..."
+                      value={rule.desc}
+                      onChange={(e) => {
+                        const updated = [...editingRules]
+                        updated[index] = { ...updated[index], desc: e.target.value }
+                        setEditingRules(updated)
+                      }}
+                      className="input-field text-xs bg-white resize-none"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                disabled={savingRules}
+                onClick={async () => {
+                  if (!community) return
+                  setSavingRules(true)
+
+                  const cleaned = editingRules
+                    .filter((r) => r.title.trim())
+                    .map((r, i) => ({
+                      id: i + 1,
+                      title: r.title.trim(),
+                      desc: r.desc.trim(),
+                    }))
+
+                  const { error } = await supabase
+                    .from('communities')
+                    .update({ rules: cleaned })
+                    .eq('id', community.id)
+
+                  setSavingRules(false)
+                  if (error) {
+                    alert(`Failed to save rules: ${error.message}`)
+                  } else {
+                    alert('Community rules updated successfully!')
+                    fetchCommunityData()
+                  }
+                }}
+                className="btn-primary py-2 px-4 text-xs font-bold w-full"
+              >
+                {savingRules ? 'Saving Rules...' : 'Save All Rules'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
