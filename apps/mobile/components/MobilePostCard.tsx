@@ -345,10 +345,84 @@ export function MobilePostCard({ post, currentUserId, communityRole, onDelete, o
         data = fallback.data
       }
 
-      setComments(data ?? [])
+      const commentList = data ?? []
+      if (commentList.length > 0) {
+        const commentIds = commentList.map((c: any) => c.id)
+
+        // Fetch like counts and user's likes
+        const [likesRes, myLikesRes] = await Promise.all([
+          supabase.from('comment_likes').select('comment_id').in('comment_id', commentIds),
+          currentUserId
+            ? supabase.from('comment_likes').select('comment_id').eq('user_id', currentUserId).in('comment_id', commentIds)
+            : Promise.resolve({ data: [] }),
+        ])
+
+        const likeCountsMap = new Map<string, number>()
+        ;(likesRes.data || []).forEach((row: any) => {
+          likeCountsMap.set(row.comment_id, (likeCountsMap.get(row.comment_id) || 0) + 1)
+        })
+
+        const myLikedSet = new Set((myLikesRes.data || []).map((row: any) => row.comment_id))
+
+        setComments(
+          commentList.map((c: any) => ({
+            ...c,
+            likeCount: likeCountsMap.get(c.id) || 0,
+            isLikedByMe: myLikedSet.has(c.id),
+          }))
+        )
+      } else {
+        setComments([])
+      }
       setLoadingComments(false)
     }
     setShowComments(!showComments)
+  }
+
+  async function handleToggleLikeComment(commentId: string) {
+    if (!currentUserId) {
+      Alert.alert('Login Required', 'Please log in to like comments.')
+      return
+    }
+
+    const currentComment = comments.find((c) => c.id === commentId)
+    if (!currentComment) return
+
+    const wasLiked = !!currentComment.isLikedByMe
+    const newLiked = !wasLiked
+    const newCount = Math.max(0, (currentComment.likeCount || 0) + (newLiked ? 1 : -1))
+
+    // Optimistic UI update
+    setComments((prev) =>
+      prev.map((c) =>
+        c.id === commentId
+          ? { ...c, isLikedByMe: newLiked, likeCount: newCount }
+          : c
+      )
+    )
+
+    try {
+      if (newLiked) {
+        await supabase.from('comment_likes').insert({
+          user_id: currentUserId,
+          comment_id: commentId,
+        })
+      } else {
+        await supabase
+          .from('comment_likes')
+          .delete()
+          .match({ user_id: currentUserId, comment_id: commentId })
+      }
+    } catch {
+      // Revert optimistic update
+      setComments((prev) =>
+        prev.map((c) =>
+          c.id === commentId
+            ? { ...c, isLikedByMe: wasLiked, likeCount: currentComment.likeCount || 0 }
+            : c
+        )
+      )
+    }
   }
 
   const [replyToComment, setReplyToComment] = useState<{ id: string; username: string } | null>(null)
@@ -375,7 +449,7 @@ export function MobilePostCard({ post, currentUserId, communityRole, onDelete, o
     if (error) {
       Alert.alert('Error', error.message)
     } else if (newComment) {
-      setComments((prev) => [...prev, newComment])
+      setComments((prev) => [...prev, { ...newComment, likeCount: 0, isLikedByMe: false }])
       setCommentText('')
 
       if (replyToComment) {
@@ -877,20 +951,39 @@ export function MobilePostCard({ post, currentUserId, communityRole, onDelete, o
             <View style={styles.commentsList}>
               {comments.map((c) => (
                 <View key={c.id} style={styles.commentItem}>
+                  <View style={{ flex: 1, flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        if (onPressMention && c.author?.username) onPressMention(c.author.username)
+                        else if (c.author_id && onPressAuthor) onPressAuthor(c.author_id)
+                      }}
+                      disabled={!onPressMention && !onPressAuthor}
+                    >
+                      <Text style={styles.commentAuthor}>@{c.author?.username || 'user'}:</Text>
+                    </TouchableOpacity>
+                    <FormattedText
+                      text={c.content}
+                      style={styles.commentBody}
+                      onPressMention={onPressMention}
+                    />
+                  </View>
                   <TouchableOpacity
-                    onPress={() => {
-                      if (onPressMention && c.author?.username) onPressMention(c.author.username)
-                      else if (c.author_id && onPressAuthor) onPressAuthor(c.author_id)
-                    }}
-                    disabled={!onPressMention && !onPressAuthor}
+                    onPress={() => handleToggleLikeComment(c.id)}
+                    style={styles.commentLikeBtn}
+                    activeOpacity={0.7}
+                    accessibilityLabel={c.isLikedByMe ? 'Unlike comment' : 'Like comment'}
                   >
-                    <Text style={styles.commentAuthor}>@{c.author?.username || 'user'}:</Text>
+                    <Heart
+                      size={14}
+                      color={c.isLikedByMe ? '#ef4444' : colors.gray400}
+                      fill={c.isLikedByMe ? '#ef4444' : 'transparent'}
+                    />
+                    {(c.likeCount || 0) > 0 && (
+                      <Text style={[styles.commentLikeCount, c.isLikedByMe && { color: '#ef4444', fontWeight: '700' }]}>
+                        {c.likeCount}
+                      </Text>
+                    )}
                   </TouchableOpacity>
-                  <FormattedText
-                    text={c.content}
-                    style={styles.commentBody}
-                    onPressMention={onPressMention}
-                  />
                 </View>
               ))}
             </View>
@@ -1038,8 +1131,9 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 10,
     flexDirection: 'row',
-    gap: 6,
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
   },
   commentAuthor: {
     fontSize: 12,
@@ -1050,6 +1144,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.gray700,
     flexShrink: 1,
+  },
+  commentLikeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  commentLikeCount: {
+    fontSize: 11,
+    color: colors.gray500,
+    fontWeight: '600',
   },
   mediaSection: {
     marginBottom: 14,

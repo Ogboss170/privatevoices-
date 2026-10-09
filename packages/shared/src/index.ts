@@ -120,6 +120,8 @@ export interface Comment {
   parentId?: string | null;
   replies?: Comment[];
   createdAt: string;
+  likeCount?: number;
+  isLikedByMe?: boolean;
 }
 
 export interface CreateCommentDto {

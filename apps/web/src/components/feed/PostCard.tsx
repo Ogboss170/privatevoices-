@@ -324,10 +324,87 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
         data = fallback.data
       }
 
-      setComments(data ?? [])
+      const commentList = data ?? []
+      if (commentList.length > 0) {
+        const commentIds = commentList.map((c: any) => c.id)
+        const { data: userRes } = await supabase.auth.getUser()
+        const currentUid = userRes?.user?.id
+
+        // Fetch like counts and user's likes for each comment
+        const [likesRes, myLikesRes] = await Promise.all([
+          supabase.from('comment_likes').select('comment_id').in('comment_id', commentIds),
+          currentUid
+            ? supabase.from('comment_likes').select('comment_id').eq('user_id', currentUid).in('comment_id', commentIds)
+            : Promise.resolve({ data: [] }),
+        ])
+
+        const likeCountsMap = new Map<string, number>()
+        ;(likesRes.data || []).forEach((row: any) => {
+          likeCountsMap.set(row.comment_id, (likeCountsMap.get(row.comment_id) || 0) + 1)
+        })
+
+        const myLikedSet = new Set((myLikesRes.data || []).map((row: any) => row.comment_id))
+
+        setComments(
+          commentList.map((c: any) => ({
+            ...c,
+            likeCount: likeCountsMap.get(c.id) || 0,
+            isLikedByMe: myLikedSet.has(c.id),
+          }))
+        )
+      } else {
+        setComments([])
+      }
       setLoadingComments(false)
     }
     setShowComments(!showComments)
+  }
+
+  async function handleToggleLikeComment(commentId: string) {
+    const { data: userRes } = await supabase.auth.getUser()
+    if (!userRes?.user) {
+      alert('Please log in to like comments.')
+      return
+    }
+
+    const currentComment = comments.find((c) => c.id === commentId)
+    if (!currentComment) return
+
+    const wasLiked = !!currentComment.isLikedByMe
+    const newLiked = !wasLiked
+    const newCount = Math.max(0, (currentComment.likeCount || 0) + (newLiked ? 1 : -1))
+
+    // Optimistic UI update
+    setComments((prev) =>
+      prev.map((c) =>
+        c.id === commentId
+          ? { ...c, isLikedByMe: newLiked, likeCount: newCount }
+          : c
+      )
+    )
+
+    try {
+      if (newLiked) {
+        await supabase.from('comment_likes').insert({
+          user_id: userRes.user.id,
+          comment_id: commentId,
+        })
+      } else {
+        await supabase
+          .from('comment_likes')
+          .delete()
+          .match({ user_id: userRes.user.id, comment_id: commentId })
+      }
+    } catch (err) {
+      // Revert optimistic update
+      setComments((prev) =>
+        prev.map((c) =>
+          c.id === commentId
+            ? { ...c, isLikedByMe: wasLiked, likeCount: currentComment.likeCount || 0 }
+            : c
+        )
+      )
+    }
   }
 
   const [replyToComment, setReplyToComment] = useState<{ id: string; username: string } | null>(null)
@@ -358,7 +435,7 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
     if (error) {
       alert(`Could not post comment: ${error.message}`)
     } else if (newComment) {
-      setComments((prev) => [...prev, newComment])
+      setComments((prev) => [...prev, { ...newComment, likeCount: 0, isLikedByMe: false }])
       setCommentText('')
 
       // Send notification to parent comment author or post author
@@ -899,22 +976,37 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
                   return (
                     <div key={comment.id} className="space-y-1.5">
                       {/* Top level comment */}
-                      <div className="bg-gray-50 p-2.5 rounded-lg space-y-1">
-                        <div className="flex items-start justify-between">
+                      <div className="bg-gray-50 dark:bg-slate-800/60 p-2.5 rounded-lg space-y-1">
+                        <div className="flex items-start justify-between gap-2">
                           <div className="flex gap-2 text-xs flex-1">
                             <Link
                               href={`/@${comment.author?.username || 'user'}`}
-                              className="font-semibold text-gray-900 hover:text-brand-600 transition-colors flex-shrink-0"
+                              className="font-semibold text-gray-900 dark:text-gray-100 hover:text-brand-600 transition-colors flex-shrink-0"
                               onClick={(e) => e.stopPropagation()}
                             >
                               @{comment.author?.username || 'user'}
                             </Link>
-                            <div className="text-gray-700 flex-1 whitespace-pre-line">
+                            <div className="text-gray-700 dark:text-gray-200 flex-1 whitespace-pre-line">
                               <FormattedText text={comment.content} />
                             </div>
                           </div>
+                          {/* Comment Like Button */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleToggleLikeComment(comment.id)
+                            }}
+                            className={`flex items-center gap-1 text-[11px] font-medium transition-colors p-1 rounded-md hover:bg-gray-200/50 dark:hover:bg-slate-700/50 ${
+                              comment.isLikedByMe ? 'text-red-500 font-bold' : 'text-gray-400 hover:text-red-500'
+                            }`}
+                            title={comment.isLikedByMe ? 'Unlike comment' : 'Like comment'}
+                          >
+                            <Heart size={14} className={comment.isLikedByMe ? 'fill-current text-red-500' : ''} />
+                            {(comment.likeCount || 0) > 0 && <span>{comment.likeCount}</span>}
+                          </button>
                         </div>
-                        <div className="flex items-center gap-3 pt-0.5 text-[11px] text-gray-400">
+                        <div className="flex items-center gap-3 pt-0.5 text-[11px] text-gray-400 dark:text-gray-500">
                           <span>{new Date(comment.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
                           <button
                             type="button"
@@ -931,22 +1023,39 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
 
                       {/* Nested Replies */}
                       {replies.length > 0 && (
-                        <div className="pl-5 border-l-2 border-purple-200 space-y-1.5 ml-2">
+                        <div className="pl-5 border-l-2 border-purple-200 dark:border-purple-900 space-y-1.5 ml-2">
                           {replies.map((reply) => (
-                            <div key={reply.id} className="bg-purple-50/50 p-2 rounded-lg space-y-1">
-                              <div className="flex gap-2 text-xs">
-                                <Link
-                                  href={`/@${reply.author?.username || 'user'}`}
-                                  className="font-semibold text-purple-900 hover:text-brand-600 transition-colors flex-shrink-0"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  @{reply.author?.username || 'user'}
-                                </Link>
-                                <div className="text-gray-700 flex-1 whitespace-pre-line">
-                                  <FormattedText text={reply.content} />
+                            <div key={reply.id} className="bg-purple-50/50 dark:bg-purple-950/20 p-2 rounded-lg space-y-1">
+                              <div className="flex items-start justify-between gap-2 text-xs">
+                                <div className="flex gap-2 flex-1">
+                                  <Link
+                                    href={`/@${reply.author?.username || 'user'}`}
+                                    className="font-semibold text-purple-900 dark:text-purple-300 hover:text-brand-600 transition-colors flex-shrink-0"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    @{reply.author?.username || 'user'}
+                                  </Link>
+                                  <div className="text-gray-700 dark:text-gray-200 flex-1 whitespace-pre-line">
+                                    <FormattedText text={reply.content} />
+                                  </div>
                                 </div>
+                                {/* Reply Like Button */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleToggleLikeComment(reply.id)
+                                  }}
+                                  className={`flex items-center gap-1 text-[11px] font-medium transition-colors p-1 rounded-md hover:bg-purple-100/50 dark:hover:bg-purple-900/50 ${
+                                    reply.isLikedByMe ? 'text-red-500 font-bold' : 'text-gray-400 hover:text-red-500'
+                                  }`}
+                                  title={reply.isLikedByMe ? 'Unlike reply' : 'Like reply'}
+                                >
+                                  <Heart size={13} className={reply.isLikedByMe ? 'fill-current text-red-500' : ''} />
+                                  {(reply.likeCount || 0) > 0 && <span>{reply.likeCount}</span>}
+                                </button>
                               </div>
-                              <div className="text-[10px] text-gray-400">
+                              <div className="text-[10px] text-gray-400 dark:text-gray-500">
                                 {new Date(reply.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
                               </div>
                             </div>

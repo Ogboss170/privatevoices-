@@ -154,7 +154,33 @@ export default function PostDetailScreen() {
       comms = fbComms.data
     }
 
-    setComments(comms ?? [])
+    const commentList = comms ?? []
+    if (commentList.length > 0) {
+      const commentIds = commentList.map((c: any) => c.id)
+      const [likesRes, myLikesRes] = await Promise.all([
+        supabase.from('comment_likes').select('comment_id').in('comment_id', commentIds),
+        uId
+          ? supabase.from('comment_likes').select('comment_id').eq('user_id', uId).in('comment_id', commentIds)
+          : Promise.resolve({ data: [] }),
+      ])
+
+      const likeCountsMap = new Map<string, number>()
+      ;(likesRes.data || []).forEach((row: any) => {
+        likeCountsMap.set(row.comment_id, (likeCountsMap.get(row.comment_id) || 0) + 1)
+      })
+
+      const myLikedSet = new Set((myLikesRes.data || []).map((row: any) => row.comment_id))
+
+      setComments(
+        commentList.map((c: any) => ({
+          ...c,
+          likeCount: likeCountsMap.get(c.id) || 0,
+          isLikedByMe: myLikedSet.has(c.id),
+        }))
+      )
+    } else {
+      setComments([])
+    }
     setLoading(false)
   }, [postId])
 
@@ -184,12 +210,58 @@ export default function PostDetailScreen() {
     if (error) {
       Alert.alert('Error', error.message)
     } else if (newComment) {
-      setComments((prev) => [...prev, newComment])
+      setComments((prev) => [...prev, { ...newComment, likeCount: 0, isLikedByMe: false }])
       setCommentText('')
       setReplyToComment(null)
       setPost((prev) => (prev ? { ...prev, commentCount: prev.commentCount + 1 } : null))
     }
     setSubmittingComment(false)
+  }
+
+  async function handleToggleLikeComment(commentId: string) {
+    if (!currentUserId) {
+      Alert.alert('Login Required', 'Please log in to like comments.')
+      return
+    }
+
+    const currentComment = comments.find((c) => c.id === commentId)
+    if (!currentComment) return
+
+    const wasLiked = !!currentComment.isLikedByMe
+    const newLiked = !wasLiked
+    const newCount = Math.max(0, (currentComment.likeCount || 0) + (newLiked ? 1 : -1))
+
+    // Optimistic UI update
+    setComments((prev) =>
+      prev.map((c) =>
+        c.id === commentId
+          ? { ...c, isLikedByMe: newLiked, likeCount: newCount }
+          : c
+      )
+    )
+
+    try {
+      if (newLiked) {
+        await supabase.from('comment_likes').insert({
+          user_id: currentUserId,
+          comment_id: commentId,
+        })
+      } else {
+        await supabase
+          .from('comment_likes')
+          .delete()
+          .match({ user_id: currentUserId, comment_id: commentId })
+      }
+    } catch {
+      // Revert optimistic update
+      setComments((prev) =>
+        prev.map((c) =>
+          c.id === commentId
+            ? { ...c, isLikedByMe: wasLiked, likeCount: currentComment.likeCount || 0 }
+            : c
+        )
+      )
+    }
   }
 
   if (loading) {
@@ -279,15 +351,35 @@ export default function PostDetailScreen() {
                         onPressMention={(u) => setSelectedProfileTarget({ username: u })}
                       />
 
-                      <TouchableOpacity
-                        style={styles.replyActionBtn}
-                        onPress={() => {
-                          setReplyToComment({ id: comment.id, username })
-                          setCommentText(`@${username} `)
-                        }}
-                      >
-                        <Text style={styles.replyActionText}>Reply</Text>
-                      </TouchableOpacity>
+                      <View style={styles.commentActionsRow}>
+                        <TouchableOpacity
+                          style={styles.replyActionBtn}
+                          onPress={() => {
+                            setReplyToComment({ id: comment.id, username })
+                            setCommentText(`@${username} `)
+                          }}
+                        >
+                          <Text style={styles.replyActionText}>Reply</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.commentLikeBtn}
+                          onPress={() => handleToggleLikeComment(comment.id)}
+                          activeOpacity={0.7}
+                          accessibilityLabel={comment.isLikedByMe ? 'Unlike comment' : 'Like comment'}
+                        >
+                          <Heart
+                            size={14}
+                            color={comment.isLikedByMe ? '#ef4444' : colors.gray400}
+                            fill={comment.isLikedByMe ? '#ef4444' : 'transparent'}
+                          />
+                          {(comment.likeCount || 0) > 0 && (
+                            <Text style={[styles.commentLikeCount, comment.isLikedByMe && { color: '#ef4444', fontWeight: '700' }]}>
+                              {comment.likeCount}
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   </View>
                 )
@@ -415,8 +507,27 @@ const styles = StyleSheet.create({
   commentDisplayName: { fontSize: 13, fontWeight: '700', color: colors.gray900 },
   commentUsername: { fontSize: 12, color: colors.gray500 },
   commentText: { fontSize: 14, color: colors.gray800, lineHeight: 20 },
-  replyActionBtn: { marginTop: 6 },
+  commentActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  replyActionBtn: { paddingVertical: 2 },
   replyActionText: { fontSize: 12, fontWeight: '600', color: colors.brand },
+  commentLikeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  commentLikeCount: {
+    fontSize: 11,
+    color: colors.gray500,
+    fontWeight: '600',
+  },
 
   replyingBar: {
     flexDirection: 'row',
