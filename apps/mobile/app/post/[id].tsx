@@ -14,7 +14,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { ArrowLeft, Send, Heart, Repeat, Bookmark, Share2, MessageCircle } from 'lucide-react-native'
+import { ArrowLeft, Send, Heart, Repeat, Bookmark, Share2, MessageCircle, Trash2 } from 'lucide-react-native'
 import { Image } from 'expo-image'
 import { supabase } from '../../lib/supabase'
 import { colors } from '../../constants/colors'
@@ -32,12 +32,45 @@ export default function PostDetailScreen() {
 
   const [post, setPost] = useState<Post | null>(null)
   const [comments, setComments] = useState<any[]>([])
+  const [commentSort, setCommentSort] = useState<'newest' | 'top'>('newest')
   const [loading, setLoading] = useState(true)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [commentText, setCommentText] = useState('')
   const [submittingComment, setSubmittingComment] = useState(false)
   const [replyToComment, setReplyToComment] = useState<{ id: string; username: string } | null>(null)
   const [selectedProfileTarget, setSelectedProfileTarget] = useState<{ userId?: string; username?: string } | null>(null)
+
+  async function handleDeleteComment(commentId: string) {
+    Alert.alert(
+      'Delete Comment',
+      'Are you sure you want to delete this comment?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const prevComments = [...comments]
+            setComments((prev) => prev.filter((c) => c.id !== commentId && c.parent_id !== commentId))
+            setPost((prev) => (prev ? { ...prev, commentCount: Math.max(0, prev.commentCount - 1) } : null))
+
+            try {
+              const { error } = await supabase.from('comments').delete().eq('id', commentId)
+              if (error) {
+                setComments(prevComments)
+                setPost((prev) => (prev ? { ...prev, commentCount: prev.commentCount + 1 } : null))
+                Alert.alert('Error', error.message)
+              }
+            } catch (err: any) {
+              setComments(prevComments)
+              setPost((prev) => (prev ? { ...prev, commentCount: prev.commentCount + 1 } : null))
+              Alert.alert('Error', err.message)
+            }
+          },
+        },
+      ]
+    )
+  }
 
   const mentionMatch = commentText.match(/(?:^|\s)@([a-zA-Z0-9_]*)$/)
   const mentionQuery = mentionMatch ? mentionMatch[1] : null
@@ -310,9 +343,29 @@ export default function PostDetailScreen() {
 
           {/* Comments Section */}
           <View style={styles.commentsSection}>
-            <Text style={styles.commentsSectionTitle}>
-              Comments ({comments.length})
-            </Text>
+            <View style={styles.commentSortRow}>
+              <Text style={styles.commentsSectionTitle}>
+                Comments ({comments.length})
+              </Text>
+              <View style={styles.commentSortTabs}>
+                <TouchableOpacity
+                  onPress={() => setCommentSort('newest')}
+                  style={[styles.commentSortTab, commentSort === 'newest' && styles.commentSortTabActive]}
+                >
+                  <Text style={[styles.commentSortTabText, commentSort === 'newest' && styles.commentSortTabTextActive]}>
+                    Newest
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setCommentSort('top')}
+                  style={[styles.commentSortTab, commentSort === 'top' && styles.commentSortTabActive]}
+                >
+                  <Text style={[styles.commentSortTabText, commentSort === 'top' && styles.commentSortTabTextActive]}>
+                    Top
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
 
             {comments.length === 0 ? (
               <View style={styles.emptyCommentsCard}>
@@ -320,70 +373,91 @@ export default function PostDetailScreen() {
                 <Text style={styles.emptyCommentsSub}>Be the first to share your thoughts on this Voice.</Text>
               </View>
             ) : (
-              comments.map((comment) => {
-                const author = comment.author
-                const displayName = author?.display_name || author?.username || 'User'
-                const username = author?.username || 'user'
-                return (
-                  <View key={comment.id} style={styles.commentCard}>
-                    <TouchableOpacity
-                      style={styles.commentAvatarCircle}
-                      onPress={() => author?.id && setSelectedProfileTarget({ userId: author.id })}
-                    >
-                      {author?.avatar_url ? (
-                        <Image source={{ uri: author.avatar_url }} style={styles.commentAvatarImg} />
-                      ) : (
-                        <Text style={styles.commentAvatarLetter}>{displayName.charAt(0).toUpperCase()}</Text>
-                      )}
-                    </TouchableOpacity>
+              [...comments]
+                .sort((a, b) => {
+                  if (commentSort === 'top') {
+                    const diff = (b.likeCount || 0) - (a.likeCount || 0)
+                    if (diff !== 0) return diff
+                  }
+                  return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                })
+                .map((comment) => {
+                  const author = comment.author
+                  const displayName = author?.display_name || author?.username || 'User'
+                  const username = author?.username || 'user'
+                  const canDelete = currentUserId && (currentUserId === comment.author_id || (post && currentUserId === post.authorId))
+                  return (
+                    <View key={comment.id} style={styles.commentCard}>
+                      <TouchableOpacity
+                        style={styles.commentAvatarCircle}
+                        onPress={() => author?.id && setSelectedProfileTarget({ userId: author.id })}
+                      >
+                        {author?.avatar_url ? (
+                          <Image source={{ uri: author.avatar_url }} style={styles.commentAvatarImg} />
+                        ) : (
+                          <Text style={styles.commentAvatarLetter}>{displayName.charAt(0).toUpperCase()}</Text>
+                        )}
+                      </TouchableOpacity>
 
-                    <View style={styles.commentBodyWrapper}>
-                      <View style={styles.commentMetaRow}>
-                        <TouchableOpacity onPress={() => author?.id && setSelectedProfileTarget({ userId: author.id })}>
-                          <Text style={styles.commentDisplayName}>{displayName}</Text>
-                        </TouchableOpacity>
-                        <Text style={styles.commentUsername}>@{username}</Text>
-                      </View>
+                      <View style={styles.commentBodyWrapper}>
+                        <View style={styles.commentMetaRow}>
+                          <TouchableOpacity onPress={() => author?.id && setSelectedProfileTarget({ userId: author.id })}>
+                            <Text style={styles.commentDisplayName}>{displayName}</Text>
+                          </TouchableOpacity>
+                          <Text style={styles.commentUsername}>@{username}</Text>
+                        </View>
 
-                      <FormattedText
-                        text={comment.content}
-                        style={styles.commentText}
-                        onPressMention={(u) => setSelectedProfileTarget({ username: u })}
-                      />
+                        <FormattedText
+                          text={comment.content}
+                          style={styles.commentText}
+                          onPressMention={(u) => setSelectedProfileTarget({ username: u })}
+                        />
 
-                      <View style={styles.commentActionsRow}>
-                        <TouchableOpacity
-                          style={styles.replyActionBtn}
-                          onPress={() => {
-                            setReplyToComment({ id: comment.id, username })
-                            setCommentText(`@${username} `)
-                          }}
-                        >
-                          <Text style={styles.replyActionText}>Reply</Text>
-                        </TouchableOpacity>
+                        <View style={styles.commentActionsRow}>
+                          <TouchableOpacity
+                            style={styles.replyActionBtn}
+                            onPress={() => {
+                              setReplyToComment({ id: comment.id, username })
+                              setCommentText(`@${username} `)
+                            }}
+                          >
+                            <Text style={styles.replyActionText}>Reply</Text>
+                          </TouchableOpacity>
 
-                        <TouchableOpacity
-                          style={styles.commentLikeBtn}
-                          onPress={() => handleToggleLikeComment(comment.id)}
-                          activeOpacity={0.7}
-                          accessibilityLabel={comment.isLikedByMe ? 'Unlike comment' : 'Like comment'}
-                        >
-                          <Heart
-                            size={14}
-                            color={comment.isLikedByMe ? '#ef4444' : colors.gray400}
-                            fill={comment.isLikedByMe ? '#ef4444' : 'transparent'}
-                          />
-                          {(comment.likeCount || 0) > 0 && (
-                            <Text style={[styles.commentLikeCount, comment.isLikedByMe && { color: '#ef4444', fontWeight: '700' }]}>
-                              {comment.likeCount}
-                            </Text>
-                          )}
-                        </TouchableOpacity>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <TouchableOpacity
+                              style={styles.commentLikeBtn}
+                              onPress={() => handleToggleLikeComment(comment.id)}
+                              activeOpacity={0.7}
+                              accessibilityLabel={comment.isLikedByMe ? 'Unlike comment' : 'Like comment'}
+                            >
+                              <Heart
+                                size={14}
+                                color={comment.isLikedByMe ? '#ef4444' : colors.gray400}
+                                fill={comment.isLikedByMe ? '#ef4444' : 'transparent'}
+                              />
+                              {(comment.likeCount || 0) > 0 && (
+                                <Text style={[styles.commentLikeCount, comment.isLikedByMe && { color: '#ef4444', fontWeight: '700' }]}>
+                                  {comment.likeCount}
+                                </Text>
+                              )}
+                            </TouchableOpacity>
+
+                            {canDelete && (
+                              <TouchableOpacity
+                                onPress={() => handleDeleteComment(comment.id)}
+                                style={{ padding: 2 }}
+                                accessibilityLabel="Delete comment"
+                              >
+                                <Trash2 size={13} color={colors.gray400} />
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        </View>
                       </View>
                     </View>
-                  </View>
-                )
-              })
+                  )
+                })
             )}
           </View>
         </ScrollView>
@@ -469,6 +543,36 @@ const styles = StyleSheet.create({
 
   commentsSection: { marginTop: 12, gap: 12 },
   commentsSectionTitle: { fontSize: 16, fontWeight: '700', color: colors.gray900, marginBottom: 4 },
+  commentSortRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 4,
+  },
+  commentSortTabs: {
+    flexDirection: 'row',
+    backgroundColor: colors.gray100,
+    borderRadius: 8,
+    padding: 2,
+    gap: 2,
+  },
+  commentSortTab: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  commentSortTabActive: {
+    backgroundColor: '#ffffff',
+  },
+  commentSortTabText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.gray500,
+  },
+  commentSortTabTextActive: {
+    fontWeight: '700',
+    color: colors.gray900,
+  },
 
   emptyCommentsCard: {
     backgroundColor: '#ffffff',

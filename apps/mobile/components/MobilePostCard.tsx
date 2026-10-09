@@ -184,6 +184,7 @@ export function MobilePostCard({ post, currentUserId, communityRole, onDelete, o
   }))
   const [showComments, setShowComments] = useState(false)
   const [comments, setComments] = useState<any[]>([])
+  const [commentSort, setCommentSort] = useState<'newest' | 'top'>('newest')
   const [commentText, setCommentText] = useState('')
   const [loadingComments, setLoadingComments] = useState(false)
   const [submittingComment, setSubmittingComment] = useState(false)
@@ -204,6 +205,38 @@ export function MobilePostCard({ post, currentUserId, communityRole, onDelete, o
         return `${prefix}@${username} `
       })
     })
+  }
+
+  async function handleDeleteComment(commentId: string) {
+    Alert.alert(
+      'Delete Comment',
+      'Are you sure you want to delete this comment?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const prevComments = [...comments]
+            setComments((prev) => prev.filter((c) => c.id !== commentId && c.parent_id !== commentId))
+            setCommentCount((c) => Math.max(0, (c || 0) - 1))
+
+            try {
+              const { error } = await supabase.from('comments').delete().eq('id', commentId)
+              if (error) {
+                setComments(prevComments)
+                setCommentCount((c) => (c || 0) + 1)
+                Alert.alert('Error', error.message)
+              }
+            } catch (err: any) {
+              setComments(prevComments)
+              setCommentCount((c) => (c || 0) + 1)
+              Alert.alert('Error', err.message)
+            }
+          },
+        },
+      ]
+    )
   }
 
   async function handleToggleLike() {
@@ -949,43 +982,88 @@ export function MobilePostCard({ post, currentUserId, communityRole, onDelete, o
             <Text style={styles.noCommentsText}>No comments yet. Be the first!</Text>
           ) : (
             <View style={styles.commentsList}>
-              {comments.map((c) => (
-                <View key={c.id} style={styles.commentItem}>
-                  <View style={{ flex: 1, flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        if (onPressMention && c.author?.username) onPressMention(c.author.username)
-                        else if (c.author_id && onPressAuthor) onPressAuthor(c.author_id)
-                      }}
-                      disabled={!onPressMention && !onPressAuthor}
-                    >
-                      <Text style={styles.commentAuthor}>@{c.author?.username || 'user'}:</Text>
-                    </TouchableOpacity>
-                    <FormattedText
-                      text={c.content}
-                      style={styles.commentBody}
-                      onPressMention={onPressMention}
-                    />
-                  </View>
+              {/* Sort selector */}
+              <View style={styles.commentSortRow}>
+                <Text style={styles.commentSortTitle}>Comments</Text>
+                <View style={styles.commentSortTabs}>
                   <TouchableOpacity
-                    onPress={() => handleToggleLikeComment(c.id)}
-                    style={styles.commentLikeBtn}
-                    activeOpacity={0.7}
-                    accessibilityLabel={c.isLikedByMe ? 'Unlike comment' : 'Like comment'}
+                    onPress={() => setCommentSort('newest')}
+                    style={[styles.commentSortTab, commentSort === 'newest' && styles.commentSortTabActive]}
                   >
-                    <Heart
-                      size={14}
-                      color={c.isLikedByMe ? '#ef4444' : colors.gray400}
-                      fill={c.isLikedByMe ? '#ef4444' : 'transparent'}
-                    />
-                    {(c.likeCount || 0) > 0 && (
-                      <Text style={[styles.commentLikeCount, c.isLikedByMe && { color: '#ef4444', fontWeight: '700' }]}>
-                        {c.likeCount}
-                      </Text>
-                    )}
+                    <Text style={[styles.commentSortTabText, commentSort === 'newest' && styles.commentSortTabTextActive]}>
+                      Newest
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setCommentSort('top')}
+                    style={[styles.commentSortTab, commentSort === 'top' && styles.commentSortTabActive]}
+                  >
+                    <Text style={[styles.commentSortTabText, commentSort === 'top' && styles.commentSortTabTextActive]}>
+                      Top
+                    </Text>
                   </TouchableOpacity>
                 </View>
-              ))}
+              </View>
+
+              {[...comments]
+                .sort((a, b) => {
+                  if (commentSort === 'top') {
+                    const diff = (b.likeCount || 0) - (a.likeCount || 0)
+                    if (diff !== 0) return diff
+                  }
+                  return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                })
+                .map((c) => {
+                  const canDelete = currentUserId && (currentUserId === c.author_id || currentUserId === post.authorId)
+                  return (
+                    <View key={c.id} style={styles.commentItem}>
+                      <View style={{ flex: 1, flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+                        <TouchableOpacity
+                          onPress={() => {
+                            if (onPressMention && c.author?.username) onPressMention(c.author.username)
+                            else if (c.author_id && onPressAuthor) onPressAuthor(c.author_id)
+                          }}
+                          disabled={!onPressMention && !onPressAuthor}
+                        >
+                          <Text style={styles.commentAuthor}>@{c.author?.username || 'user'}:</Text>
+                        </TouchableOpacity>
+                        <FormattedText
+                          text={c.content}
+                          style={styles.commentBody}
+                          onPressMention={onPressMention}
+                        />
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <TouchableOpacity
+                          onPress={() => handleToggleLikeComment(c.id)}
+                          style={styles.commentLikeBtn}
+                          activeOpacity={0.7}
+                          accessibilityLabel={c.isLikedByMe ? 'Unlike comment' : 'Like comment'}
+                        >
+                          <Heart
+                            size={14}
+                            color={c.isLikedByMe ? '#ef4444' : colors.gray400}
+                            fill={c.isLikedByMe ? '#ef4444' : 'transparent'}
+                          />
+                          {(c.likeCount || 0) > 0 && (
+                            <Text style={[styles.commentLikeCount, c.isLikedByMe && { color: '#ef4444', fontWeight: '700' }]}>
+                              {c.likeCount}
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                        {canDelete && (
+                          <TouchableOpacity
+                            onPress={() => handleDeleteComment(c.id)}
+                            style={{ padding: 4 }}
+                            accessibilityLabel="Delete comment"
+                          >
+                            <Trash2 size={13} color={colors.gray400} />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+                  )
+                })}
             </View>
           )}
         </View>
@@ -1125,6 +1203,45 @@ const styles = StyleSheet.create({
   },
   commentsList: {
     gap: 8,
+  },
+  commentSortRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  commentSortTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.gray400,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  commentSortTabs: {
+    flexDirection: 'row',
+    backgroundColor: colors.gray100,
+    borderRadius: 8,
+    padding: 2,
+    gap: 2,
+  },
+  commentSortTab: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  commentSortTabActive: {
+    backgroundColor: '#ffffff',
+  },
+  commentSortTabText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: colors.gray500,
+  },
+  commentSortTabTextActive: {
+    fontWeight: '700',
+    color: colors.gray900,
   },
   commentItem: {
     backgroundColor: '#f9fafb',

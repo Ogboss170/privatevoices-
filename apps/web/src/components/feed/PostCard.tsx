@@ -89,6 +89,7 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
   const [isSaved, setIsSaved] = useState(post.isSavedByMe)
   const [showComments, setShowComments] = useState(false)
   const [comments, setComments] = useState<any[]>([])
+  const [commentSort, setCommentSort] = useState<'newest' | 'top'>('newest')
   const [commentText, setCommentText] = useState('')
   const [loadingComments, setLoadingComments] = useState(false)
   const [submittingComment, setSubmittingComment] = useState(false)
@@ -404,6 +405,28 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
             : c
         )
       )
+    }
+  }
+
+  async function handleDeleteComment(commentId: string) {
+    if (!confirm('Are you sure you want to delete this comment?')) return
+
+    // Optimistic removal
+    const previousComments = [...comments]
+    setComments((prev) => prev.filter((c) => c.id !== commentId && c.parent_id !== commentId))
+    post.commentCount = Math.max(0, (post.commentCount || 0) - 1)
+
+    try {
+      const { error } = await supabase.from('comments').delete().eq('id', commentId)
+      if (error) {
+        setComments(previousComments)
+        post.commentCount = (post.commentCount || 0) + 1
+        alert(`Failed to delete comment: ${error.message}`)
+      }
+    } catch (err: any) {
+      setComments(previousComments)
+      post.commentCount = (post.commentCount || 0) + 1
+      alert(`Error deleting comment: ${err.message}`)
     }
   }
 
@@ -968,11 +991,48 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
             <p className="text-xs text-gray-400 text-center py-2">No comments yet. Be the first!</p>
           ) : (
             <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+              {/* Comment Sorting Selector */}
+              <div className="flex items-center justify-between pb-1 border-b border-gray-100 dark:border-slate-800 text-[11px]">
+                <span className="font-semibold text-gray-400 uppercase tracking-wider">Comments</span>
+                <div className="flex items-center gap-1 bg-gray-100 dark:bg-slate-800 p-0.5 rounded-lg">
+                  <button
+                    type="button"
+                    onClick={() => setCommentSort('newest')}
+                    className={`px-2 py-0.5 rounded-md font-medium transition-colors ${
+                      commentSort === 'newest'
+                        ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-xs font-semibold'
+                        : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                    }`}
+                  >
+                    Newest
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCommentSort('top')}
+                    className={`px-2 py-0.5 rounded-md font-medium transition-colors ${
+                      commentSort === 'top'
+                        ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-xs font-semibold'
+                        : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                    }`}
+                  >
+                    Top
+                  </button>
+                </div>
+              </div>
+
               {/* Separate top-level comments and nested replies */}
               {comments
                 .filter((c) => !c.parent_id)
+                .sort((a, b) => {
+                  if (commentSort === 'top') {
+                    const diff = (b.likeCount || 0) - (a.likeCount || 0)
+                    if (diff !== 0) return diff
+                  }
+                  return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                })
                 .map((comment) => {
                   const replies = comments.filter((r) => r.parent_id === comment.id)
+                  const canDelete = currentUserId && (currentUserId === comment.author_id || currentUserId === post.authorId)
                   return (
                     <div key={comment.id} className="space-y-1.5">
                       {/* Top level comment */}
@@ -1006,60 +1066,85 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
                             {(comment.likeCount || 0) > 0 && <span>{comment.likeCount}</span>}
                           </button>
                         </div>
-                        <div className="flex items-center gap-3 pt-0.5 text-[11px] text-gray-400 dark:text-gray-500">
-                          <span>{new Date(comment.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setReplyToComment({ id: comment.id, username: comment.author?.username || 'user' })
-                              setCommentText(`@${comment.author?.username || 'user'} `)
-                            }}
-                            className="font-semibold text-brand-600 hover:underline"
-                          >
-                            Reply
-                          </button>
+                        <div className="flex items-center justify-between pt-0.5 text-[11px] text-gray-400 dark:text-gray-500">
+                          <div className="flex items-center gap-3">
+                            <span>{new Date(comment.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setReplyToComment({ id: comment.id, username: comment.author?.username || 'user' })
+                                setCommentText(`@${comment.author?.username || 'user'} `)
+                              }}
+                              className="font-semibold text-brand-600 hover:underline"
+                            >
+                              Reply
+                            </button>
+                          </div>
+                          {canDelete && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteComment(comment.id)}
+                              className="text-gray-400 hover:text-red-500 transition-colors p-0.5"
+                              title="Delete comment"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
                         </div>
                       </div>
 
                       {/* Nested Replies */}
                       {replies.length > 0 && (
                         <div className="pl-5 border-l-2 border-purple-200 dark:border-purple-900 space-y-1.5 ml-2">
-                          {replies.map((reply) => (
-                            <div key={reply.id} className="bg-purple-50/50 dark:bg-purple-950/20 p-2 rounded-lg space-y-1">
-                              <div className="flex items-start justify-between gap-2 text-xs">
-                                <div className="flex gap-2 flex-1">
-                                  <Link
-                                    href={`/@${reply.author?.username || 'user'}`}
-                                    className="font-semibold text-purple-900 dark:text-purple-300 hover:text-brand-600 transition-colors flex-shrink-0"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    @{reply.author?.username || 'user'}
-                                  </Link>
-                                  <div className="text-gray-700 dark:text-gray-200 flex-1 whitespace-pre-line">
-                                    <FormattedText text={reply.content} />
+                          {replies.map((reply) => {
+                            const canDeleteReply = currentUserId && (currentUserId === reply.author_id || currentUserId === post.authorId)
+                            return (
+                              <div key={reply.id} className="bg-purple-50/50 dark:bg-purple-950/20 p-2 rounded-lg space-y-1">
+                                <div className="flex items-start justify-between gap-2 text-xs">
+                                  <div className="flex gap-2 flex-1">
+                                    <Link
+                                      href={`/@${reply.author?.username || 'user'}`}
+                                      className="font-semibold text-purple-900 dark:text-purple-300 hover:text-brand-600 transition-colors flex-shrink-0"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      @{reply.author?.username || 'user'}
+                                    </Link>
+                                    <div className="text-gray-700 dark:text-gray-200 flex-1 whitespace-pre-line">
+                                      <FormattedText text={reply.content} />
+                                    </div>
                                   </div>
+                                  {/* Reply Like Button */}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleToggleLikeComment(reply.id)
+                                    }}
+                                    className={`flex items-center gap-1 text-[11px] font-medium transition-colors p-1 rounded-md hover:bg-purple-100/50 dark:hover:bg-purple-900/50 ${
+                                      reply.isLikedByMe ? 'text-red-500 font-bold' : 'text-gray-400 hover:text-red-500'
+                                    }`}
+                                    title={reply.isLikedByMe ? 'Unlike reply' : 'Like reply'}
+                                  >
+                                    <Heart size={13} className={reply.isLikedByMe ? 'fill-current text-red-500' : ''} />
+                                    {(reply.likeCount || 0) > 0 && <span>{reply.likeCount}</span>}
+                                  </button>
                                 </div>
-                                {/* Reply Like Button */}
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleToggleLikeComment(reply.id)
-                                  }}
-                                  className={`flex items-center gap-1 text-[11px] font-medium transition-colors p-1 rounded-md hover:bg-purple-100/50 dark:hover:bg-purple-900/50 ${
-                                    reply.isLikedByMe ? 'text-red-500 font-bold' : 'text-gray-400 hover:text-red-500'
-                                  }`}
-                                  title={reply.isLikedByMe ? 'Unlike reply' : 'Like reply'}
-                                >
-                                  <Heart size={13} className={reply.isLikedByMe ? 'fill-current text-red-500' : ''} />
-                                  {(reply.likeCount || 0) > 0 && <span>{reply.likeCount}</span>}
-                                </button>
+                                <div className="flex items-center justify-between text-[10px] text-gray-400 dark:text-gray-500">
+                                  <span>{new Date(reply.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
+                                  {canDeleteReply && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteComment(reply.id)}
+                                      className="text-gray-400 hover:text-red-500 transition-colors p-0.5"
+                                      title="Delete reply"
+                                    >
+                                      <Trash2 size={12} />
+                                    </button>
+                                  )}
+                                </div>
                               </div>
-                              <div className="text-[10px] text-gray-400 dark:text-gray-500">
-                                {new Date(reply.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                              </div>
-                            </div>
-                          ))}
+                            )
+                          })}
                         </div>
                       )}
                     </div>
