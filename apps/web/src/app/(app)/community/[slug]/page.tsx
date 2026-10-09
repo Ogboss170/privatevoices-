@@ -24,6 +24,8 @@ import {
   UserMinus,
   LogOut,
   FileText,
+  VolumeX,
+  AlertCircle,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import PostCard from '@/components/feed/PostCard'
@@ -65,6 +67,14 @@ export default function CommunityDetailPage(): React.JSX.Element {
   // Rules editor state
   const [editingRules, setEditingRules] = useState<any[]>([])
   const [savingRules, setSavingRules] = useState(false)
+
+  // Community Mutes state
+  const [mutes, setMutes] = useState<any[]>([])
+  const [isMuted, setIsMuted] = useState(false)
+  const [muteTargetMember, setMuteTargetMember] = useState<any | null>(null)
+  const [muteReason, setMuteReason] = useState('')
+  const [muteDuration, setMuteDuration] = useState<'1_day' | '7_days' | '30_days' | 'indefinite'>('7_days')
+  const [mutingBusy, setMutingBusy] = useState(false)
 
   const fetchCommunityData = useCallback(async () => {
     setLoading(true)
@@ -123,6 +133,27 @@ export default function CommunityDetailPage(): React.JSX.Element {
       .eq('community_id', comm.id)
 
     setMembers(mems || [])
+
+    // 4. Fetch community mutes
+    try {
+      const { data: muteData } = await supabase
+        .from('community_mutes')
+        .select('*')
+        .eq('community_id', comm.id)
+
+      const activeMutes = (muteData ?? []).filter((m: any) => {
+        if (!m.expires_at) return true
+        return new Date(m.expires_at) > new Date()
+      })
+
+      setMutes(activeMutes)
+      if (uId) {
+        setIsMuted(activeMutes.some((m: any) => m.user_id === uId))
+      }
+    } catch {
+      setMutes([])
+      setIsMuted(false)
+    }
 
     // 4. Fetch community posts (pinned posts stay at top)
     const { data: rawPosts } = await supabase
@@ -207,6 +238,11 @@ export default function CommunityDetailPage(): React.JSX.Element {
   async function handleCreateCommunityPost(e: React.FormEvent) {
     e.preventDefault()
     if (!newPostContent.trim() || !currentUserId || !community) return
+
+    if (isMuted) {
+      alert('You have been muted in this community and cannot create new posts.')
+      return
+    }
 
     setPosting(true)
     const { error } = await supabase.from('posts').insert({
@@ -431,24 +467,34 @@ export default function CommunityDetailPage(): React.JSX.Element {
         <div className="space-y-4">
           {/* Post composer inside community */}
           {membershipStatus === 'member' && (
-            <form onSubmit={handleCreateCommunityPost} className="card p-4 space-y-3">
-              <textarea
-                rows={3}
-                value={newPostContent}
-                onChange={(e) => setNewPostContent(e.target.value)}
-                placeholder={`Share something with @${community.slug}...`}
-                className="input-field text-sm resize-none"
-              />
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={posting || !newPostContent.trim()}
-                  className="btn-primary text-xs py-2 px-4"
-                >
-                  {posting ? 'Posting...' : 'Post to Community'}
-                </button>
+            isMuted ? (
+              <div className="card p-4 flex items-center gap-3 bg-amber-50/80 border border-amber-200 text-amber-900 rounded-xl">
+                <VolumeX size={20} className="text-amber-600 flex-shrink-0" />
+                <div>
+                  <p className="text-xs font-bold">You are currently muted in this community</p>
+                  <p className="text-[11px] text-amber-700">A community moderator has restricted your posting privileges.</p>
+                </div>
               </div>
-            </form>
+            ) : (
+              <form onSubmit={handleCreateCommunityPost} className="card p-4 space-y-3">
+                <textarea
+                  rows={3}
+                  value={newPostContent}
+                  onChange={(e) => setNewPostContent(e.target.value)}
+                  placeholder={`Share something with @${community.slug}...`}
+                  className="input-field text-sm resize-none"
+                />
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={posting || !newPostContent.trim()}
+                    className="btn-primary text-xs py-2 px-4"
+                  >
+                    {posting ? 'Posting...' : 'Post to Community'}
+                  </button>
+                </div>
+              </form>
+            )
           )}
 
           {posts.length === 0 ? (
@@ -670,6 +716,42 @@ export default function CommunityDetailPage(): React.JSX.Element {
                         </button>
                       )}
 
+                      {/* Mute / Unmute Button */}
+                      {isOwnerOrMod && m.role === 'member' && (
+                        (() => {
+                          const memberMute = mutes.find((mu) => mu.user_id === m.user_id)
+                          return memberMute ? (
+                            <button
+                              onClick={async () => {
+                                if (!confirm(`Unmute @${m.user?.username}?`)) return
+                                await supabase
+                                  .from('community_mutes')
+                                  .delete()
+                                  .match({ community_id: community.id, user_id: m.user_id })
+                                fetchCommunityData()
+                              }}
+                              className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 transition-colors flex items-center gap-1"
+                              title="Member is muted. Click to unmute."
+                            >
+                              <VolumeX size={11} />
+                              Unmute
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setMuteTargetMember(m)
+                                setMuteReason('')
+                              }}
+                              className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors flex items-center gap-1"
+                              title="Mute member from posting"
+                            >
+                              <VolumeX size={11} />
+                              Mute
+                            </button>
+                          )
+                        })()
+                      )}
+
                       {/* Remove from community */}
                       {(userRole === 'owner' || (userRole === 'moderator' && m.role === 'member')) && (
                         <button
@@ -853,6 +935,111 @@ export default function CommunityDetailPage(): React.JSX.Element {
                 <div className="w-9 h-9 rounded-xl bg-red-50 text-red-600 flex items-center justify-center"><LogOut size={18} /></div>
                 <div><div className="text-xs font-bold">Leave Community</div><div className="text-[11px] text-red-400">You can rejoin anytime</div></div>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mute Member Modal */}
+      {muteTargetMember && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2 text-amber-600">
+                <VolumeX size={20} />
+                <h3 className="font-bold text-gray-900 text-base">
+                  Mute @{muteTargetMember.user?.username}
+                </h3>
+              </div>
+              <button
+                onClick={() => setMuteTargetMember(null)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-500">
+              Muted members remain in the community but cannot publish new posts or comments until their mute expires.
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Mute Duration
+                </label>
+                <select
+                  value={muteDuration}
+                  onChange={(e) => setMuteDuration(e.target.value as any)}
+                  className="input-field text-xs w-full"
+                >
+                  <option value="1_day">24 Hours (1 Day)</option>
+                  <option value="7_days">7 Days (1 Week)</option>
+                  <option value="30_days">30 Days (1 Month)</option>
+                  <option value="indefinite">Indefinite (Until unmuted)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Reason for Mute (Optional)
+                </label>
+                <textarea
+                  rows={2}
+                  value={muteReason}
+                  onChange={(e) => setMuteReason(e.target.value)}
+                  placeholder="e.g. Inappropriate language, repetitive spam..."
+                  className="input-field text-xs resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setMuteTargetMember(null)}
+                  className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={mutingBusy}
+                  onClick={async () => {
+                    if (!community || !muteTargetMember || !currentUserId) return
+                    setMutingBusy(true)
+
+                    let expiresAt: string | null = null
+                    const now = new Date()
+                    if (muteDuration === '1_day') {
+                      expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString()
+                    } else if (muteDuration === '7_days') {
+                      expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+                    } else if (muteDuration === '30_days') {
+                      expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
+                    }
+
+                    const { error } = await supabase.from('community_mutes').upsert({
+                      community_id: community.id,
+                      user_id: muteTargetMember.user_id,
+                      muted_by: currentUserId,
+                      reason: muteReason.trim() || null,
+                      expires_at: expiresAt,
+                    }, { onConflict: 'community_id,user_id' })
+
+                    setMutingBusy(false)
+                    if (error) {
+                      alert(`Failed to mute member: ${error.message}`)
+                    } else {
+                      alert(`@${muteTargetMember.user?.username} has been muted in this community.`)
+                      setMuteTargetMember(null)
+                      fetchCommunityData()
+                    }
+                  }}
+                  className="px-4 py-2 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors"
+                >
+                  {mutingBusy ? 'Muting...' : 'Confirm Mute'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

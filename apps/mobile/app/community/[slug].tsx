@@ -40,6 +40,7 @@ import {
   BarChart2,
   ImageIcon,
   ChevronDown,
+  VolumeX,
 } from 'lucide-react-native'
 import { Image as ExpoImage } from 'expo-image'
 import * as ImagePicker from 'expo-image-picker'
@@ -105,6 +106,14 @@ export default function CommunityDetailScreen() {
   const [rules, setRules] = useState<any[]>([])
   const [editingRules, setEditingRules] = useState<any[]>([])
   const [savingRules, setSavingRules] = useState(false)
+
+  // Mutes state
+  const [mutes, setMutes] = useState<any[]>([])
+  const [isMuted, setIsMuted] = useState(false)
+  const [muteTargetMember, setMuteTargetMember] = useState<any | null>(null)
+  const [muteReason, setMuteReason] = useState('')
+  const [muteDuration, setMuteDuration] = useState<'1_day' | '7_days' | '30_days' | 'indefinite'>('7_days')
+  const [mutingBusy, setMutingBusy] = useState(false)
 
   // ── Settings sheet animation ─────────────────────────────────────────────────
   function openSettings() {
@@ -180,6 +189,26 @@ export default function CommunityDetailScreen() {
       }
     } else {
       setMembers(mems)
+    }
+
+    // Mutes
+    try {
+      const { data: muteData } = await supabase
+        .from('community_mutes')
+        .select('*')
+        .eq('community_id', comm.id)
+
+      const activeMutes = (muteData ?? []).filter((m: any) => {
+        if (!m.expires_at) return true
+        return new Date(m.expires_at) > new Date()
+      })
+      setMutes(activeMutes)
+      if (uId) {
+        setIsMuted(activeMutes.some((m: any) => m.user_id === uId))
+      }
+    } catch {
+      setMutes([])
+      setIsMuted(false)
     }
 
     // Posts (pinned posts stay at top)
@@ -333,6 +362,12 @@ export default function CommunityDetailScreen() {
   async function handlePost() {
     if (!newPostContent.trim() && composerImages.length === 0) return
     if (!currentUserId || !community) return
+
+    if (isMuted) {
+      Alert.alert('Posting Restricted', 'You are currently muted in this community and cannot share new posts.')
+      return
+    }
+
     setPosting(true)
 
     let finalContent = newPostContent.trim()
@@ -535,80 +570,90 @@ export default function CommunityDetailScreen() {
 
             {/* Inline composer for members */}
             {membershipStatus === 'member' && (
-              <View style={styles.card}>
-                <TextInput
-                  style={styles.composerInput}
-                  multiline
-                  placeholder={`Share something in ${community.name}...`}
-                  placeholderTextColor={colors.gray400}
-                  value={newPostContent}
-                  onChangeText={setNewPostContent}
-                />
+              isMuted ? (
+                <View style={[styles.card, { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#fef3c7', borderColor: '#fde68a' }]}>
+                  <VolumeX size={20} color="#b45309" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#92400e' }}>Posting Restricted</Text>
+                    <Text style={{ fontSize: 11, color: '#b45309', marginTop: 2 }}>You are currently muted in this community by a moderator.</Text>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.card}>
+                  <TextInput
+                    style={styles.composerInput}
+                    multiline
+                    placeholder={`Share something in ${community.name}...`}
+                    placeholderTextColor={colors.gray400}
+                    value={newPostContent}
+                    onChangeText={setNewPostContent}
+                  />
 
-                {/* Image previews */}
-                {composerImages.length > 0 && (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
-                    {composerImages.map((uri, idx) => (
-                      <View key={idx} style={styles.imgPreviewWrap}>
-                        <Image source={{ uri }} style={styles.imgPreview} />
-                        <TouchableOpacity style={styles.imgRemoveBtn} onPress={() => setComposerImages((prev) => prev.filter((_, i) => i !== idx))}>
-                          <X size={11} color="#fff" />
+                  {/* Image previews */}
+                  {composerImages.length > 0 && (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+                      {composerImages.map((uri, idx) => (
+                        <View key={idx} style={styles.imgPreviewWrap}>
+                          <Image source={{ uri }} style={styles.imgPreview} />
+                          <TouchableOpacity style={styles.imgRemoveBtn} onPress={() => setComposerImages((prev) => prev.filter((_, i) => i !== idx))}>
+                            <X size={11} color="#fff" />
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+                    </ScrollView>
+                  )}
+
+                  {/* Poll inputs */}
+                  {showPoll && (
+                    <View style={styles.pollCard}>
+                      <View style={styles.pollHeader}>
+                        <Text style={styles.pollTitle}>📊 Poll</Text>
+                        <TouchableOpacity onPress={() => { setShowPoll(false); setPollOptions(['', '']) }}>
+                          <X size={14} color={colors.gray500} />
                         </TouchableOpacity>
                       </View>
-                    ))}
-                  </ScrollView>
-                )}
-
-                {/* Poll inputs */}
-                {showPoll && (
-                  <View style={styles.pollCard}>
-                    <View style={styles.pollHeader}>
-                      <Text style={styles.pollTitle}>📊 Poll</Text>
-                      <TouchableOpacity onPress={() => { setShowPoll(false); setPollOptions(['', '']) }}>
-                        <X size={14} color={colors.gray500} />
-                      </TouchableOpacity>
+                      {pollOptions.map((opt, idx) => (
+                        <TextInput
+                          key={idx}
+                          style={styles.pollInput}
+                          placeholder={`Option ${idx + 1}`}
+                          placeholderTextColor={colors.gray400}
+                          value={opt}
+                          onChangeText={(v) => {
+                            const next = [...pollOptions]; next[idx] = v; setPollOptions(next)
+                          }}
+                        />
+                      ))}
+                      {pollOptions.length < 4 && (
+                        <TouchableOpacity onPress={() => setPollOptions([...pollOptions, ''])}>
+                          <Text style={styles.addPollOption}>+ Add option</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
-                    {pollOptions.map((opt, idx) => (
-                      <TextInput
-                        key={idx}
-                        style={styles.pollInput}
-                        placeholder={`Option ${idx + 1}`}
-                        placeholderTextColor={colors.gray400}
-                        value={opt}
-                        onChangeText={(v) => {
-                          const next = [...pollOptions]; next[idx] = v; setPollOptions(next)
-                        }}
-                      />
-                    ))}
-                    {pollOptions.length < 4 && (
-                      <TouchableOpacity onPress={() => setPollOptions([...pollOptions, ''])}>
-                        <Text style={styles.addPollOption}>+ Add option</Text>
-                      </TouchableOpacity>
-                    )}
+                  )}
+
+                  {/* Composer toolbar */}
+                  <View style={styles.composerToolbar}>
+                    <TouchableOpacity style={styles.toolBtn} onPress={pickComposerImage}>
+                      <ImageIcon size={19} color={colors.gray500} />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.toolBtn} onPress={() => setShowPoll((v) => !v)}>
+                      <BarChart2 size={19} color={showPoll ? colors.brand : colors.gray500} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.postBtn, (!newPostContent.trim() && composerImages.length === 0) || posting ? { opacity: 0.45 } : null]}
+                      disabled={(!newPostContent.trim() && composerImages.length === 0) || posting}
+                      onPress={handlePost}
+                    >
+                      {posting
+                        ? <ActivityIndicator color="#fff" size="small" />
+                        : <View style={styles.btnRow}><Send size={13} color="#fff" /><Text style={styles.postBtnText}>Post</Text></View>
+                      }
+                    </TouchableOpacity>
                   </View>
-                )}
-
-                {/* Composer toolbar */}
-                <View style={styles.composerToolbar}>
-                  <TouchableOpacity style={styles.toolBtn} onPress={pickComposerImage}>
-                    <ImageIcon size={19} color={colors.gray500} />
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.toolBtn} onPress={() => setShowPoll((v) => !v)}>
-                    <BarChart2 size={19} color={showPoll ? colors.brand : colors.gray500} />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.postBtn, (!newPostContent.trim() && composerImages.length === 0) || posting ? { opacity: 0.45 } : null]}
-                    disabled={(!newPostContent.trim() && composerImages.length === 0) || posting}
-                    onPress={handlePost}
-                  >
-                    {posting
-                      ? <ActivityIndicator color="#fff" size="small" />
-                      : <View style={styles.btnRow}><Send size={13} color="#fff" /><Text style={styles.postBtnText}>Post</Text></View>
-                    }
-                  </TouchableOpacity>
                 </View>
-              </View>
+              )
             )}
 
             {filteredPosts.length === 0 ? (
@@ -756,6 +801,45 @@ export default function CommunityDetailScreen() {
                           </Text>
                         </TouchableOpacity>
                       )}
+                      {/* Mute / Unmute Button */}
+                      {(userRole === 'owner' || userRole === 'moderator') && m.role === 'member' && (
+                        (() => {
+                          const isMemberMuted = mutes.some((mu) => mu.user_id === m.user_id)
+                          return isMemberMuted ? (
+                            <TouchableOpacity
+                              style={[styles.modBtn, { backgroundColor: '#fef3c7' }]}
+                              onPress={() => {
+                                Alert.alert('Unmute Member', `Unmute @${username}?`, [
+                                  { text: 'Cancel', style: 'cancel' },
+                                  {
+                                    text: 'Unmute',
+                                    onPress: async () => {
+                                      await supabase
+                                        .from('community_mutes')
+                                        .delete()
+                                        .match({ community_id: community.id, user_id: m.user_id })
+                                      fetchCommunityData()
+                                    },
+                                  },
+                                ])
+                              }}
+                            >
+                              <Text style={[styles.modBtnText, { color: '#b45309' }]}>Unmute</Text>
+                            </TouchableOpacity>
+                          ) : (
+                            <TouchableOpacity
+                              style={[styles.modBtn, { backgroundColor: colors.gray100 }]}
+                              onPress={() => {
+                                setMuteTargetMember(m)
+                                setMuteReason('')
+                              }}
+                            >
+                              <Text style={[styles.modBtnText, { color: colors.gray700 }]}>Mute</Text>
+                            </TouchableOpacity>
+                          )
+                        })()
+                      )}
+
                       {(userRole === 'owner' || (userRole === 'moderator' && m.role === 'member')) && (
                         <TouchableOpacity
                           style={{ padding: 6, backgroundColor: '#fef2f2', borderRadius: 8 }}
@@ -896,6 +980,120 @@ export default function CommunityDetailScreen() {
           onClose={() => setSelectedProfileTarget(null)}
         />
       )}
+
+      {/* ── Mute Member Modal ─────────────────────────────────────────────────── */}
+      <Modal
+        visible={!!muteTargetMember}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMuteTargetMember(null)}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 }}
+          activeOpacity={1}
+          onPress={() => setMuteTargetMember(null)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={{ backgroundColor: '#fff', borderRadius: 18, padding: 20, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 10, elevation: 6 }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <VolumeX size={20} color="#d97706" />
+                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.gray900 }}>
+                  Mute @{muteTargetMember?.user?.username}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setMuteTargetMember(null)}>
+                <X size={18} color={colors.gray400} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={{ fontSize: 13, color: colors.gray500, marginBottom: 14 }}>
+              Muted members can read posts but cannot post or comment in this community.
+            </Text>
+
+            <Text style={[styles.fieldLabel, { marginBottom: 6 }]}>Duration</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+              {[
+                { id: '1_day', label: '24 Hours' },
+                { id: '7_days', label: '7 Days' },
+                { id: '30_days', label: '30 Days' },
+                { id: 'indefinite', label: 'Indefinite' },
+              ].map((opt) => (
+                <TouchableOpacity
+                  key={opt.id}
+                  style={[
+                    styles.privacyBtn,
+                    muteDuration === opt.id && styles.privacyBtnActive,
+                    { paddingHorizontal: 12, paddingVertical: 8 },
+                  ]}
+                  onPress={() => setMuteDuration(opt.id as any)}
+                >
+                  <Text style={[styles.privacyBtnText, muteDuration === opt.id && styles.privacyBtnTextActive, { fontSize: 12 }]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={[styles.fieldLabel, { marginBottom: 6 }]}>Reason (Optional)</Text>
+            <TextInput
+              style={[styles.fieldInput, { minHeight: 45, marginBottom: 16 }]}
+              placeholder="e.g. Unwanted advertising or insults..."
+              placeholderTextColor={colors.gray400}
+              value={muteReason}
+              onChangeText={setMuteReason}
+            />
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                style={[styles.joinBtn, { flex: 1, backgroundColor: colors.gray100 }]}
+                onPress={() => setMuteTargetMember(null)}
+              >
+                <Text style={[styles.joinBtnText, { color: colors.gray700 }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.joinBtn, { flex: 1, backgroundColor: '#d97706' }, mutingBusy && { opacity: 0.6 }]}
+                disabled={mutingBusy}
+                onPress={async () => {
+                  if (!community || !muteTargetMember || !currentUserId) return
+                  setMutingBusy(true)
+
+                  let expiresAt: string | null = null
+                  const now = new Date()
+                  if (muteDuration === '1_day') {
+                    expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString()
+                  } else if (muteDuration === '7_days') {
+                    expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+                  } else if (muteDuration === '30_days') {
+                    expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
+                  }
+
+                  const { error } = await supabase.from('community_mutes').upsert({
+                    community_id: community.id,
+                    user_id: muteTargetMember.user_id,
+                    muted_by: currentUserId,
+                    reason: muteReason.trim() || null,
+                    expires_at: expiresAt,
+                  }, { onConflict: 'community_id,user_id' })
+
+                  setMutingBusy(false)
+                  if (error) {
+                    Alert.alert('Mute Failed', error.message)
+                  } else {
+                    Alert.alert('Member Muted', `@${muteTargetMember.user?.username} is now muted.`)
+                    setMuteTargetMember(null)
+                    fetchCommunityData()
+                  }
+                }}
+              >
+                <Text style={styles.joinBtnText}>{mutingBusy ? 'Saving...' : 'Mute Member'}</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   )
 }
