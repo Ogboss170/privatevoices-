@@ -64,31 +64,31 @@ const STORAGE_KEYS = {
 }
 
 const TOKENS_LIGHT: WebDesignTokens = {
-  background: '#f9fafb',
+  background: '#fafafa',
   surface: '#ffffff',
-  surfaceBorder: '#e5e7eb',
-  textPrimary: '#111827',
-  textSecondary: '#4b5563',
-  textMuted: '#9ca3af',
+  surfaceBorder: '#efefef',
+  textPrimary: '#121212',
+  textSecondary: '#737373',
+  textMuted: '#8e8e8e',
   brand: '#7c3aed',
   brandLight: '#ede9fe',
   cardBg: '#ffffff',
-  inputBg: '#ffffff',
-  inputBorder: '#d1d5db',
+  inputBg: '#fafafa',
+  inputBorder: '#dbdbdb',
 }
 
 const TOKENS_DARK: WebDesignTokens = {
-  background: '#0b0f17',
-  surface: '#111827',
-  surfaceBorder: '#1f2937',
-  textPrimary: '#f9fafb',
-  textSecondary: '#9ca3af',
-  textMuted: '#6b7280',
+  background: '#000000',
+  surface: '#121212',
+  surfaceBorder: '#262626',
+  textPrimary: '#f5f5f5',
+  textSecondary: '#a8a8a8',
+  textMuted: '#737373',
   brand: '#8b5cf6',
-  brandLight: 'rgba(124, 58, 237, 0.2)',
-  cardBg: '#111827',
-  inputBg: '#1f2937',
-  inputBorder: '#374151',
+  brandLight: 'rgba(139, 92, 246, 0.15)',
+  cardBg: '#121212',
+  inputBg: '#1a1a1a',
+  inputBorder: '#363636',
 }
 
 export const WebThemeContext = createContext<WebThemeContextType>({

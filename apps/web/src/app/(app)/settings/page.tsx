@@ -829,24 +829,137 @@ export default function SettingsPage(): React.JSX.Element {
           Appearance
         </h2>
         <div className="space-y-4 text-sm">
-          {/* Theme: System | Light | Dark */}
-          <div className="flex items-center justify-between p-2">
-            <div className="flex items-center space-x-3">
-              <SunMoon size={18} className="text-gray-500 dark:text-gray-400" />
-              <div>
-                <span className="font-semibold text-gray-800 dark:text-gray-100 block">Theme</span>
-                <span className="text-xs text-gray-400 dark:text-gray-500">System follows device/browser; Light and Dark force mode</span>
-              </div>
+          {/* Premium Theme Selector Cards */}
+          <div className="space-y-3 pb-2">
+            <div>
+              <span className="font-semibold text-gray-900 dark:text-gray-100 block">Theme</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">Choose how Private Voices looks on your device</span>
             </div>
-            <select
-              value={themeMode}
-              onChange={(e: any) => setThemeMode(e.target.value)}
-              className="input-field w-auto py-1 px-3 text-xs font-semibold cursor-pointer"
-            >
-              <option value="system">System</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-            </select>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+              {/* 1. Light Theme Card */}
+              <button
+                type="button"
+                onClick={() => setThemeMode('light')}
+                className={`relative flex flex-col p-3 rounded-2xl border text-left transition-all group ${
+                  themeMode === 'light'
+                    ? 'border-brand-600 bg-brand-50/20 dark:bg-brand-950/20 ring-2 ring-brand-500/30'
+                    : 'border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-gray-300 dark:hover:border-slate-700'
+                }`}
+              >
+                {/* Visual Preview */}
+                <div className="w-full h-20 rounded-xl bg-[#fafafa] border border-gray-200 p-2 flex flex-col justify-between overflow-hidden shadow-xs mb-3">
+                  <div className="flex items-center justify-between border-b border-gray-200/80 pb-1.5">
+                    <div className="w-8 h-2 rounded-full bg-gray-300" />
+                    <div className="w-3 h-3 rounded-full bg-brand-600" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="w-full h-2 rounded bg-gray-200" />
+                    <div className="w-3/4 h-2 rounded bg-gray-200" />
+                  </div>
+                  <div className="w-12 h-3 rounded-md bg-brand-600/20" />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-gray-900 dark:text-gray-100 block">Light</span>
+                    <span className="text-[11px] text-gray-500 dark:text-gray-400">Clean & bright</span>
+                  </div>
+                  <div
+                    className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
+                      themeMode === 'light'
+                        ? 'border-brand-600 bg-brand-600'
+                        : 'border-gray-300 dark:border-slate-600'
+                    }`}
+                  >
+                    {themeMode === 'light' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                  </div>
+                </div>
+              </button>
+
+              {/* 2. Dark Theme Card */}
+              <button
+                type="button"
+                onClick={() => setThemeMode('dark')}
+                className={`relative flex flex-col p-3 rounded-2xl border text-left transition-all group ${
+                  themeMode === 'dark'
+                    ? 'border-brand-600 bg-brand-50/20 dark:bg-brand-950/20 ring-2 ring-brand-500/30'
+                    : 'border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-gray-300 dark:hover:border-slate-700'
+                }`}
+              >
+                {/* Visual Preview */}
+                <div className="w-full h-20 rounded-xl bg-[#121212] border border-[#262626] p-2 flex flex-col justify-between overflow-hidden shadow-xs mb-3">
+                  <div className="flex items-center justify-between border-b border-[#262626] pb-1.5">
+                    <div className="w-8 h-2 rounded-full bg-neutral-700" />
+                    <div className="w-3 h-3 rounded-full bg-brand-500" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="w-full h-2 rounded bg-neutral-800" />
+                    <div className="w-3/4 h-2 rounded bg-neutral-800" />
+                  </div>
+                  <div className="w-12 h-3 rounded-md bg-brand-500/20" />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-gray-900 dark:text-gray-100 block">Dark</span>
+                    <span className="text-[11px] text-gray-500 dark:text-gray-400">Refined charcoal</span>
+                  </div>
+                  <div
+                    className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
+                      themeMode === 'dark'
+                        ? 'border-brand-600 bg-brand-600'
+                        : 'border-gray-300 dark:border-slate-600'
+                    }`}
+                  >
+                    {themeMode === 'dark' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                  </div>
+                </div>
+              </button>
+
+              {/* 3. System Theme Card */}
+              <button
+                type="button"
+                onClick={() => setThemeMode('system')}
+                className={`relative flex flex-col p-3 rounded-2xl border text-left transition-all group ${
+                  themeMode === 'system'
+                    ? 'border-brand-600 bg-brand-50/20 dark:bg-brand-950/20 ring-2 ring-brand-500/30'
+                    : 'border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-gray-300 dark:hover:border-slate-700'
+                }`}
+              >
+                {/* Split Visual Preview */}
+                <div className="w-full h-20 rounded-xl border border-gray-200 dark:border-neutral-800 overflow-hidden shadow-xs mb-3 flex">
+                  {/* Left half Light */}
+                  <div className="w-1/2 h-full bg-[#fafafa] p-2 flex flex-col justify-between border-r border-gray-200">
+                    <div className="w-6 h-2 rounded-full bg-gray-300" />
+                    <div className="w-full h-2 rounded bg-gray-200" />
+                    <div className="w-8 h-2 rounded bg-brand-600/30" />
+                  </div>
+                  {/* Right half Dark */}
+                  <div className="w-1/2 h-full bg-[#121212] p-2 flex flex-col justify-between">
+                    <div className="w-6 h-2 rounded-full bg-neutral-700 ml-auto" />
+                    <div className="w-full h-2 rounded bg-neutral-800" />
+                    <div className="w-8 h-2 rounded bg-brand-500/30 ml-auto" />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-gray-900 dark:text-gray-100 block">System</span>
+                    <span className="text-[11px] text-gray-500 dark:text-gray-400">Follows device</span>
+                  </div>
+                  <div
+                    className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
+                      themeMode === 'system'
+                        ? 'border-brand-600 bg-brand-600'
+                        : 'border-gray-300 dark:border-slate-600'
+                    }`}
+                  >
+                    {themeMode === 'system' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                  </div>
+                </div>
+              </button>
+            </div>
           </div>
 
           {/* Language */}

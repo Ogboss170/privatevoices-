@@ -17,11 +17,13 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated'
 
+import { useTheme } from '../context/ThemeContext'
+import { colors } from '../constants/colors'
+
 // ─── Brand colours ──────────────────────────────────────────────────────────
 const ACCENT        = '#7c3aed'
-const ACCENT_BG     = 'rgba(124, 58, 237, 0.18)'
-const ACCENT_BORDER = 'rgba(124, 58, 237, 0.4)'
-const INACTIVE      = 'rgba(255, 255, 255, 0.55)'
+const ACCENT_BG     = 'rgba(124, 58, 237, 0.12)'
+const ACCENT_BORDER = 'rgba(124, 58, 237, 0.3)'
 
 // ─── Animation config ────────────────────────────────────────────────────────
 const ANIM_DURATION = 200
@@ -69,11 +71,15 @@ function AnimatedTabItem({
   isFocused,
   hasBadge,
   onPress,
+  isDark,
+  themeColors,
 }: {
   routeName: string
   isFocused: boolean
   hasBadge?: boolean
   onPress: () => void
+  isDark: boolean
+  themeColors: any
 }) {
   const progress = useSharedValue(isFocused ? 1 : 0)
 
@@ -93,13 +99,15 @@ function AnimatedTabItem({
     ],
   }))
 
+  const inactiveColor = isDark ? 'rgba(255, 255, 255, 0.55)' : '#737373'
+
   const labelStyle = useAnimatedStyle(() => ({
-    color:      isFocused ? ACCENT   : INACTIVE,
+    color:      isFocused ? ACCENT   : inactiveColor,
     fontWeight: isFocused ? '600'    : '500',
-    opacity:    isFocused ? 1        : 0.8,
+    opacity:    isFocused ? 1        : 0.85,
   }))
 
-  const iconColor   = isFocused ? ACCENT : INACTIVE
+  const iconColor   = isFocused ? ACCENT : inactiveColor
   const strokeWidth = isFocused ? 2.3    : 1.8
 
   return (
@@ -115,7 +123,7 @@ function AnimatedTabItem({
       <Animated.View style={[styles.tabInner, pillStyle]}>
         <Animated.View style={[styles.iconWrap, iconScaleStyle]}>
           <TabIcon name={routeName} color={iconColor} size={20} strokeWidth={strokeWidth} />
-          {hasBadge && <View style={styles.dot} />}
+          {hasBadge && <View style={[styles.dot, { borderColor: isDark ? '#121212' : '#ffffff' }]} />}
         </Animated.View>
         <Animated.Text style={[styles.label, labelStyle]}>
           {getLabel(routeName)}
@@ -128,6 +136,7 @@ function AnimatedTabItem({
 // ─── FloatingTabBar ───────────────────────────────────────────────────────────
 export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets()
+  const { colors: themeColors, isDark } = useTheme()
 
   // Never render during the create tab (full-screen modal behaviour)
   const activeRouteName = state.routes[state.index]?.name
@@ -159,12 +168,35 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
       pointerEvents="box-none"
     >
       {/* Shadow lives outside overflow:hidden so it renders on iOS */}
-      <View style={styles.shadow}>
-        <View style={styles.floatingBarWrapper}>
+      <View
+        style={[
+          styles.shadow,
+          {
+            shadowColor: isDark ? '#000000' : 'rgba(0, 0, 0, 0.12)',
+            shadowOpacity: isDark ? 0.45 : 0.16,
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.floatingBarWrapper,
+            {
+              borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
+              backgroundColor: isDark ? '#121212' : '#ffffff',
+            },
+          ]}
+        >
           <BlurView
-            intensity={Platform.OS === 'ios' ? 72 : 90}
-            tint="dark"
-            style={styles.blurContainer}
+            intensity={Platform.OS === 'ios' ? (isDark ? 70 : 80) : 95}
+            tint={isDark ? 'dark' : 'light'}
+            style={[
+              styles.blurContainer,
+              {
+                backgroundColor: isDark
+                  ? Platform.OS === 'android' ? 'rgba(18, 18, 18, 0.96)' : 'rgba(18, 18, 18, 0.75)'
+                  : Platform.OS === 'android' ? 'rgba(255, 255, 255, 0.96)' : 'rgba(255, 255, 255, 0.85)',
+              },
+            ]}
           >
             <View style={styles.tabsRow}>
               {orderedRoutes.map((route) => {
@@ -177,6 +209,8 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
                     isFocused={isFocused}
                     hasBadge={hasBadge}
                     onPress={() => handlePress(route)}
+                    isDark={isDark}
+                    themeColors={themeColors}
                   />
                 )
               })}

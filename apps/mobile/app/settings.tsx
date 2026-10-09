@@ -861,18 +861,156 @@ export default function SettingsScreen() {
             <Text style={[styles.rowLabel, { color: themeColors.textPrimary }]}>Theme</Text>
           </View>
         </View>
-        <View style={styles.optionsGroup}>
-          {(['system', 'light', 'dark'] as const).map((t) => (
-            <TouchableOpacity
-              key={t}
-              style={[styles.optionBtn, themeMode === t && styles.optionBtnActive]}
-              onPress={() => setThemeMode(t)}
-            >
-              <Text style={[styles.optionText, themeMode === t && styles.optionTextActive]}>
-                {t.charAt(0).toUpperCase() + t.slice(1)}
+        {/* Instagram-style Visual Theme Preview Selector */}
+        <View style={styles.themeCardsRow}>
+          {/* Light Theme Card */}
+          <TouchableOpacity
+            style={[
+              styles.themeCard,
+              {
+                backgroundColor: themeColors.surface,
+                borderColor: themeMode === 'light' ? colors.brand : themeColors.surfaceBorder,
+              },
+              themeMode === 'light' && styles.themeCardActive,
+            ]}
+            onPress={() => setThemeMode('light')}
+            activeOpacity={0.75}
+            accessibilityRole="radio"
+            accessibilityLabel="Light theme"
+            accessibilityState={{ selected: themeMode === 'light' }}
+          >
+            {/* Visual mini-mockup */}
+            <View style={[styles.themePreviewBox, { backgroundColor: '#fafafa', borderColor: '#e5e7eb' }]}>
+              <View style={styles.previewHeaderBar}>
+                <View style={[styles.previewDotMini, { backgroundColor: '#d1d5db' }]} />
+                <View style={[styles.previewPillMini, { backgroundColor: colors.brand }]} />
+              </View>
+              <View style={[styles.previewLineMini, { backgroundColor: '#e5e7eb' }]} />
+              <View style={[styles.previewLineMini, { backgroundColor: '#e5e7eb', width: '60%' }]} />
+              <View style={[styles.previewActionMini, { backgroundColor: 'rgba(124, 58, 237, 0.15)' }]} />
+            </View>
+            <View style={styles.themeCardFooter}>
+              <Text
+                style={[
+                  styles.themeCardLabel,
+                  { color: themeColors.textPrimary },
+                  themeMode === 'light' && { color: colors.brand, fontWeight: '700' },
+                ]}
+              >
+                Light
               </Text>
-            </TouchableOpacity>
-          ))}
+              <View
+                style={[
+                  styles.radioIndicator,
+                  { borderColor: themeMode === 'light' ? colors.brand : themeColors.textMuted },
+                  themeMode === 'light' && { backgroundColor: colors.brand },
+                ]}
+              >
+                {themeMode === 'light' && <View style={styles.radioIndicatorInner} />}
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* Dark Theme Card */}
+          <TouchableOpacity
+            style={[
+              styles.themeCard,
+              {
+                backgroundColor: themeColors.surface,
+                borderColor: themeMode === 'dark' ? colors.brand : themeColors.surfaceBorder,
+              },
+              themeMode === 'dark' && styles.themeCardActive,
+            ]}
+            onPress={() => setThemeMode('dark')}
+            activeOpacity={0.75}
+            accessibilityRole="radio"
+            accessibilityLabel="Dark theme"
+            accessibilityState={{ selected: themeMode === 'dark' }}
+          >
+            {/* Visual mini-mockup */}
+            <View style={[styles.themePreviewBox, { backgroundColor: '#121212', borderColor: '#262626' }]}>
+              <View style={styles.previewHeaderBar}>
+                <View style={[styles.previewDotMini, { backgroundColor: '#404040' }]} />
+                <View style={[styles.previewPillMini, { backgroundColor: colors.brand }]} />
+              </View>
+              <View style={[styles.previewLineMini, { backgroundColor: '#262626' }]} />
+              <View style={[styles.previewLineMini, { backgroundColor: '#262626', width: '60%' }]} />
+              <View style={[styles.previewActionMini, { backgroundColor: 'rgba(139, 92, 246, 0.25)' }]} />
+            </View>
+            <View style={styles.themeCardFooter}>
+              <Text
+                style={[
+                  styles.themeCardLabel,
+                  { color: themeColors.textPrimary },
+                  themeMode === 'dark' && { color: colors.brand, fontWeight: '700' },
+                ]}
+              >
+                Dark
+              </Text>
+              <View
+                style={[
+                  styles.radioIndicator,
+                  { borderColor: themeMode === 'dark' ? colors.brand : themeColors.textMuted },
+                  themeMode === 'dark' && { backgroundColor: colors.brand },
+                ]}
+              >
+                {themeMode === 'dark' && <View style={styles.radioIndicatorInner} />}
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* System Theme Card */}
+          <TouchableOpacity
+            style={[
+              styles.themeCard,
+              {
+                backgroundColor: themeColors.surface,
+                borderColor: themeMode === 'system' ? colors.brand : themeColors.surfaceBorder,
+              },
+              themeMode === 'system' && styles.themeCardActive,
+            ]}
+            onPress={() => setThemeMode('system')}
+            activeOpacity={0.75}
+            accessibilityRole="radio"
+            accessibilityLabel="System theme"
+            accessibilityState={{ selected: themeMode === 'system' }}
+          >
+            {/* Split visual mini-mockup */}
+            <View style={[styles.themePreviewBox, styles.splitPreviewBox, { borderColor: themeColors.surfaceBorder }]}>
+              {/* Left light half */}
+              <View style={[styles.splitHalf, { backgroundColor: '#fafafa', borderRightWidth: 1, borderRightColor: '#e5e7eb' }]}>
+                <View style={[styles.previewDotMini, { backgroundColor: '#d1d5db', marginBottom: 6 }]} />
+                <View style={[styles.previewLineMini, { backgroundColor: '#e5e7eb' }]} />
+                <View style={[styles.previewActionMini, { backgroundColor: 'rgba(124, 58, 237, 0.15)' }]} />
+              </View>
+              {/* Right dark half */}
+              <View style={[styles.splitHalf, { backgroundColor: '#121212' }]}>
+                <View style={[styles.previewDotMini, { backgroundColor: '#404040', marginBottom: 6, alignSelf: 'flex-end' }]} />
+                <View style={[styles.previewLineMini, { backgroundColor: '#262626' }]} />
+                <View style={[styles.previewActionMini, { backgroundColor: 'rgba(139, 92, 246, 0.25)', alignSelf: 'flex-end' }]} />
+              </View>
+            </View>
+            <View style={styles.themeCardFooter}>
+              <Text
+                style={[
+                  styles.themeCardLabel,
+                  { color: themeColors.textPrimary },
+                  themeMode === 'system' && { color: colors.brand, fontWeight: '700' },
+                ]}
+              >
+                System
+              </Text>
+              <View
+                style={[
+                  styles.radioIndicator,
+                  { borderColor: themeMode === 'system' ? colors.brand : themeColors.textMuted },
+                  themeMode === 'system' && { backgroundColor: colors.brand },
+                ]}
+              >
+                {themeMode === 'system' && <View style={styles.radioIndicatorInner} />}
+              </View>
+            </View>
+          </TouchableOpacity>
         </View>
 
         {/* Language Picker */}
@@ -1646,6 +1784,90 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.gray500,
     fontWeight: '500',
+  },
+  themeCardsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginVertical: 6,
+  },
+  themeCard: {
+    flex: 1,
+    padding: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  themeCardActive: {
+    borderWidth: 2,
+  },
+  themePreviewBox: {
+    width: '100%',
+    height: 60,
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 6,
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  splitPreviewBox: {
+    flexDirection: 'row',
+    padding: 0,
+  },
+  splitHalf: {
+    flex: 1,
+    height: '100%',
+    padding: 6,
+    justifyContent: 'space-between',
+  },
+  previewHeaderBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  previewDotMini: {
+    width: 14,
+    height: 4,
+    borderRadius: 2,
+  },
+  previewPillMini: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  previewLineMini: {
+    width: '100%',
+    height: 3,
+    borderRadius: 1.5,
+    marginVertical: 1.5,
+  },
+  previewActionMini: {
+    width: 18,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  themeCardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  themeCardLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  radioIndicator: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioIndicatorInner: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#ffffff',
   },
   optionsGroup: { flexDirection: 'row', gap: 8, marginVertical: 4 },
   optionBtn: {
