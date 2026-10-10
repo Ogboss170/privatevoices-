@@ -116,7 +116,7 @@ export default function SettingsPage(): React.JSX.Element {
 
   // Search & Navigation state
   const [searchQuery, setSearchQuery] = useState('')
-  const [activeCategory, setActiveCategory] = useState<string | null>(null)
+  const [activeCategory, setActiveCategory] = useState<string>('account')
 
   // Active Sessions & Device Manager state
   const [showSessionsModal, setShowSessionsModal] = useState(false)
@@ -545,35 +545,78 @@ export default function SettingsPage(): React.JSX.Element {
         )}
       </div>
 
-      {/* ── CATEGORY HUB TILES ── */}
+      {/* ── PROFILE HERO CARD ── */}
+      <div className="bg-gradient-to-br from-white via-white to-brand-50/30 dark:from-slate-900 dark:via-slate-900 dark:to-brand-950/20 rounded-3xl p-5 border border-gray-200/80 dark:border-slate-800 shadow-sm flex items-center justify-between gap-4">
+        <div className="flex items-center space-x-3.5 min-w-0">
+          <div className="relative">
+            {profile?.avatar_url ? (
+              <img
+                src={profile.avatar_url}
+                alt={profile.display_name || profile.username || 'User'}
+                className="w-14 h-14 rounded-full object-cover ring-2 ring-brand-500/20"
+              />
+            ) : (
+              <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center text-white font-bold text-xl shadow-inner">
+                {(profile?.display_name || profile?.username || 'U')[0]?.toUpperCase()}
+              </div>
+            )}
+            <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" title="Online" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-base font-bold text-gray-900 dark:text-gray-100 truncate flex items-center gap-1.5">
+              <span>{profile?.display_name || profile?.username || 'Private Voices Member'}</span>
+              {profile?.is_verified && (
+                <span className="text-[10px] bg-brand-500/10 text-brand-600 dark:text-brand-400 font-bold px-1.5 py-0.5 rounded-full border border-brand-500/20">
+                  VERIFIED
+                </span>
+              )}
+            </h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 font-mono truncate">
+              @{profile?.username || 'username'}
+            </p>
+            {userEmail && (
+              <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate mt-0.5">
+                {userEmail}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowEditProfileModal(true)}
+          className="shrink-0 px-3.5 py-2 text-xs font-semibold text-brand-600 dark:text-brand-400 bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/60 dark:hover:bg-brand-900/60 rounded-xl transition-colors flex items-center gap-1.5 border border-brand-500/20"
+        >
+          <User size={14} />
+          <span>Edit Profile</span>
+        </button>
+      </div>
+
+      {/* ── CATEGORY TAB BAR ── */}
       {!searchQuery && (
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none border-b border-gray-100 dark:border-slate-800">
           {[
-            { id: 'section-account', label: 'Account', icon: User, color: 'text-blue-500 bg-blue-50 dark:bg-blue-950/40' },
-            { id: 'section-privacy', label: 'Privacy', icon: Lock, color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/40' },
-            { id: 'section-notifications', label: 'Alerts', icon: Bell, color: 'text-amber-500 bg-amber-50 dark:bg-amber-950/40' },
-            { id: 'section-appearance', label: 'Theme', icon: SunMoon, color: 'text-purple-500 bg-purple-50 dark:bg-purple-950/40' },
-            { id: 'section-security', label: 'Security', icon: Shield, color: 'text-rose-500 bg-rose-50 dark:bg-rose-950/40' },
-          ].map((hub) => {
-            const Icon = hub.icon
+            { id: 'account', label: 'Account', icon: User },
+            { id: 'privacy', label: 'Privacy', icon: Lock },
+            { id: 'notifications', label: 'Alerts', icon: Bell },
+            { id: 'appearance', label: 'Theme', icon: SunMoon },
+            { id: 'about', label: 'About & Danger', icon: Shield },
+          ].map((tab) => {
+            const Icon = tab.icon
+            const isActive = activeCategory === tab.id
             return (
               <button
-                key={hub.id}
+                key={tab.id}
                 type="button"
-                onClick={() => {
-                  const elem = document.getElementById(hub.id)
-                  if (elem) {
-                    elem.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                  }
-                }}
-                className="flex flex-col items-center justify-center p-3 rounded-2xl bg-white dark:bg-slate-900 border border-gray-200/80 dark:border-slate-800 hover:border-brand-500/50 hover:shadow-sm transition-all group cursor-pointer"
+                onClick={() => setActiveCategory(tab.id)}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+                  isActive
+                    ? 'bg-brand-600 text-white shadow-sm shadow-brand-500/25 ring-2 ring-brand-500/20'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-800'
+                }`}
               >
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110 ${hub.color}`}>
-                  <Icon size={16} />
-                </div>
-                <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
-                  {hub.label}
-                </span>
+                <Icon size={14} className={isActive ? 'text-white' : 'text-gray-500 dark:text-gray-400'} />
+                <span>{tab.label}</span>
               </button>
             )
           })}
@@ -581,6 +624,7 @@ export default function SettingsPage(): React.JSX.Element {
       )}
 
       {/* ── 1. ACCOUNT ── */}
+      {(searchQuery || activeCategory === 'account') && (
       <section id="section-account" className="card p-6 space-y-4">
         <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 pb-2">
           {t.account}
@@ -659,8 +703,11 @@ export default function SettingsPage(): React.JSX.Element {
           </div>
         </div>
       </section>
+      )}
 
-      {/* ── 2. PRIVACY ── */}
+      {/* ── 2. PRIVACY & SAFETY ── */}
+      {(searchQuery || activeCategory === 'privacy') && (
+        <>
       <section id="section-privacy" className="card p-6 space-y-4">
         <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 pb-2">
           {t.privacy}
@@ -901,8 +948,11 @@ export default function SettingsPage(): React.JSX.Element {
           </div>
         </div>
       </section>
+        </>
+      )}
 
       {/* ── 5. NOTIFICATIONS ── */}
+      {(searchQuery || activeCategory === 'notifications') && (
       <section id="section-notifications" className="card p-6 space-y-5">
         <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-2">
           <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
@@ -1076,8 +1126,10 @@ export default function SettingsPage(): React.JSX.Element {
           </div>
         </div>
       </section>
+      )}
 
       {/* ── 6. APPEARANCE ── */}
+      {(searchQuery || activeCategory === 'appearance') && (
       <section id="section-appearance" className="card p-6 space-y-4">
         <h2 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider border-b border-gray-100 dark:border-slate-800 pb-2">
           {t.appearance}
@@ -1290,8 +1342,11 @@ export default function SettingsPage(): React.JSX.Element {
           </div>
         </div>
       </section>
+      )}
 
-      {/* ── 7. DATA & PRIVACY ── */}
+      {/* ── 7, 8, 9, 10. ABOUT, DATA & DANGER ZONE ── */}
+      {(searchQuery || activeCategory === 'about') && (
+        <>
       <section className="card p-6 space-y-4">
         <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 pb-2">
           Data & Privacy
@@ -1478,6 +1533,8 @@ export default function SettingsPage(): React.JSX.Element {
           <ChevronRight size={16} className="text-red-400" />
         </div>
       </section>
+        </>
+      )}
 
       {/* ── ACTIVE SESSIONS & DEVICE MANAGER MODAL ── */}
       {showSessionsModal && (
