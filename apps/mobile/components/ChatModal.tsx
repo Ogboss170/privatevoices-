@@ -15,13 +15,34 @@ import {
   type AppStateStatus,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { X, Send, Check, CheckCheck, Image as ImageIcon, Trash2, Mic, Square, Play, Pause, Volume2 } from 'lucide-react-native'
+import {
+  X,
+  Send,
+  Check,
+  CheckCheck,
+  Image as ImageIcon,
+  Trash2,
+  Mic,
+  Square,
+  Play,
+  Pause,
+  Volume2,
+  Phone,
+  Video,
+  PhoneOff,
+  MicOff,
+  VideoOff,
+  VolumeX,
+  SwitchCamera,
+  ShieldCheck,
+} from 'lucide-react-native'
 import { Image } from 'expo-image'
 import * as ImagePicker from 'expo-image-picker'
 import { Audio } from 'expo-av'
 import { supabase } from '../lib/supabase'
 import { colors } from '../constants/colors'
 import { useTheme } from '../context/ThemeContext'
+import type { DMCallType, DMCallStatus } from '@private-voices/shared'
 
 interface ChatPartner {
   id: string
@@ -54,6 +75,18 @@ export function ChatModal({
   const [sending, setSending] = useState(false)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [fullscreenImageUrl, setFullscreenImageUrl] = useState<string | null>(null)
+
+  // Voice & Video Calling State
+  const [isCallOpen, setIsCallOpen] = useState(false)
+  const [callType, setCallType] = useState<DMCallType>('audio')
+  const [callStatus, setCallStatus] = useState<DMCallStatus>('idle')
+  const [isIncomingCall, setIsIncomingCall] = useState(false)
+  const [activeCallId, setActiveCallId] = useState<string | null>(null)
+  const [callMuted, setCallMuted] = useState(false)
+  const [callCameraOff, setCallCameraOff] = useState(false)
+  const [callSpeakerOn, setCallSpeakerOn] = useState(true)
+  const [callDuration, setCallDuration] = useState(0)
+  const callTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Presence & Typing State
   const [isPartnerTyping, setIsPartnerTyping] = useState(false)
@@ -178,6 +211,30 @@ export function ChatModal({
           }
         }
       })
+      .on('broadcast', { event: 'call_signal' }, ({ payload }) => {
+        if (!payload) return
+        if (payload.receiver?.id === currentUserId && payload.action === 'call_init') {
+          setActiveCallId(payload.callId)
+          setCallType(payload.type || 'audio')
+          setCallStatus('incoming_ringing')
+          setIsIncomingCall(true)
+          setIsCallOpen(true)
+        } else if (payload.action === 'call_accept') {
+          setCallStatus('connected')
+        } else if (payload.action === 'call_decline') {
+          setCallStatus('declined')
+          setTimeout(() => {
+            setIsCallOpen(false)
+            setCallStatus('idle')
+          }, 1800)
+        } else if (payload.action === 'call_end') {
+          setCallStatus('ended')
+          setTimeout(() => {
+            setIsCallOpen(false)
+            setCallStatus('idle')
+          }, 1500)
+        }
+      })
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState()
         const partnerActive = Object.values(state).some((presences: any) =>
@@ -210,8 +267,131 @@ export function ChatModal({
       }
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current)
+      }
+      if (callTimerRef.current) {
+        clearInterval(callTimerRef.current)
+      }
     }
   }, [visible, conversationId, currentUserId, partnerId])
+
+  // Timer for connected call duration
+  useEffect(() => {
+    if (callStatus === 'connected') {
+      callTimerRef.current = setInterval(() => {
+        setCallDuration((prev) => prev + 1)
+      }, 1000)
+    } else {
+      if (callTimerRef.current) clearInterval(callTimerRef.current)
+      setCallDuration(0)
+    }
+    return () => {
+      if (callTimerRef.current) clearInterval(callTimerRef.current)
+    }
+  }, [callStatus])
+
+  // Mobile Call Handlers
+  function handleStartCall(type: DMCallType) {
+    const newCallId = `call-${Date.now()}`
+    setActiveCallId(newCallId)
+    setCallType(type)
+    setCallStatus('outgoing_ringing')
+    setIsIncomingCall(false)
+    setIsCallOpen(true)
+
+    channelRef.current?.send({
+      type: 'broadcast',
+      event: 'call_signal',
+      payload: {
+        callId: newCallId,
+        conversationId,
+        type,
+        action: 'call_init',
+        caller: {
+          id: currentUserId,
+          username: 'you',
+          displayName: 'You',
+        },
+        receiver: {
+          id: partnerId,
+          username: partnerUsername,
+          displayName: partnerName,
+          avatarUrl: partnerAvatar,
+        },
+        timestamp: Date.now(),
+      },
+    })
+  }
+
+  function handleAcceptCall() {
+    setCallStatus('connected')
+    channelRef.current?.send({
+      type: 'broadcast',
+      event: 'call_signal',
+      payload: {
+        callId: activeCallId,
+        conversationId,
+        type: callType,
+        action: 'call_accept',
+        caller: {
+          id: partnerId,
+          username: partnerUsername,
+          displayName: partnerName,
+        },
+        receiver: { id: currentUserId, username: 'you', displayName: 'You' },
+        timestamp: Date.now(),
+      },
+    })
+  }
+
+  function handleDeclineCall() {
+    setCallStatus('declined')
+    channelRef.current?.send({
+      type: 'broadcast',
+      event: 'call_signal',
+      payload: {
+        callId: activeCallId,
+        conversationId,
+        type: callType,
+        action: 'call_decline',
+        caller: {
+          id: partnerId,
+          username: partnerUsername,
+          displayName: partnerName,
+        },
+        receiver: { id: currentUserId, username: 'you', displayName: 'You' },
+        timestamp: Date.now(),
+      },
+    })
+    setTimeout(() => {
+      setIsCallOpen(false)
+      setCallStatus('idle')
+    }, 1500)
+  }
+
+  function handleEndCall() {
+    setCallStatus('ended')
+    channelRef.current?.send({
+      type: 'broadcast',
+      event: 'call_signal',
+      payload: {
+        callId: activeCallId,
+        conversationId,
+        type: callType,
+        action: 'call_end',
+        caller: {
+          id: partnerId,
+          username: partnerUsername,
+          displayName: partnerName,
+        },
+        receiver: { id: currentUserId, username: 'you', displayName: 'You' },
+        timestamp: Date.now(),
+      },
+    })
+    setTimeout(() => {
+      setIsCallOpen(false)
+      setCallStatus('idle')
+    }, 1200)
+  }
 
   // Handle AppState lifecycle: pause audio or cancel recording when app goes to background
   useEffect(() => {
@@ -731,13 +911,33 @@ export function ChatModal({
               </View>
             </View>
 
-            <TouchableOpacity
-              onPress={onClose}
-              style={[styles.closeBtn, { backgroundColor: themeColors.surfaceBorder }]}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <X size={22} color={themeColors.text} />
-            </TouchableOpacity>
+            <View style={styles.headerRightActions}>
+              {/* Phone Voice Call Button */}
+              <TouchableOpacity
+                onPress={() => handleStartCall('audio')}
+                style={[styles.headerCallBtn, { backgroundColor: isDark ? '#27272a' : '#f4f4f5' }]}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Phone size={19} color={themeColors.text} />
+              </TouchableOpacity>
+
+              {/* Video Call Button */}
+              <TouchableOpacity
+                onPress={() => handleStartCall('video')}
+                style={[styles.headerCallBtn, { backgroundColor: isDark ? '#27272a' : '#f4f4f5' }]}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Video size={20} color={themeColors.text} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={onClose}
+                style={[styles.closeBtn, { backgroundColor: themeColors.surfaceBorder }]}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <X size={22} color={themeColors.text} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Messages */}
@@ -1047,6 +1247,180 @@ export function ChatModal({
               />
             </View>
           </Modal>
+        {/* Voice & Video Calling Screen Overlay */}
+        {isCallOpen && (
+          <Modal
+            visible={isCallOpen}
+            animationType="fade"
+            presentationStyle="fullScreen"
+            statusBarTranslucent={true}
+          >
+            <View style={styles.callScreenContainer}>
+              {/* Header Info */}
+              <View style={styles.callHeader}>
+                <View style={styles.callPartnerRow}>
+                  <View style={styles.callAvatar}>
+                    {partnerAvatar ? (
+                      <Image source={{ uri: partnerAvatar }} style={styles.callAvatarImg} />
+                    ) : (
+                      <Text style={styles.callAvatarLetter}>{partnerName.charAt(0).toUpperCase()}</Text>
+                    )}
+                  </View>
+                  <View>
+                    <Text style={styles.callPartnerName}>{partnerName}</Text>
+                    <View style={styles.callEncryptedRow}>
+                      <ShieldCheck size={12} color="#10b981" />
+                      <Text style={styles.callEncryptedText}>Encrypted &bull; @{partnerUsername}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.callStatusBadge}>
+                  <Text style={styles.callStatusText}>
+                    {callStatus === 'connected'
+                      ? `${Math.floor(callDuration / 60).toString().padStart(2, '0')}:${(callDuration % 60).toString().padStart(2, '0')}`
+                      : callStatus === 'incoming_ringing'
+                      ? `Incoming ${callType === 'video' ? 'Video' : 'Voice'} Call`
+                      : callStatus === 'outgoing_ringing'
+                      ? 'Ringing...'
+                      : callStatus === 'declined'
+                      ? 'Call Declined'
+                      : callStatus === 'ended'
+                      ? 'Call Ended'
+                      : 'Connecting...'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Center Canvas */}
+              <View style={styles.callCenterCanvas}>
+                {callType === 'video' ? (
+                  <View style={styles.callVideoView}>
+                    <View style={styles.callVideoRemotePlaceholder}>
+                      <View style={styles.callBigAvatar}>
+                        {partnerAvatar ? (
+                          <Image source={{ uri: partnerAvatar }} style={styles.callBigAvatarImg} />
+                        ) : (
+                          <Text style={styles.callBigAvatarLetter}>{partnerName.charAt(0).toUpperCase()}</Text>
+                        )}
+                      </View>
+                      <Text style={styles.callRemoteLabel}>{partnerName}</Text>
+                      <Text style={styles.callRemoteSub}>
+                        {callStatus === 'connected' ? 'Video Connected' : 'Calling video...'}
+                      </Text>
+                    </View>
+
+                    {/* Floating Self-View (Picture-in-Picture) */}
+                    <View style={styles.callSelfPipView}>
+                      <View style={styles.callSelfInner}>
+                        {callCameraOff ? (
+                          <View style={styles.callSelfCamOff}>
+                            <VideoOff size={18} color="#94a3b8" />
+                            <Text style={styles.callSelfCamOffText}>Off</Text>
+                          </View>
+                        ) : (
+                          <View style={styles.callSelfCamActive}>
+                            <Text style={styles.callSelfPipLabel}>You</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.callAudioView}>
+                    <View style={styles.callBigAvatar}>
+                      {partnerAvatar ? (
+                        <Image source={{ uri: partnerAvatar }} style={styles.callBigAvatarImg} />
+                      ) : (
+                        <Text style={styles.callBigAvatarLetter}>{partnerName.charAt(0).toUpperCase()}</Text>
+                      )}
+                    </View>
+                    <Text style={styles.callBigName}>{partnerName}</Text>
+                    <Text style={styles.callSubStatus}>
+                      {callStatus === 'connected' ? 'Voice Call Connected' : 'Calling private line...'}
+                    </Text>
+
+                    {callStatus === 'connected' && (
+                      <View style={styles.callWaveformRow}>
+                        {[30, 50, 75, 40, 85, 60, 95, 70, 45, 80, 55, 30].map((h, i) => (
+                          <View
+                            key={i}
+                            style={[styles.callWaveBar, { height: (h / 100) * 36 }]}
+                          />
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
+
+              {/* Bottom Controls Dock */}
+              <View style={styles.callBottomDock}>
+                {callStatus === 'incoming_ringing' ? (
+                  <View style={styles.callIncomingActions}>
+                    <TouchableOpacity
+                      style={styles.callDeclineBtn}
+                      onPress={handleDeclineCall}
+                      activeOpacity={0.8}
+                    >
+                      <PhoneOff size={28} color="#ffffff" />
+                      <Text style={styles.callActionLabel}>Decline</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.callAcceptBtn}
+                      onPress={handleAcceptCall}
+                      activeOpacity={0.8}
+                    >
+                      {callType === 'video' ? (
+                        <Video size={28} color="#ffffff" />
+                      ) : (
+                        <Phone size={28} color="#ffffff" />
+                      )}
+                      <Text style={styles.callActionLabel}>Accept</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.callControlsRow}>
+                    {/* Mute Mic */}
+                    <TouchableOpacity
+                      style={[styles.callControlCircle, callMuted && styles.callControlActive]}
+                      onPress={() => setCallMuted((prev) => !prev)}
+                    >
+                      {callMuted ? <MicOff size={22} color="#ffffff" /> : <Mic size={22} color="#ffffff" />}
+                    </TouchableOpacity>
+
+                    {/* Camera On/Off (Video) */}
+                    {callType === 'video' && (
+                      <TouchableOpacity
+                        style={[styles.callControlCircle, callCameraOff && styles.callControlActive]}
+                        onPress={() => setCallCameraOff((prev) => !prev)}
+                      >
+                        {callCameraOff ? <VideoOff size={22} color="#ffffff" /> : <Video size={22} color="#ffffff" />}
+                      </TouchableOpacity>
+                    )}
+
+                    {/* Speaker */}
+                    <TouchableOpacity
+                      style={[styles.callControlCircle, !callSpeakerOn && styles.callControlActive]}
+                      onPress={() => setCallSpeakerOn((prev) => !prev)}
+                    >
+                      {callSpeakerOn ? <Volume2 size={22} color="#ffffff" /> : <VolumeX size={22} color="#ffffff" />}
+                    </TouchableOpacity>
+
+                    {/* End Call */}
+                    <TouchableOpacity
+                      style={styles.callEndBtn}
+                      onPress={handleEndCall}
+                      activeOpacity={0.8}
+                    >
+                      <PhoneOff size={24} color="#ffffff" />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </View>
+          </Modal>
         )}
       </SafeAreaView>
     </Modal>
@@ -1132,6 +1506,17 @@ const styles = StyleSheet.create({
     color: colors.brand,
     fontWeight: '600',
     fontSize: 12,
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerCallBtn: {
+    padding: 7,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   closeBtn: {
     padding: 6,
@@ -1563,5 +1948,253 @@ const styles = StyleSheet.create({
   lightboxImage: {
     width: '100%',
     height: '80%',
+  },
+  // Call Screen Styles
+  callScreenContainer: {
+    flex: 1,
+    backgroundColor: '#030712',
+    justifyContent: 'space-between',
+    paddingVertical: 48,
+    paddingHorizontal: 20,
+  },
+  callHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    zIndex: 20,
+  },
+  callPartnerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  callAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#1f2937',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  callAvatarImg: {
+    width: '100%',
+    height: '100%',
+  },
+  callAvatarLetter: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  callPartnerName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  callEncryptedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  callEncryptedText: {
+    fontSize: 11,
+    color: '#9ca3af',
+  },
+  callStatusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  callStatusText: {
+    fontSize: 12,
+    color: '#ffffff',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontWeight: '600',
+  },
+  callCenterCanvas: {
+    flex: 1,
+    marginVertical: 24,
+    borderRadius: 28,
+    overflow: 'hidden',
+    backgroundColor: '#0f172a',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  callVideoView: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  callVideoRemotePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  callRemoteLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#ffffff',
+    marginTop: 12,
+  },
+  callRemoteSub: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginTop: 4,
+  },
+  callSelfPipView: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    width: 100,
+    height: 140,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#1e293b',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.25)',
+    elevation: 8,
+  },
+  callSelfInner: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  callSelfCamOff: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  callSelfCamOffText: {
+    fontSize: 10,
+    color: '#94a3b8',
+    marginTop: 2,
+  },
+  callSelfCamActive: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: '#334155',
+    justifyContent: 'flex-end',
+    padding: 6,
+  },
+  callSelfPipLabel: {
+    fontSize: 10,
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  callAudioView: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  callBigAvatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#6366f1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    borderWidth: 3,
+    borderColor: '#818cf8',
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  callBigAvatarImg: {
+    width: '100%',
+    height: '100%',
+  },
+  callBigAvatarLetter: {
+    fontSize: 40,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  callBigName: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#ffffff',
+    marginTop: 16,
+  },
+  callSubStatus: {
+    fontSize: 13,
+    color: '#a5b4fc',
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  callWaveformRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 20,
+    height: 40,
+  },
+  callWaveBar: {
+    width: 4,
+    backgroundColor: '#818cf8',
+    borderRadius: 2,
+  },
+  callBottomDock: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  callIncomingActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 48,
+  },
+  callDeclineBtn: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  callAcceptBtn: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  callActionLabel: {
+    fontSize: 12,
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  callControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 22,
+    paddingVertical: 14,
+    borderRadius: 36,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  callControlCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  callControlActive: {
+    backgroundColor: '#ef4444',
+  },
+  callEndBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#dc2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4,
   },
 })

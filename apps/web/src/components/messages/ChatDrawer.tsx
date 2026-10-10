@@ -2,9 +2,11 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
-import { X, Send, Loader2, Image as ImageIcon, ExternalLink, Trash2, Mic, Play, Pause, Square, Volume2, Maximize2, Minimize2 } from 'lucide-react'
+import { X, Send, Loader2, Image as ImageIcon, ExternalLink, Trash2, Mic, Play, Pause, Square, Volume2, Maximize2, Minimize2, Phone, Video } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/media/imageCompression'
+import { DMCallModal } from '@/components/messages/DMCallModal'
+import type { DMCallType, DMCallStatus } from '@private-voices/shared'
 
 interface ChatDrawerProps {
   conversationId: string
@@ -33,6 +35,13 @@ export default function ChatDrawer({
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [previewModalUrl, setPreviewModalUrl] = useState<string | null>(null)
   const [isFullScreen, setIsFullScreen] = useState(true)
+
+  // Voice & Video Calling State
+  const [isCallOpen, setIsCallOpen] = useState(false)
+  const [callType, setCallType] = useState<DMCallType>('audio')
+  const [callStatus, setCallStatus] = useState<DMCallStatus>('idle')
+  const [isIncomingCall, setIsIncomingCall] = useState(false)
+  const [activeCallId, setActiveCallId] = useState<string | null>(null)
 
   // Presence & Typing State
   const [isPartnerTyping, setIsPartnerTyping] = useState(false)
@@ -149,6 +158,30 @@ export default function ChatDrawer({
           }
         }
       })
+      .on('broadcast', { event: 'call_signal' }, ({ payload }) => {
+        if (!payload) return
+        if (payload.receiver?.id === currentUserId && payload.action === 'call_init') {
+          setActiveCallId(payload.callId)
+          setCallType(payload.type || 'audio')
+          setCallStatus('incoming_ringing')
+          setIsIncomingCall(true)
+          setIsCallOpen(true)
+        } else if (payload.action === 'call_accept') {
+          setCallStatus('connected')
+        } else if (payload.action === 'call_decline') {
+          setCallStatus('declined')
+          setTimeout(() => {
+            setIsCallOpen(false)
+            setCallStatus('idle')
+          }, 1800)
+        } else if (payload.action === 'call_end') {
+          setCallStatus('ended')
+          setTimeout(() => {
+            setIsCallOpen(false)
+            setCallStatus('idle')
+          }, 1500)
+        }
+      })
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState()
         const partnerActive = Object.values(state).some((presences: any) =>
@@ -184,6 +217,94 @@ export default function ChatDrawer({
       }
     }
   }, [supabase, conversationId, currentUserId, partner.id])
+
+  // --- Voice & Video Calling Handlers ---
+  function handleStartCall(type: DMCallType) {
+    const newCallId = 'call-' + Date.now()
+    setActiveCallId(newCallId)
+    setCallType(type)
+    setCallStatus('outgoing_ringing')
+    setIsIncomingCall(false)
+    setIsCallOpen(true)
+
+    // Send broadcast signal
+    channelRef.current?.send({
+      type: 'broadcast',
+      event: 'call_signal',
+      payload: {
+        callId: newCallId,
+        conversationId,
+        type,
+        action: 'call_init',
+        caller: {
+          id: currentUserId,
+          username: 'you',
+          displayName: 'You',
+        },
+        receiver: partner,
+        timestamp: Date.now(),
+      },
+    })
+  }
+
+  function handleAcceptCall() {
+    setCallStatus('connected')
+    channelRef.current?.send({
+      type: 'broadcast',
+      event: 'call_signal',
+      payload: {
+        callId: activeCallId,
+        conversationId,
+        type: callType,
+        action: 'call_accept',
+        caller: partner,
+        receiver: { id: currentUserId, username: 'you', displayName: 'You' },
+        timestamp: Date.now(),
+      },
+    })
+  }
+
+  function handleDeclineCall() {
+    setCallStatus('declined')
+    channelRef.current?.send({
+      type: 'broadcast',
+      event: 'call_signal',
+      payload: {
+        callId: activeCallId,
+        conversationId,
+        type: callType,
+        action: 'call_decline',
+        caller: partner,
+        receiver: { id: currentUserId, username: 'you', displayName: 'You' },
+        timestamp: Date.now(),
+      },
+    })
+    setTimeout(() => {
+      setIsCallOpen(false)
+      setCallStatus('idle')
+    }, 1500)
+  }
+
+  function handleEndCall() {
+    setCallStatus('ended')
+    channelRef.current?.send({
+      type: 'broadcast',
+      event: 'call_signal',
+      payload: {
+        callId: activeCallId,
+        conversationId,
+        type: callType,
+        action: 'call_end',
+        caller: partner,
+        receiver: { id: currentUserId, username: 'you', displayName: 'You' },
+        timestamp: Date.now(),
+      },
+    })
+    setTimeout(() => {
+      setIsCallOpen(false)
+      setCallStatus('idle')
+    }, 1200)
+  }
 
   // --- Web Audio Recording & Playback ---
   async function startRecording() {
@@ -634,10 +755,32 @@ export default function ChatDrawer({
             </div>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 sm:gap-2">
+            {/* Voice Call Button */}
+            <button
+              onClick={() => handleStartCall('audio')}
+              className="p-2 rounded-xl text-gray-600 hover:text-purple-600 hover:bg-purple-50 transition-colors"
+              aria-label="Start Voice Call"
+              title="Voice Call"
+            >
+              <Phone size={18} />
+            </button>
+
+            {/* Video Call Button */}
+            <button
+              onClick={() => handleStartCall('video')}
+              className="p-2 rounded-xl text-gray-600 hover:text-purple-600 hover:bg-purple-50 transition-colors"
+              aria-label="Start Video Call"
+              title="Video Call"
+            >
+              <Video size={19} />
+            </button>
+
+            <div className="w-[1px] h-5 bg-gray-200 mx-0.5" />
+
             <button
               onClick={() => setIsFullScreen((prev) => !prev)}
-              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
               aria-label={isFullScreen ? 'Exit full screen' : 'Full screen'}
               title={isFullScreen ? 'Standard drawer' : 'Full screen'}
             >
@@ -645,7 +788,7 @@ export default function ChatDrawer({
             </button>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
               aria-label="Close chat"
               title="Close chat"
             >
@@ -965,6 +1108,21 @@ export default function ChatDrawer({
           />
         </div>
       )}
+
+      {/* Voice & Video Call Modal */}
+      <DMCallModal
+        isOpen={isCallOpen}
+        callType={callType}
+        callStatus={callStatus}
+        partner={partner}
+        isIncoming={isIncomingCall}
+        onAccept={handleAcceptCall}
+        onDecline={handleDeclineCall}
+        onEndCall={handleEndCall}
+        onToggleMute={() => {}}
+        onToggleCamera={() => {}}
+        onToggleSpeaker={() => {}}
+      />
     </>
   )
 }

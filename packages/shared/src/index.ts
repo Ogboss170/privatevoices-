@@ -554,4 +554,54 @@ export interface AppRatingSummary {
   };
 }
 
+// ─── Direct Message Calling Types (Audio & Video) ────────────────────────────
+
+export type DMCallType = 'audio' | 'video';
+
+export type DMCallStatus =
+  | 'idle'
+  | 'outgoing_ringing'
+  | 'incoming_ringing'
+  | 'connecting'
+  | 'connected'
+  | 'declined'
+  | 'missed'
+  | 'ended'
+  | 'busy';
+
+export interface DMCallParticipant {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl?: string | null;
+}
+
+export interface DMCallSession {
+  callId: string;
+  conversationId: string;
+  type: DMCallType;
+  status: DMCallStatus;
+  caller: DMCallParticipant;
+  receiver: DMCallParticipant;
+  startedAt?: string | null;
+  endedAt?: string | null;
+  durationSeconds?: number;
+  isMuted?: boolean;
+  isCameraOff?: boolean;
+  isSpeakerOn?: boolean;
+  cameraFacing?: 'user' | 'environment';
+}
+
+export interface DMCallSignalPayload {
+  callId: string;
+  conversationId: string;
+  type: DMCallType;
+  action: 'call_init' | 'call_accept' | 'call_decline' | 'call_end' | 'ice_candidate' | 'sdp_offer' | 'sdp_answer';
+  caller: DMCallParticipant;
+  receiver: DMCallParticipant;
+  sdp?: any;
+  candidate?: any;
+  timestamp: number;
+}
+
 
