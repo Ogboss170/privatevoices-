@@ -122,7 +122,11 @@ export default function RegisterPage() {
     }
   }, [form.username, supabase])
 
-  // Live Check: Email Availability
+  // Auto-generation trigger refs to avoid duplicate dispatches
+  const autoEmailTriggeredRef = useRef<string | null>(null)
+  const autoPhoneTriggeredRef = useRef<string | null>(null)
+
+  // Live Check & Automatic Code Generator for Email
   useEffect(() => {
     const rawEmail = form.email.trim().toLowerCase()
     if (emailTimerRef.current) clearTimeout(emailTimerRef.current)
@@ -136,7 +140,6 @@ export default function RegisterPage() {
 
     emailTimerRef.current = setTimeout(async () => {
       try {
-        // Direct RPC check
         const { data, error: rpcErr } = await supabase.rpc('check_email_available', {
           p_email: rawEmail,
         })
@@ -147,10 +150,15 @@ export default function RegisterPage() {
             available: data.available,
             message: data.message,
           })
+
+          // Automatic code generation if email is available and hasn't been triggered yet
+          if (data.available && autoEmailTriggeredRef.current !== rawEmail && !isEmailVerified) {
+            autoEmailTriggeredRef.current = rawEmail
+            handleSendVerificationCode('email')
+          }
           return
         }
 
-        // Fallback: check email_registry table if accessible
         const { data: existingReg } = await supabase
           .from('email_registry')
           .select('id')
@@ -169,16 +177,34 @@ export default function RegisterPage() {
             available: true,
             message: 'Email is available!',
           })
+
+          // Automatic code generation
+          if (autoEmailTriggeredRef.current !== rawEmail && !isEmailVerified) {
+            autoEmailTriggeredRef.current = rawEmail
+            handleSendVerificationCode('email')
+          }
         }
       } catch {
         setEmailStatus({ checking: false })
       }
-    }, 400)
+    }, 450)
 
     return () => {
       if (emailTimerRef.current) clearTimeout(emailTimerRef.current)
     }
-  }, [form.email, supabase])
+  }, [form.email, isEmailVerified, supabase])
+
+  // Automatic Code Generator for Phone (triggers automatically when 10+ digits are typed)
+  useEffect(() => {
+    const rawPhone = form.phone.trim().replace(/[^0-9+]/g, '')
+    if (rawPhone.length >= 10 && autoPhoneTriggeredRef.current !== rawPhone && !isPhoneVerified) {
+      const timer = setTimeout(() => {
+        autoPhoneTriggeredRef.current = rawPhone
+        handleSendVerificationCode('phone')
+      }, 700)
+      return () => clearTimeout(timer)
+    }
+  }, [form.phone, isPhoneVerified])
 
   async function handleSendVerificationCode(targetType: 'phone' | 'email') {
     const targetValue = targetType === 'phone' ? form.phone.trim() : form.email.trim()

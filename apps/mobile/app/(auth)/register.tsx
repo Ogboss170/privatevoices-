@@ -98,6 +98,9 @@ export default function RegisterScreen() {
         const { data } = await supabase.rpc('check_email_available', { p_email: rawEmail })
         if (data) {
           setEmailStatus({ checking: false, available: data.available, message: data.message })
+          if (data.available && !emailCodeSent && !isEmailVerified) {
+            handleSendVerificationCode('email')
+          }
           return
         }
         const { data: reg } = await supabase.from('email_registry').select('id').eq('normalized_email', rawEmail).maybeSingle()
@@ -106,13 +109,27 @@ export default function RegisterScreen() {
           available: !reg,
           message: reg ? 'This email has already been used.' : 'Email is available!',
         })
+        if (!reg && !emailCodeSent && !isEmailVerified) {
+          handleSendVerificationCode('email')
+        }
       } catch {
         setEmailStatus({ checking: false })
       }
-    }, 400)
+    }, 450)
 
     return () => clearTimeout(timer)
-  }, [email])
+  }, [email, emailCodeSent, isEmailVerified])
+
+  // Realtime phone automatic code generation
+  React.useEffect(() => {
+    const rawPhone = phone.trim().replace(/[^0-9+]/g, '')
+    if (rawPhone.length >= 10 && !phoneCodeSent && !isPhoneVerified) {
+      const timer = setTimeout(() => {
+        handleSendVerificationCode('phone')
+      }, 700)
+      return () => clearTimeout(timer)
+    }
+  }, [phone, phoneCodeSent, isPhoneVerified])
 
   async function handleSendVerificationCode(targetType: 'email' | 'phone') {
     const targetValue = targetType === 'email' ? email.trim() : phone.trim()
