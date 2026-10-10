@@ -1,7 +1,6 @@
 'use client'
 
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react'
-import { getPlayableAudioUrl, cacheAudioForOffline } from '@/lib/audio/offlineAudioCache'
 
 export interface GlobalAudioTrack {
   id: string
@@ -96,7 +95,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     }
   }, [])
 
-  // Audio lifecycle with offline local cache resolution
+  // Audio lifecycle
   useEffect(() => {
     if (!currentTrack) {
       if (audioRef.current) {
@@ -109,61 +108,35 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
       return
     }
 
-    let activeAudio: HTMLAudioElement | null = null
-    let objectUrlToRevoke: string | null = null
+    const audio = audioRef.current || new Audio()
+    audioRef.current = audio
+    audio.src = currentTrack.audioUrl
+    audio.playbackRate = playbackRate
 
-    async function initTrackAudio() {
-      if (!currentTrack) return
+    audio.play().then(() => {
+      setIsPlaying(true)
+    }).catch((err) => {
+      console.warn('Audio play error:', err)
+      setIsPlaying(false)
+    })
 
-      // Pre-cache track if online for future offline playback
-      if (typeof navigator !== 'undefined' && navigator.onLine) {
-        cacheAudioForOffline(currentTrack.audioUrl).catch(console.warn)
-      }
-
-      // Resolve cached offline blob or original URL
-      const playableUrl = await getPlayableAudioUrl(currentTrack.audioUrl)
-      if (playableUrl.startsWith('blob:')) {
-        objectUrlToRevoke = playableUrl
-      }
-
-      const audio = audioRef.current || new Audio()
-      audioRef.current = audio
-      activeAudio = audio
-      audio.src = playableUrl
-      audio.playbackRate = playbackRate
-
-      audio.play().then(() => {
-        setIsPlaying(true)
-      }).catch((err) => {
-        console.warn('Audio play error:', err)
-        setIsPlaying(false)
-      })
-
-      audio.onloadedmetadata = () => {
-        if (audio.duration && isFinite(audio.duration)) {
-          setDuration(audio.duration)
-        }
-      }
-
-      audio.ontimeupdate = () => {
-        setCurrentTime(audio.currentTime)
-      }
-
-      audio.onended = () => {
-        setIsPlaying(false)
-        setCurrentTime(0)
+    audio.onloadedmetadata = () => {
+      if (audio.duration && isFinite(audio.duration)) {
+        setDuration(audio.duration)
       }
     }
 
-    initTrackAudio()
+    audio.ontimeupdate = () => {
+      setCurrentTime(audio.currentTime)
+    }
+
+    audio.onended = () => {
+      setIsPlaying(false)
+      setCurrentTime(0)
+    }
 
     return () => {
-      if (activeAudio) {
-        activeAudio.pause()
-      }
-      if (objectUrlToRevoke) {
-        URL.revokeObjectURL(objectUrlToRevoke)
-      }
+      audio.pause()
     }
   }, [currentTrack])
 
