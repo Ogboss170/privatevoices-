@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { WebThemeProvider } from '@/context/WebThemeContext'
+import { AudioPlayerProvider } from '@/context/AudioPlayerContext'
+import { GlobalStickyAudioPlayer } from '@/components/common/GlobalStickyAudioPlayer'
 
 export const metadata: Metadata = {
   title: {
@@ -24,7 +26,10 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body>
         <WebThemeProvider>
-          {children}
+          <AudioPlayerProvider>
+            {children}
+            <GlobalStickyAudioPlayer />
+          </AudioPlayerProvider>
         </WebThemeProvider>
       </body>
     </html>
