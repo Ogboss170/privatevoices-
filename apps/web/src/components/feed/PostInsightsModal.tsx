@@ -23,6 +23,10 @@ export default function PostInsightsModal({ post, currentUserId, onClose }: Post
   }
 
   const [viewCount, setViewCount] = useState<number>(post.viewCount || 0)
+  const [uniqueListeners, setUniqueListeners] = useState<number>(post.viewCount || 0)
+  const [impressions, setImpressions] = useState<number>(post.viewCount || 0)
+  const [bookmarkCount, setBookmarkCount] = useState<number>((post as any).bookmarkCount || (post as any).saveCount || 0)
+  const [bookmarkRate, setBookmarkRate] = useState<number>(0)
   const [viewers, setViewers] = useState<any[]>([])
   const [loadingViewers, setLoadingViewers] = useState<boolean>(true)
 
@@ -30,23 +34,45 @@ export default function PostInsightsModal({ post, currentUserId, onClose }: Post
   const likeCount = post.likeCount || 0
   const commentCount = post.commentCount || 0
   const repostCount = post.repostCount || 0
-  const bookmarkCount = postAny.bookmarkCount || postAny.saveCount || 0
   const shareCount = postAny.shareCount || 0
   const totalEngagement = likeCount + commentCount + repostCount + bookmarkCount
 
-  // Calculate Engagement Rate: Total Interactions / Unique Views
-  const engagementRate = viewCount > 0 ? Math.min(100, Math.round((totalEngagement / viewCount) * 100)) : 0
+  // Calculate Engagement Rate: Total Interactions / Unique Listeners
+  const engagementRate = uniqueListeners > 0 ? Math.min(100, Math.round((totalEngagement / uniqueListeners) * 100)) : 0
 
   useEffect(() => {
     async function fetchInsights() {
-      // 1. Fetch total 24h unique view count
+      // 1. Fetch creator-specific metrics RPC
       try {
-        const { data: vCount } = await supabase.rpc('get_post_view_count', { p_post_id: post.id })
-        if (typeof vCount === 'number') {
-          setViewCount(vCount)
+        const { data: creatorMetrics } = await supabase.rpc('get_post_creator_metrics', { p_post_id: post.id })
+        if (creatorMetrics) {
+          if (typeof creatorMetrics.impressions === 'number') setImpressions(creatorMetrics.impressions)
+          if (typeof creatorMetrics.uniqueListeners === 'number') {
+            setUniqueListeners(creatorMetrics.uniqueListeners)
+            setViewCount(creatorMetrics.uniqueListeners)
+          }
+          if (typeof creatorMetrics.bookmarks === 'number') setBookmarkCount(creatorMetrics.bookmarks)
+          if (typeof creatorMetrics.bookmarkRate === 'number') setBookmarkRate(creatorMetrics.bookmarkRate)
+        } else {
+          // Fallback to get_post_view_count and saved_posts
+          const [{ data: vCount }, { count: bCount }] = await Promise.all([
+            supabase.rpc('get_post_view_count', { p_post_id: post.id }),
+            supabase.from('saved_posts').select('*', { count: 'exact', head: true }).eq('post_id', post.id),
+          ])
+          if (typeof vCount === 'number') {
+            setViewCount(vCount)
+            setUniqueListeners(vCount)
+            setImpressions(vCount)
+          }
+          if (typeof bCount === 'number') {
+            setBookmarkCount(bCount)
+            if (typeof vCount === 'number' && vCount > 0) {
+              setBookmarkRate(Math.round((bCount / vCount) * 1000) / 10)
+            }
+          }
         }
       } catch {
-        // ignore
+        // Safe fallback
       }
 
       // 2. Author-Only Viewer Profile List (strictly prohibited for non-authors)
@@ -139,15 +165,15 @@ export default function PostInsightsModal({ post, currentUserId, onClose }: Post
           </div>
 
           {/* Breakdown Grid */}
-          <h4 className="text-sm font-bold text-gray-900 pt-1">Interactions Breakdown</h4>
+          <h4 className="text-sm font-bold text-gray-900 pt-1">Interactions & Creator Metrics</h4>
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-white p-3.5 rounded-xl border border-gray-200 flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
                 <Eye size={18} />
               </div>
               <div>
-                <p className="text-lg font-bold text-gray-900 leading-none">{viewCount}</p>
-                <p className="text-xs text-gray-500 mt-0.5">24h Views</p>
+                <p className="text-lg font-bold text-gray-900 leading-none">{impressions}</p>
+                <p className="text-xs text-gray-500 mt-0.5">Impressions</p>
               </div>
             </div>
 
@@ -156,8 +182,18 @@ export default function PostInsightsModal({ post, currentUserId, onClose }: Post
                 <Users size={18} />
               </div>
               <div>
-                <p className="text-lg font-bold text-gray-900 leading-none">{viewers.length > 0 ? viewers.length : viewCount}</p>
-                <p className="text-xs text-gray-500 mt-0.5">Unique Viewers</p>
+                <p className="text-lg font-bold text-gray-900 leading-none">{uniqueListeners}</p>
+                <p className="text-xs text-gray-500 mt-0.5">Unique Listeners</p>
+              </div>
+            </div>
+
+            <div className="bg-white p-3.5 rounded-xl border border-gray-200 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
+                <Bookmark size={18} />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-gray-900 leading-none">{bookmarkRate}%</p>
+                <p className="text-xs text-gray-500 mt-0.5">Bookmark Rate ({bookmarkCount})</p>
               </div>
             </div>
 
@@ -172,7 +208,7 @@ export default function PostInsightsModal({ post, currentUserId, onClose }: Post
             </div>
 
             <div className="bg-white p-3.5 rounded-xl border border-gray-200 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
                 <MessageCircle size={18} />
               </div>
               <div>
@@ -192,17 +228,7 @@ export default function PostInsightsModal({ post, currentUserId, onClose }: Post
             </div>
 
             <div className="bg-white p-3.5 rounded-xl border border-gray-200 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
-                <Bookmark size={18} />
-              </div>
-              <div>
-                <p className="text-lg font-bold text-gray-900 leading-none">{bookmarkCount}</p>
-                <p className="text-xs text-gray-500 mt-0.5">Bookmarks</p>
-              </div>
-            </div>
-
-            <div className="bg-white p-3.5 rounded-xl border border-gray-200 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 rounded-full bg-teal-50 text-teal-600 flex items-center justify-center flex-shrink-0">
                 <Share2 size={18} />
               </div>
               <div>

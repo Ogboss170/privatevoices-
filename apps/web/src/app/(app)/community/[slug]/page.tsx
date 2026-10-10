@@ -29,6 +29,10 @@ import {
   Trash2,
   UserPlus,
   AlertTriangle,
+  TrendingUp,
+  BarChart3,
+  Activity,
+  Zap,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import PostCard from '@/components/feed/PostCard'
@@ -50,6 +54,7 @@ export default function CommunityDetailPage(): React.JSX.Element {
   const [membershipStatus, setMembershipStatus] = useState<'none' | 'pending' | 'member'>('none')
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [rules, setRules] = useState<any[]>([])
+  const [growthMetrics, setGrowthMetrics] = useState<any | null>(null)
 
   // Search & Settings parity states
   const [searchQuery, setSearchQuery] = useState('')
@@ -193,6 +198,28 @@ export default function CommunityDetailPage(): React.JSX.Element {
         updatedAt: p.updated_at,
       }))
       setPosts(formatted)
+    }
+
+    // 5. Fetch community growth & engagement metrics (for owners & mods)
+    try {
+      const { data: gMetrics } = await supabase.rpc('get_community_growth_metrics', { p_community_id: comm.id })
+      if (gMetrics) {
+        setGrowthMetrics(gMetrics)
+      } else {
+        // Fallback calculation
+        setGrowthMetrics({
+          totalMembers: (mems || []).length,
+          newMembers7d: (mems || []).filter((m: any) => new Date(m.created_at) >= new Date(Date.now() - 7 * 86400000)).length,
+          newMembers30d: (mems || []).filter((m: any) => new Date(m.created_at) >= new Date(Date.now() - 30 * 86400000)).length,
+          totalPosts: (rawPosts || []).length,
+          posts7d: (rawPosts || []).filter((p: any) => new Date(p.created_at) >= new Date(Date.now() - 7 * 86400000)).length,
+          activeContributors30d: new Set((rawPosts || []).map((p: any) => p.author_id)).size,
+          growthRate7d: 0,
+          totalInteractions: 0,
+        })
+      }
+    } catch {
+      // Safe fallback
     }
 
     setLoading(false)
@@ -581,7 +608,67 @@ export default function CommunityDetailPage(): React.JSX.Element {
 
       {activeTab === 'manage' && isOwnerOrMod && (
         <div className="space-y-6">
-          {/* 1. Community Settings & Customization Card */}
+          {/* 1. Community Growth & Engagement Metrics Overview */}
+          <div className="card p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <TrendingUp size={18} className="text-brand-600" />
+                <h3 className="font-bold text-gray-900 text-base">Community Growth & Engagement</h3>
+              </div>
+              <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                7-Day Growth: {growthMetrics?.growthRate7d ? `+${growthMetrics.growthRate7d}%` : '+0%'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100 space-y-1">
+                <div className="flex items-center justify-between text-gray-500">
+                  <span className="text-xs font-medium">Total Members</span>
+                  <Users size={15} className="text-brand-600" />
+                </div>
+                <p className="text-xl font-bold text-gray-900">{growthMetrics?.totalMembers ?? members.length}</p>
+                <p className="text-[11px] text-emerald-600 font-semibold">
+                  +{growthMetrics?.newMembers7d ?? 0} past 7d
+                </p>
+              </div>
+
+              <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100 space-y-1">
+                <div className="flex items-center justify-between text-gray-500">
+                  <span className="text-xs font-medium">Total Voices</span>
+                  <FileText size={15} className="text-purple-600" />
+                </div>
+                <p className="text-xl font-bold text-gray-900">{growthMetrics?.totalPosts ?? posts.length}</p>
+                <p className="text-[11px] text-purple-600 font-semibold">
+                  +{growthMetrics?.posts7d ?? 0} new this week
+                </p>
+              </div>
+
+              <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100 space-y-1">
+                <div className="flex items-center justify-between text-gray-500">
+                  <span className="text-xs font-medium">30d Contributors</span>
+                  <Activity size={15} className="text-blue-600" />
+                </div>
+                <p className="text-xl font-bold text-gray-900">{growthMetrics?.activeContributors30d ?? 0}</p>
+                <p className="text-[11px] text-gray-400">Unique active authors</p>
+              </div>
+
+              <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100 space-y-1">
+                <div className="flex items-center justify-between text-gray-500">
+                  <span className="text-xs font-medium">Total Interactions</span>
+                  <Zap size={15} className="text-amber-600" />
+                </div>
+                <p className="text-xl font-bold text-gray-900">{growthMetrics?.totalInteractions ?? 0}</p>
+                <p className="text-[11px] text-amber-700 font-medium">Likes & comments</p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-brand-50/60 border border-brand-100 rounded-xl text-xs text-brand-900 flex items-center justify-between">
+              <span className="font-medium">Member Acquisition: <strong>{growthMetrics?.newMembers30d ?? 0}</strong> new members joined over the last 30 days.</span>
+              <span className="text-[11px] font-bold text-brand-700">Creator Analytics Active</span>
+            </div>
+          </div>
+
+          {/* 2. Community Settings & Customization Card */}
           <div className="card p-6 space-y-4">
             <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
               <Settings size={18} className="text-brand-600" />

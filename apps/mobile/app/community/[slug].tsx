@@ -44,6 +44,9 @@ import {
   UserPlus,
   AlertTriangle,
   Trash2,
+  TrendingUp,
+  Activity,
+  Zap,
 } from 'lucide-react-native'
 import { Image as ExpoImage } from 'expo-image'
 import * as ImagePicker from 'expo-image-picker'
@@ -81,6 +84,7 @@ export default function CommunityDetailScreen() {
   const [currentUserId, setCurrentUserId]   = useState<string | null>(null)
   const [isPinned, setIsPinned]             = useState(false)
   const [notifEnabled, setNotifEnabled]     = useState(true)
+  const [growthMetrics, setGrowthMetrics]   = useState<any | null>(null)
 
   // Search
   const [searchQuery, setSearchQuery]       = useState('')
@@ -261,6 +265,27 @@ export default function CommunityDetailScreen() {
       setPosts(formatted)
     } else {
       setPosts([])
+    }
+
+    // Growth & Engagement Metrics for creators
+    try {
+      const { data: gMetrics } = await supabase.rpc('get_community_growth_metrics', { p_community_id: comm.id })
+      if (gMetrics) {
+        setGrowthMetrics(gMetrics)
+      } else {
+        setGrowthMetrics({
+          totalMembers: (mems || []).length,
+          newMembers7d: (mems || []).filter((m: any) => new Date(m.created_at) >= new Date(Date.now() - 7 * 86400000)).length,
+          newMembers30d: (mems || []).filter((m: any) => new Date(m.created_at) >= new Date(Date.now() - 30 * 86400000)).length,
+          totalPosts: (rawPosts || []).length,
+          posts7d: (rawPosts || []).filter((p: any) => new Date(p.created_at) >= new Date(Date.now() - 7 * 86400000)).length,
+          activeContributors30d: new Set((rawPosts || []).map((p: any) => p.author_id)).size,
+          growthRate7d: 0,
+          totalInteractions: 0,
+        })
+      }
+    } catch {
+      // Safe fallback
     }
 
     setLoading(false)
@@ -738,6 +763,65 @@ export default function CommunityDetailScreen() {
         {/* ── Tab: Manage (owner/mod) ──────────────────────────────────────── */}
         {activeTab === 'manage' && (userRole === 'owner' || userRole === 'moderator') && (
           <View style={{ gap: 14 }}>
+            {/* Community Growth & Engagement Metrics Overview */}
+            <View style={styles.card}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <TrendingUp size={18} color={colors.brand} />
+                  <Text style={styles.cardTitle}>Community Growth</Text>
+                </View>
+                <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, borderWidth: 1, borderColor: '#a7f3d0' }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#047857' }}>
+                    7d Growth: {growthMetrics?.growthRate7d ? `+${growthMetrics.growthRate7d}%` : '+0%'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
+                <View style={[styles.statBox, { flex: 1, minWidth: '45%' }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={styles.statLabel}>Total Members</Text>
+                    <Users size={14} color={colors.brand} />
+                  </View>
+                  <Text style={styles.statValue}>{growthMetrics?.totalMembers ?? members.length}</Text>
+                  <Text style={[styles.statTrend, { color: '#059669' }]}>+{growthMetrics?.newMembers7d ?? 0} past 7d</Text>
+                </View>
+
+                <View style={[styles.statBox, { flex: 1, minWidth: '45%' }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={styles.statLabel}>Total Voices</Text>
+                    <FileText size={14} color="#7c3aed" />
+                  </View>
+                  <Text style={styles.statValue}>{growthMetrics?.totalPosts ?? posts.length}</Text>
+                  <Text style={[styles.statTrend, { color: '#7c3aed' }]}>+{growthMetrics?.posts7d ?? 0} this week</Text>
+                </View>
+
+                <View style={[styles.statBox, { flex: 1, minWidth: '45%' }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={styles.statLabel}>30d Contributors</Text>
+                    <Activity size={14} color="#0284c7" />
+                  </View>
+                  <Text style={styles.statValue}>{growthMetrics?.activeContributors30d ?? 0}</Text>
+                  <Text style={[styles.statTrend, { color: '#64748b' }]}>Active creators</Text>
+                </View>
+
+                <View style={[styles.statBox, { flex: 1, minWidth: '45%' }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={styles.statLabel}>Interactions</Text>
+                    <Zap size={14} color="#d97706" />
+                  </View>
+                  <Text style={styles.statValue}>{growthMetrics?.totalInteractions ?? 0}</Text>
+                  <Text style={[styles.statTrend, { color: '#d97706' }]}>Likes & comments</Text>
+                </View>
+              </View>
+
+              <View style={{ backgroundColor: '#eff6ff', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: '#bfdbfe' }}>
+                <Text style={{ fontSize: 11, color: '#1e40af', lineHeight: 16 }}>
+                  💡 <Text style={{ fontWeight: '700' }}>Acquisition:</Text> {growthMetrics?.newMembers30d ?? 0} new members joined this group in the last 30 days.
+                </Text>
+              </View>
+            </View>
+
             {/* Settings card */}
             <View style={styles.card}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
@@ -1409,6 +1493,30 @@ const styles = StyleSheet.create({
   privacyBtnTextActive: { color: colors.brand },
   modBtn:           { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
   modBtnText:       { fontSize: 11, fontWeight: '700' },
+
+  // ── Growth Analytics Stats ──────────────────────────────────────────────────
+  statBox: {
+    backgroundColor: colors.gray50,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    gap: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.gray600,
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: colors.gray900,
+  },
+  statTrend: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
 
   // ── Settings sheet ────────────────────────────────────────────────────────────
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },

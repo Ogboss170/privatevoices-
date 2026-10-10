@@ -33,29 +33,55 @@ export function PostInsightsModal({ visible, post, currentUserId, onClose }: Pos
   }
 
   const [viewCount, setViewCount] = useState<number>(post.viewCount || 0)
+  const [uniqueListeners, setUniqueListeners] = useState<number>(post.viewCount || 0)
+  const [impressions, setImpressions] = useState<number>(post.viewCount || 0)
+  const [bookmarkCount, setBookmarkCount] = useState<number>((post as any).bookmarkCount || (post as any).saveCount || 0)
+  const [bookmarkRate, setBookmarkRate] = useState<number>(0)
   const [viewers, setViewers] = useState<any[]>([])
   const [loadingViewers, setLoadingViewers] = useState<boolean>(true)
 
   const likeCount = post.likeCount || 0
   const commentCount = post.commentCount || 0
   const repostCount = post.repostCount || 0
-  const bookmarkCount = (post as any).bookmarkCount || (post as any).saveCount || 0
   const shareCount = (post as any).shareCount || 0
   const totalEngagement = likeCount + commentCount + repostCount + bookmarkCount
 
   // Calculate Engagement Rate
-  const engagementRate = viewCount > 0 ? Math.min(100, Math.round((totalEngagement / viewCount) * 100)) : 0
+  const engagementRate = uniqueListeners > 0 ? Math.min(100, Math.round((totalEngagement / uniqueListeners) * 100)) : 0
 
   useEffect(() => {
     async function fetchInsights() {
-      // 1. Fetch total 24h unique view count
+      // 1. Fetch creator-specific metrics RPC
       try {
-        const { data: vCount } = await supabase.rpc('get_post_view_count', { p_post_id: post.id })
-        if (typeof vCount === 'number') {
-          setViewCount(vCount)
+        const { data: creatorMetrics } = await supabase.rpc('get_post_creator_metrics', { p_post_id: post.id })
+        if (creatorMetrics) {
+          if (typeof creatorMetrics.impressions === 'number') setImpressions(creatorMetrics.impressions)
+          if (typeof creatorMetrics.uniqueListeners === 'number') {
+            setUniqueListeners(creatorMetrics.uniqueListeners)
+            setViewCount(creatorMetrics.uniqueListeners)
+          }
+          if (typeof creatorMetrics.bookmarks === 'number') setBookmarkCount(creatorMetrics.bookmarks)
+          if (typeof creatorMetrics.bookmarkRate === 'number') setBookmarkRate(creatorMetrics.bookmarkRate)
+        } else {
+          // Fallback to get_post_view_count and saved_posts
+          const [{ data: vCount }, { count: bCount }] = await Promise.all([
+            supabase.rpc('get_post_view_count', { p_post_id: post.id }),
+            supabase.from('saved_posts').select('*', { count: 'exact', head: true }).eq('post_id', post.id),
+          ])
+          if (typeof vCount === 'number') {
+            setViewCount(vCount)
+            setUniqueListeners(vCount)
+            setImpressions(vCount)
+          }
+          if (typeof bCount === 'number') {
+            setBookmarkCount(bCount)
+            if (typeof vCount === 'number' && vCount > 0) {
+              setBookmarkRate(Math.round((bCount / vCount) * 1000) / 10)
+            }
+          }
         }
       } catch {
-        // ignore
+        // Safe fallback
       }
 
       // 2. Author-Only Viewer Profile List
@@ -148,22 +174,30 @@ export function PostInsightsModal({ visible, post, currentUserId, onClose }: Pos
             </View>
 
             {/* Metrics Breakdown Grid */}
-            <Text style={styles.sectionHeader}>Interactions Breakdown</Text>
+            <Text style={styles.sectionHeader}>Interactions & Creator Metrics</Text>
             <View style={styles.grid}>
               <View style={styles.metricBox}>
                 <View style={[styles.iconCircle, { backgroundColor: 'rgba(59, 130, 246, 0.12)' }]}>
                   <Eye size={20} color="#3b82f6" />
                 </View>
-                <Text style={styles.metricValue}>{viewCount}</Text>
-                <Text style={styles.metricLabel}>24h Views</Text>
+                <Text style={styles.metricValue}>{impressions}</Text>
+                <Text style={styles.metricLabel}>Impressions</Text>
               </View>
 
               <View style={styles.metricBox}>
                 <View style={[styles.iconCircle, { backgroundColor: 'rgba(139, 92, 246, 0.12)' }]}>
                   <Users size={20} color="#8b5cf6" />
                 </View>
-                <Text style={styles.metricValue}>{viewers.length > 0 ? viewers.length : viewCount}</Text>
-                <Text style={styles.metricLabel}>Unique Viewers</Text>
+                <Text style={styles.metricValue}>{uniqueListeners}</Text>
+                <Text style={styles.metricLabel}>Unique Listeners</Text>
+              </View>
+
+              <View style={styles.metricBox}>
+                <View style={[styles.iconCircle, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
+                  <Bookmark size={20} color="#f59e0b" />
+                </View>
+                <Text style={styles.metricValue}>{bookmarkRate}%</Text>
+                <Text style={styles.metricLabel}>Bookmark Rate ({bookmarkCount})</Text>
               </View>
 
               <View style={styles.metricBox}>
@@ -175,8 +209,8 @@ export function PostInsightsModal({ visible, post, currentUserId, onClose }: Pos
               </View>
 
               <View style={styles.metricBox}>
-                <View style={[styles.iconCircle, { backgroundColor: 'rgba(139, 92, 246, 0.12)' }]}>
-                  <MessageCircle size={20} color="#8b5cf6" />
+                <View style={[styles.iconCircle, { backgroundColor: 'rgba(99, 102, 241, 0.12)' }]}>
+                  <MessageCircle size={20} color="#6366f1" />
                 </View>
                 <Text style={styles.metricValue}>{commentCount}</Text>
                 <Text style={styles.metricLabel}>Comments</Text>
@@ -191,16 +225,8 @@ export function PostInsightsModal({ visible, post, currentUserId, onClose }: Pos
               </View>
 
               <View style={styles.metricBox}>
-                <View style={[styles.iconCircle, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
-                  <Bookmark size={20} color="#f59e0b" />
-                </View>
-                <Text style={styles.metricValue}>{bookmarkCount}</Text>
-                <Text style={styles.metricLabel}>Bookmarks</Text>
-              </View>
-
-              <View style={styles.metricBox}>
-                <View style={[styles.iconCircle, { backgroundColor: 'rgba(59, 130, 246, 0.12)' }]}>
-                  <Share2 size={20} color="#3b82f6" />
+                <View style={[styles.iconCircle, { backgroundColor: 'rgba(20, 184, 166, 0.12)' }]}>
+                  <Share2 size={20} color="#14b8a6" />
                 </View>
                 <Text style={styles.metricValue}>{shareCount}</Text>
                 <Text style={styles.metricLabel}>Shares</Text>
