@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
-import { X, Send, Loader2, Image as ImageIcon, ExternalLink, Trash2, Mic, Play, Pause, Square, Volume2, Maximize2, Minimize2, Phone, Video } from 'lucide-react'
+import { X, Send, Loader2, Image as ImageIcon, ExternalLink, Trash2, Mic, Play, Pause, Square, Volume2, Maximize2, Minimize2, Phone, Video, Search, Reply as ReplyIcon, Flame, Smile, Film, Sparkles } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/media/imageCompression'
 import { DMCallModal } from '@/components/messages/DMCallModal'
@@ -35,6 +35,28 @@ export default function ChatDrawer({
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [previewModalUrl, setPreviewModalUrl] = useState<string | null>(null)
   const [isFullScreen, setIsFullScreen] = useState(true)
+
+  // Search in chat
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  // Reply quoting
+  const [replyingTo, setReplyingTo] = useState<{
+    id: string
+    content: string
+    senderName: string
+  } | null>(null)
+
+  // Vanishing mode
+  const [isVanishMode, setIsVanishMode] = useState(false)
+
+  // Video attachment
+  const [videoFile, setVideoFile] = useState<File | null>(null)
+  const [videoPreview, setVideoPreview] = useState<string | null>(null)
+  const videoInputRef = useRef<HTMLInputElement>(null)
+
+  // Hovered / active reaction message ID
+  const [activeReactionMsgId, setActiveReactionMsgId] = useState<string | null>(null)
 
   // Voice & Video Calling State
   const [isCallOpen, setIsCallOpen] = useState(false)
@@ -76,6 +98,20 @@ export default function ChatDrawer({
       setMessages(data ?? [])
       setLoading(false)
       scrollToBottom()
+
+      // Fetch conversation settings (e.g. vanish mode)
+      try {
+        const { data: convData } = await supabase
+          .from('conversations')
+          .select('vanish_mode_enabled')
+          .eq('id', conversationId)
+          .single()
+        if (convData?.vanish_mode_enabled !== undefined) {
+          setIsVanishMode(Boolean(convData.vanish_mode_enabled))
+        }
+      } catch (e) {
+        // Ignore if column not yet added
+      }
 
       // Mark unread messages as read
       await supabase
@@ -134,7 +170,7 @@ export default function ChatDrawer({
         },
         (payload) => {
           setMessages((prev) =>
-            prev.map((m) => (m.id === payload.new.id ? { ...m, is_read: payload.new.is_read } : m))
+            prev.map((m) => (m.id === payload.new.id ? { ...m, ...payload.new } : m))
           )
         }
       )
@@ -607,9 +643,96 @@ export default function ChatDrawer({
     }
   }
 
+  function handleVideoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith('video/')) {
+      alert('Please select a video file.')
+      return
+    }
+
+    if (file.size > 50 * 1024 * 1024) {
+      alert('Video size exceeds 50MB limit.')
+      return
+    }
+
+    setVideoFile(file)
+    setVideoPreview(URL.createObjectURL(file))
+  }
+
+  function handleRemoveVideo() {
+    setVideoFile(null)
+    if (videoPreview) {
+      URL.revokeObjectURL(videoPreview)
+    }
+    setVideoPreview(null)
+    if (videoInputRef.current) {
+      videoInputRef.current.value = ''
+    }
+  }
+
+  async function handleToggleReaction(messageId: string, emoji: string) {
+    // Optimistic UI update for reactions
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== messageId) return m
+        const currentReactions: Record<string, string[]> = m.reactions ? { ...m.reactions } : {}
+        const existingUsers: string[] = currentReactions[emoji] ? [...currentReactions[emoji]] : []
+        const userIndex = existingUsers.indexOf(currentUserId)
+
+        if (userIndex > -1) {
+          existingUsers.splice(userIndex, 1)
+          if (existingUsers.length === 0) {
+            delete currentReactions[emoji]
+          } else {
+            currentReactions[emoji] = existingUsers
+          }
+        } else {
+          existingUsers.push(currentUserId)
+          currentReactions[emoji] = existingUsers
+        }
+
+        return { ...m, reactions: currentReactions }
+      })
+    )
+
+    try {
+      const { data, error } = await supabase.rpc('toggle_dm_reaction', {
+        p_message_id: messageId,
+        p_emoji: emoji,
+      })
+      if (error) {
+        console.warn('toggle_dm_reaction RPC fallback/error:', error)
+      }
+    } catch (err) {
+      console.error('Error toggling reaction:', err)
+    }
+  }
+
+  async function handleToggleVanishMode() {
+    const nextVal = !isVanishMode
+    setIsVanishMode(nextVal)
+
+    try {
+      await supabase.rpc('toggle_conversation_vanish_mode', {
+        p_conversation_id: conversationId,
+        p_enabled: nextVal,
+        p_duration_seconds: 86400,
+      })
+    } catch (e) {
+      console.warn('Vanish mode RPC fallback:', e)
+      // Fallback direct table update
+      await supabase
+        .from('conversations')
+        .update({ vanish_mode_enabled: nextVal })
+        .eq('id', conversationId)
+    }
+  }
+
   async function handleSend(e: React.FormEvent) {
     e.preventDefault()
-    if ((!text.trim() && !imageFile) || sending) return
+    if ((!text.trim() && !imageFile && !videoFile) || sending) return
 
     // Immediately stop typing indicator
     if (typingTimeoutRef.current) {
@@ -621,12 +744,18 @@ export default function ChatDrawer({
       payload: { userId: currentUserId, isTyping: false },
     })
 
-    const messageContent = text.trim() || '📷 Photo'
+    const messageContent =
+      text.trim() || (imageFile ? '📷 Photo' : videoFile ? '🎥 Video' : '')
     const currentImgFile = imageFile
     const currentImgPreview = imagePreview
+    const currentVidFile = videoFile
+    const currentVidPreview = videoPreview
+    const quotedReply = replyingTo
 
     setText('')
     handleRemoveImage()
+    handleRemoveVideo()
+    setReplyingTo(null)
     setSending(true)
 
     // Optimistic message
@@ -637,6 +766,13 @@ export default function ChatDrawer({
       sender_id: currentUserId,
       content: messageContent,
       image_url: currentImgPreview,
+      video_url: currentVidPreview,
+      media_type: currentVidFile ? 'video' : currentImgFile ? 'image' : 'text',
+      is_disappearing: isVanishMode,
+      reply_to_message_id: quotedReply?.id || null,
+      reply_to_content: quotedReply?.content || null,
+      reply_to_sender: quotedReply?.senderName || null,
+      reactions: {},
       is_read: false,
       created_at: new Date().toISOString(),
     }
@@ -645,7 +781,8 @@ export default function ChatDrawer({
     scrollToBottom()
 
     try {
-      let uploadedUrl: string | null = null
+      let uploadedImgUrl: string | null = null
+      let uploadedVidUrl: string | null = null
 
       if (currentImgFile) {
         let fileToUpload = currentImgFile
@@ -674,7 +811,31 @@ export default function ChatDrawer({
             .from(bucket)
             .getPublicUrl(uploadRes.data.path)
 
-          uploadedUrl = publicUrlData.publicUrl
+          uploadedImgUrl = publicUrlData.publicUrl
+        }
+      }
+
+      if (currentVidFile) {
+        const fileExt = currentVidFile.name.split('.').pop() || 'mp4'
+        const fileName = `${currentUserId}/${Date.now()}.${fileExt}`
+
+        let uploadRes = await supabase.storage
+          .from('chat-media')
+          .upload(fileName, currentVidFile, { upsert: true })
+
+        if (uploadRes.error) {
+          uploadRes = await supabase.storage
+            .from('stories')
+            .upload(`chat/${fileName}`, currentVidFile, { upsert: true })
+        }
+
+        if (uploadRes.data) {
+          const bucket = uploadRes.data.path.startsWith('chat/') ? 'stories' : 'chat-media'
+          const { data: publicUrlData } = supabase.storage
+            .from(bucket)
+            .getPublicUrl(uploadRes.data.path)
+
+          uploadedVidUrl = publicUrlData.publicUrl
         }
       }
 
@@ -684,7 +845,13 @@ export default function ChatDrawer({
           conversation_id: conversationId,
           sender_id: currentUserId,
           content: messageContent,
-          image_url: uploadedUrl,
+          image_url: uploadedImgUrl,
+          video_url: uploadedVidUrl,
+          media_type: uploadedVidUrl ? 'video' : uploadedImgUrl ? 'image' : 'text',
+          is_disappearing: isVanishMode,
+          reply_to_message_id: quotedReply?.id || null,
+          reply_to_content: quotedReply?.content || null,
+          reply_to_sender: quotedReply?.senderName || null,
         })
         .select('*')
         .single()
@@ -788,6 +955,34 @@ export default function ChatDrawer({
           </div>
 
           <div className="flex items-center gap-1 sm:gap-2">
+            {/* Search messages toggle */}
+            <button
+              onClick={() => setIsSearching((prev) => !prev)}
+              className={`p-2 rounded-xl transition-colors ${
+                isSearching
+                  ? 'text-brand-600 bg-brand-50'
+                  : 'text-gray-600 hover:text-brand-600 hover:bg-gray-100'
+              }`}
+              aria-label="Search chat"
+              title="Search messages"
+            >
+              <Search size={18} />
+            </button>
+
+            {/* Vanish / Disappearing mode toggle */}
+            <button
+              onClick={handleToggleVanishMode}
+              className={`p-2 rounded-xl transition-all ${
+                isVanishMode
+                  ? 'text-amber-500 bg-amber-50 shadow-xs'
+                  : 'text-gray-500 hover:text-amber-500 hover:bg-gray-100'
+              }`}
+              aria-label="Toggle Vanish Mode"
+              title={isVanishMode ? 'Vanish Mode: ON (Messages auto-fade)' : 'Turn On Vanish Mode'}
+            >
+              <Flame size={18} className={isVanishMode ? 'animate-pulse' : ''} />
+            </button>
+
             {/* Voice Call Button */}
             <button
               onClick={() => handleStartCall('audio')}
@@ -829,6 +1024,45 @@ export default function ChatDrawer({
           </div>
         </div>
 
+        {/* Collapsible In-Chat Search Bar */}
+        {isSearching && (
+          <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200/80 flex items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-150">
+            <Search size={16} className="text-gray-400 flex-shrink-0" />
+            <input
+              type="text"
+              placeholder="Search conversation..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-transparent text-xs text-gray-900 focus:outline-hidden"
+              autoFocus
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="text-gray-400 hover:text-gray-600 p-0.5"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Vanish Mode Banner */}
+        {isVanishMode && (
+          <div className="px-4 py-1.5 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border-b border-amber-200/50 flex items-center justify-between text-xs text-amber-700 animate-in fade-in duration-200">
+            <div className="flex items-center gap-1.5 font-medium text-[11px]">
+              <Flame size={13} className="text-amber-500 animate-pulse" />
+              <span>Vanish Mode is active — messages disappear after viewing</span>
+            </div>
+            <button
+              onClick={handleToggleVanishMode}
+              className="text-[10px] underline font-semibold text-amber-800 hover:text-amber-900"
+            >
+              Turn off
+            </button>
+          </div>
+        )}
+
         {/* Messages List */}
         <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-gray-50/70">
           {loading ? (
@@ -845,19 +1079,85 @@ export default function ChatDrawer({
               </p>
             </div>
           ) : (
-            messages.map((msg) => {
+            messages
+              .filter((m) => {
+                if (!searchQuery.trim()) return true
+                return (m.content || '').toLowerCase().includes(searchQuery.toLowerCase())
+              })
+              .map((msg) => {
               const isMe = msg.sender_id === currentUserId
               const isTemp = msg.id.startsWith?.('temp-')
               const hasImage = !!msg.image_url
+              const hasVideo = !!msg.video_url
               const hasAudio = !!msg.audio_url
               const isPlayingThis = playingAudioId === msg.id
-              const showText = msg.content && msg.content !== '📷 Photo' && msg.content !== '🎙️ Voice note'
+              const showText =
+                msg.content &&
+                msg.content !== '📷 Photo' &&
+                msg.content !== '🎥 Video' &&
+                msg.content !== '🎙️ Voice note'
+              const reactionsObj = msg.reactions || {}
+              const reactionEntries = Object.entries(reactionsObj).filter(
+                ([_, users]: any) => Array.isArray(users) && users.length > 0
+              )
+              const hasQuotedReply = Boolean(msg.reply_to_content)
 
               return (
                 <div
                   key={msg.id}
-                  className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} group`}
+                  className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} group relative`}
+                  onMouseEnter={() => setActiveReactionMsgId(msg.id)}
+                  onMouseLeave={() => {
+                    if (activeReactionMsgId === msg.id) {
+                      setActiveReactionMsgId(null)
+                    }
+                  }}
                 >
+                  {/* Floating Action Dock: Reactions & Reply Quote (Instagram style) */}
+                  {!isTemp && activeReactionMsgId === msg.id && (
+                    <div
+                      className={`absolute -top-7 ${
+                        isMe ? 'right-2' : 'left-2'
+                      } z-20 flex items-center bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-full shadow-lg border border-gray-200/90 py-0.5 px-2 gap-1 animate-in fade-in zoom-in-95 duration-150`}
+                    >
+                      {['❤️', '😂', '🔥', '😮', '😢', '👏'].map((emoji) => {
+                        const users: string[] = reactionsObj[emoji] || []
+                        const hasReacted = users.includes(currentUserId)
+                        return (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => handleToggleReaction(msg.id, emoji)}
+                            className={`text-sm hover:scale-125 transition-transform px-1 py-0.5 rounded-full ${
+                              hasReacted ? 'bg-brand-100 scale-110' : ''
+                            }`}
+                            title={`React ${emoji}`}
+                          >
+                            {emoji}
+                          </button>
+                        )
+                      })}
+
+                      <div className="w-[1px] h-3.5 bg-gray-200 mx-0.5" />
+
+                      {/* Reply Button */}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setReplyingTo({
+                            id: msg.id,
+                            content: msg.content || (hasImage ? 'Photo' : hasVideo ? 'Video' : 'Voice note'),
+                            senderName: isMe ? 'You' : partner.displayName,
+                          })
+                        }
+                        className="p-1 rounded-full text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+                        title="Reply to message"
+                      >
+                        <ReplyIcon size={13} />
+                      </button>
+                    </div>
+                  )}
+
                   <div className={`flex items-end gap-1.5 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
                     {/* Delete button — only visible on own messages on hover */}
                     {isMe && !isTemp && (
@@ -871,12 +1171,32 @@ export default function ChatDrawer({
                     )}
 
                     <div
-                      className={`max-w-[82%] rounded-2xl text-xs leading-relaxed overflow-hidden ${
+                      className={`max-w-[84%] rounded-2xl text-xs leading-relaxed overflow-hidden transition-all ${
                         isMe
-                          ? 'bg-brand-600 text-white rounded-br-xs shadow-xs'
+                          ? msg.is_disappearing
+                            ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white rounded-br-xs shadow-md border border-orange-400/40'
+                            : 'bg-brand-600 text-white rounded-br-xs shadow-xs'
+                          : msg.is_disappearing
+                          ? 'bg-amber-50/90 text-amber-950 border border-amber-300/80 rounded-bl-xs shadow-xs'
                           : 'bg-white text-gray-900 border border-gray-200/80 rounded-bl-xs shadow-xs'
                       } ${isTemp ? 'opacity-70' : ''}`}
                     >
+                      {/* Quoted Message Preview Header */}
+                      {hasQuotedReply && (
+                        <div
+                          className={`mx-2.5 mt-2 px-2.5 py-1.5 rounded-lg border-l-2 text-[11px] line-clamp-2 ${
+                            isMe
+                              ? 'bg-white/15 border-white/80 text-white/90'
+                              : 'bg-gray-100/90 border-brand-500 text-gray-700'
+                          }`}
+                        >
+                          <span className="font-bold block text-[10px] opacity-80">
+                            {msg.reply_to_sender || 'Replied to'}
+                          </span>
+                          <span className="truncate block">{msg.reply_to_content}</span>
+                        </div>
+                      )}
+
                       {/* Media Image */}
                       {hasImage && (
                         <div
@@ -891,6 +1211,18 @@ export default function ChatDrawer({
                           <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 flex items-center justify-center transition-opacity">
                             <ExternalLink size={18} className="text-white drop-shadow-md" />
                           </div>
+                        </div>
+                      )}
+
+                      {/* Video Attachment */}
+                      {hasVideo && (
+                        <div className="relative overflow-hidden max-w-sm bg-black rounded-lg">
+                          <video
+                            src={msg.video_url}
+                            controls
+                            playsInline
+                            className="w-full max-h-72 object-contain"
+                          />
                         </div>
                       )}
 
@@ -989,7 +1321,40 @@ export default function ChatDrawer({
                     </div>
                   </div>
 
+                  {/* Reaction Badges Below Message */}
+                  {reactionEntries.length > 0 && (
+                    <div
+                      className={`flex flex-wrap gap-1 mt-1 ${
+                        isMe ? 'justify-end' : 'justify-start'
+                      } px-1`}
+                    >
+                      {reactionEntries.map(([emoji, users]: any) => {
+                        const hasReacted = users.includes(currentUserId)
+                        return (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => handleToggleReaction(msg.id, emoji)}
+                            className={`flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full border shadow-2xs transition-transform active:scale-95 ${
+                              hasReacted
+                                ? 'bg-brand-50 border-brand-300 text-brand-700 font-semibold'
+                                : 'bg-white border-gray-200 text-gray-700'
+                            }`}
+                          >
+                            <span>{emoji}</span>
+                            <span className="text-[10px]">{users.length}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+
                   <span className="text-[10px] text-gray-400 mt-1 px-1 flex items-center gap-1">
+                    {msg.is_disappearing && (
+                      <span title="Disappearing message">
+                        <Flame size={11} className="text-amber-500" />
+                      </span>
+                    )}
                     {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     {isMe && !isTemp && (
                       <span className="text-brand-500 font-semibold">
@@ -1019,6 +1384,28 @@ export default function ChatDrawer({
           <div ref={messagesEndRef} />
         </div>
 
+        {/* Replying-To Banner */}
+        {replyingTo && (
+          <div className="px-4 py-2 border-t border-gray-100 bg-brand-50/60 flex items-center justify-between animate-in slide-in-from-bottom-2 duration-150">
+            <div className="flex items-center gap-2 overflow-hidden">
+              <ReplyIcon size={14} className="text-brand-600 flex-shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold text-brand-900 truncate">
+                  Replying to {replyingTo.senderName}
+                </p>
+                <p className="text-[11px] text-gray-600 truncate">{replyingTo.content}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setReplyingTo(null)}
+              className="p-1 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-200"
+            >
+              <X size={15} />
+            </button>
+          </div>
+        )}
+
         {/* Selected Image Preview Bar */}
         {imagePreview && (
           <div className="px-4 py-2 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
@@ -1033,6 +1420,27 @@ export default function ChatDrawer({
             <button
               type="button"
               onClick={handleRemoveImage}
+              className="p-1 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
+
+        {/* Selected Video Preview Bar */}
+        {videoPreview && (
+          <div className="px-4 py-2 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-12 h-12 rounded-lg overflow-hidden border border-gray-200 relative bg-black flex items-center justify-center">
+                <Film size={20} className="text-white" />
+              </div>
+              <span className="text-xs text-gray-600 font-medium truncate max-w-[200px]">
+                {videoFile?.name || 'Video selected'}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleRemoveVideo}
               className="p-1 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition-colors"
             >
               <X size={16} />
@@ -1079,6 +1487,13 @@ export default function ChatDrawer({
               accept="image/*"
               className="hidden"
             />
+            <input
+              type="file"
+              ref={videoInputRef}
+              onChange={handleVideoSelect}
+              accept="video/*"
+              className="hidden"
+            />
 
             <button
               type="button"
@@ -1089,9 +1504,18 @@ export default function ChatDrawer({
               <ImageIcon size={19} />
             </button>
 
+            <button
+              type="button"
+              onClick={() => videoInputRef.current?.click()}
+              className="p-2.5 rounded-xl text-gray-500 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+              title="Attach Video"
+            >
+              <Film size={19} />
+            </button>
+
             <input
               type="text"
-              placeholder={imageFile ? "Add a caption..." : "Type a message..."}
+              placeholder={imageFile ? "Add a caption..." : videoFile ? "Add video caption..." : "Type a message..."}
               value={text}
               onChange={(e) => handleTextChange(e.target.value)}
               disabled={sending}
@@ -1099,10 +1523,10 @@ export default function ChatDrawer({
               autoFocus
             />
 
-            {text.trim() || imageFile ? (
+            {text.trim() || imageFile || videoFile ? (
               <button
                 type="submit"
-                disabled={sending || (!text.trim() && !imageFile)}
+                disabled={sending || (!text.trim() && !imageFile && !videoFile)}
                 className="btn-primary text-xs py-2.5 px-4 rounded-xl flex items-center justify-center transition-all disabled:opacity-50"
               >
                 {sending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}

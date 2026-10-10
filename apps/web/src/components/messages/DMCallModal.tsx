@@ -68,6 +68,7 @@ export function DMCallModal({
   const [isMuted, setIsMuted] = useState(false)
   const [isCameraOff, setIsCameraOff] = useState(callType === 'audio')
   const [isSpeakerOn, setIsSpeakerOn] = useState(true)
+  const [isMinimized, setIsMinimized] = useState(false)
   const [duration, setDuration] = useState(0)
   const [localStream, setLocalStream] = useState<MediaStream | null>(null)
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null)
@@ -381,6 +382,53 @@ export function DMCallModal({
     }
   }
 
+  if (isMinimized) {
+    return (
+      <div className="fixed bottom-6 right-6 z-60 w-72 sm:w-80 bg-slate-950/95 border border-white/20 rounded-2xl shadow-2xl p-3 flex flex-col gap-2 backdrop-blur-xl animate-in slide-in-from-bottom duration-200">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white font-bold text-xs">
+              {partner.avatarUrl ? (
+                <Image src={partner.avatarUrl} alt={partner.displayName} width={32} height={32} className="rounded-full" />
+              ) : (
+                partner.displayName.charAt(0)
+              )}
+            </div>
+            <div>
+              <p className="text-xs font-bold text-white leading-tight">{partner.displayName}</p>
+              <p className="text-[10px] text-emerald-400 font-mono">{getStatusLabel()}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setIsMinimized(false)}
+              className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white"
+              title="Expand Call"
+            >
+              <Maximize2 size={14} />
+            </button>
+            <button
+              onClick={onEndCall}
+              className="p-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white"
+              title="End Call"
+            >
+              <PhoneOff size={14} />
+            </button>
+          </div>
+        </div>
+
+        {/* Mini Preview */}
+        {callType === 'video' && callStatus === 'connected' && (
+          <div className="relative h-32 rounded-xl overflow-hidden bg-black">
+            <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
+          </div>
+        )}
+
+        <audio ref={remoteAudioRef} autoPlay playsInline />
+      </div>
+    )
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-xl animate-in fade-in duration-200">
       {/* Background Ambience Gradient */}
@@ -421,8 +469,19 @@ export function DMCallModal({
             </div>
           </div>
 
-          <div className="px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-xs font-mono font-medium text-white shadow-sm">
-            {getStatusLabel()}
+          <div className="flex items-center gap-3">
+            <div className="px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-xs font-mono font-medium text-white shadow-sm">
+              {getStatusLabel()}
+            </div>
+            {callStatus === 'connected' && (
+              <button
+                onClick={() => setIsMinimized(true)}
+                className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer"
+                title="Minimize Call to Chat"
+              >
+                <Minimize2 size={18} />
+              </button>
+            )}
           </div>
         </div>
 
