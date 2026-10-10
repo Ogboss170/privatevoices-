@@ -17,10 +17,15 @@ import {
   UserCheck,
   Award,
   MoreVertical,
-  X
+  X,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { LiveSpace, SpaceParticipant, SpaceRole } from '@private-voices/shared'
+import {
+  VoiceFilterType,
+  VOICE_FILTERS,
+  applyVoiceFilterToStream,
+} from '@/lib/audio/voiceModifiers'
 
 interface LiveSpaceModalProps {
   spaceId: string
@@ -42,11 +47,14 @@ export function LiveSpaceModal({
   const [myParticipant, setMyParticipant] = useState<SpaceParticipant | null>(null)
   const [isMuted, setIsMuted] = useState(true)
   const [handRaised, setHandRaised] = useState(false)
+  const [selectedVoiceFilter, setSelectedVoiceFilter] = useState<VoiceFilterType>('none')
+  const [showVoiceFilterPicker, setShowVoiceFilterPicker] = useState(false)
   const [speakingUsers, setSpeakingUsers] = useState<Set<string>>(new Set())
   const [isMinimized, setIsMinimized] = useState(false)
   const [audioStream, setAudioStream] = useState<MediaStream | null>(null)
   const [loading, setLoading] = useState(true)
 
+  const voiceModifierCleanupRef = useRef<(() => void) | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
   const animationFrameRef = useRef<number | null>(null)
@@ -230,15 +238,22 @@ export function LiveSpaceModal({
     async function startAudioMonitoring() {
       try {
         localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-        setAudioStream(localStream)
+        
+        // Apply Anonymous Voice Modifier filter
+        const processed = applyVoiceFilterToStream(localStream, selectedVoiceFilter)
+        voiceModifierCleanupRef.current = () => {
+          processed.cleanup()
+          localStream?.getTracks().forEach((track) => track.stop())
+        }
+        setAudioStream(processed.stream)
 
-        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)()
+        const audioCtx = processed.audioContext
         audioContextRef.current = audioCtx
         const analyser = audioCtx.createAnalyser()
         analyser.fftSize = 256
         analyserRef.current = analyser
 
-        const source = audioCtx.createMediaStreamSource(localStream)
+        const source = audioCtx.createMediaStreamSource(processed.stream)
         source.connect(analyser)
 
         const dataArray = new Uint8Array(analyser.frequencyBinCount)
@@ -624,17 +639,67 @@ export function LiveSpaceModal({
             )}
 
             {isSpeaker && (
-              <button
-                onClick={handleToggleMute}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md ${
-                  isMuted
-                    ? 'bg-red-600 text-white hover:bg-red-700'
-                    : 'bg-emerald-600 text-white hover:bg-emerald-700 ring-2 ring-emerald-400/50'
-                }`}
-              >
-                {isMuted ? <MicOff size={16} /> : <Mic size={16} />}
-                <span>{isMuted ? 'Muted' : 'Speaking'}</span>
-              </button>
+              <>
+                {/* Voice Modifier Filter Selector */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowVoiceFilterPicker((prev) => !prev)}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                      selectedVoiceFilter !== 'none'
+                        ? 'bg-purple-600 text-white shadow-md shadow-purple-500/25 ring-2 ring-purple-400'
+                        : 'bg-white/10 text-gray-300 hover:text-white hover:bg-white/15'
+                    }`}
+                    title="Change Anonymous Voice Filter"
+                  >
+                    <span>{VOICE_FILTERS.find((f) => f.id === selectedVoiceFilter)?.emoji || '🎙️'}</span>
+                    <span className="hidden sm:inline">
+                      {VOICE_FILTERS.find((f) => f.id === selectedVoiceFilter)?.name || 'Voice Filter'}
+                    </span>
+                  </button>
+
+                  {showVoiceFilterPicker && (
+                    <div className="absolute bottom-12 right-0 z-30 bg-gray-900 border border-white/10 rounded-2xl shadow-2xl p-2 w-56 space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-2 py-1 block">
+                        Voice Modifiers
+                      </span>
+                      {VOICE_FILTERS.map((filter) => (
+                        <button
+                          key={filter.id}
+                          onClick={() => {
+                            setSelectedVoiceFilter(filter.id)
+                            setShowVoiceFilterPicker(false)
+                          }}
+                          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                            selectedVoiceFilter === filter.id
+                              ? 'bg-purple-600/30 text-purple-300 font-bold border border-purple-500/30'
+                              : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <span>{filter.emoji}</span>
+                            <span>{filter.name}</span>
+                          </span>
+                          {selectedVoiceFilter === filter.id && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={handleToggleMute}
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md ${
+                    isMuted
+                      ? 'bg-red-600 text-white hover:bg-red-700'
+                      : 'bg-emerald-600 text-white hover:bg-emerald-700 ring-2 ring-emerald-400/50'
+                  }`}
+                >
+                  {isMuted ? <MicOff size={16} /> : <Mic size={16} />}
+                  <span>{isMuted ? 'Muted' : 'Speaking'}</span>
+                </button>
+              </>
             )}
           </div>
         </div>

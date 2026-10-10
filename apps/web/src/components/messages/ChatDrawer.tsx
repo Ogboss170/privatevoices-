@@ -15,6 +15,11 @@ import {
   encryptTextMessage,
   decryptTextMessage,
 } from '@/lib/crypto/e2eeEngine'
+import {
+  VoiceFilterType,
+  VOICE_FILTERS,
+  applyVoiceFilterToStream,
+} from '@/lib/audio/voiceModifiers'
 import type { DMCallType, DMCallStatus } from '@private-voices/shared'
 
 interface ChatDrawerProps {
@@ -102,6 +107,8 @@ export default function ChatDrawer({
   // Voice Note / Audio Whisper State
   const [isRecording, setIsRecording] = useState(false)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
+  const [selectedVoiceFilter, setSelectedVoiceFilter] = useState<VoiceFilterType>('none')
+  const [showVoiceFilterPicker, setShowVoiceFilterPicker] = useState(false)
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null)
   const [audioSpeed, setAudioSpeed] = useState<1 | 1.5 | 2>(1)
   const [audioCurrentTime, setAudioCurrentTime] = useState<number>(0)
@@ -110,6 +117,7 @@ export default function ChatDrawer({
   const audioChunksRef = useRef<Blob[]>([])
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const currentAudioElementRef = useRef<HTMLAudioElement | null>(null)
+  const voiceModifierCleanupRef = useRef<(() => void) | null>(null)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -562,9 +570,17 @@ export default function ChatDrawer({
   // --- Web Audio Recording & Playback ---
   async function startRecording() {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const rawStream = await navigator.mediaDevices.getUserMedia({ audio: true })
       audioChunksRef.current = []
-      const recorder = new MediaRecorder(stream)
+
+      // Apply selected WebAudio anonymous filter
+      const processed = applyVoiceFilterToStream(rawStream, selectedVoiceFilter)
+      voiceModifierCleanupRef.current = () => {
+        processed.cleanup()
+        rawStream.getTracks().forEach((track) => track.stop())
+      }
+
+      const recorder = new MediaRecorder(processed.stream)
       mediaRecorderRef.current = recorder
 
       recorder.ondataavailable = (event) => {
@@ -594,6 +610,10 @@ export default function ChatDrawer({
       mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop())
       mediaRecorderRef.current.stop()
     }
+    if (voiceModifierCleanupRef.current) {
+      voiceModifierCleanupRef.current()
+      voiceModifierCleanupRef.current = null
+    }
     audioChunksRef.current = []
     setIsRecording(false)
     setRecordingSeconds(0)
@@ -611,6 +631,10 @@ export default function ChatDrawer({
 
     mediaRecorderRef.current.onstop = async () => {
       mediaRecorderRef.current?.stream.getTracks().forEach((track) => track.stop())
+      if (voiceModifierCleanupRef.current) {
+        voiceModifierCleanupRef.current()
+        voiceModifierCleanupRef.current = null
+      }
       const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
       audioChunksRef.current = []
 
@@ -1962,6 +1986,57 @@ export default function ChatDrawer({
             >
               <Film size={19} />
             </button>
+
+            {/* Voice Modifier Filter Selector */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowVoiceFilterPicker((prev) => !prev)}
+                className={`p-2.5 rounded-xl transition-all flex items-center gap-1 ${
+                  selectedVoiceFilter !== 'none'
+                    ? 'bg-purple-100 text-purple-700 ring-2 ring-purple-400/50'
+                    : 'text-gray-500 hover:text-purple-600 hover:bg-purple-50'
+                }`}
+                title={`Anonymous Voice Modifier: ${
+                  VOICE_FILTERS.find((f) => f.id === selectedVoiceFilter)?.name || 'Original'
+                }`}
+              >
+                <span className="text-sm">
+                  {VOICE_FILTERS.find((f) => f.id === selectedVoiceFilter)?.emoji || '🎙️'}
+                </span>
+              </button>
+
+              {showVoiceFilterPicker && (
+                <div className="absolute bottom-12 left-0 z-30 bg-white rounded-2xl shadow-xl border border-gray-100 p-2 w-52 space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-2 py-1 block">
+                    Voice Modifiers
+                  </span>
+                  {VOICE_FILTERS.map((filter) => (
+                    <button
+                      key={filter.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedVoiceFilter(filter.id)
+                        setShowVoiceFilterPicker(false)
+                      }}
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                        selectedVoiceFilter === filter.id
+                          ? 'bg-purple-50 text-purple-700 font-bold'
+                          : 'text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <span>{filter.emoji}</span>
+                        <span>{filter.name}</span>
+                      </span>
+                      {selectedVoiceFilter === filter.id && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-purple-600" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <input
               type="text"
