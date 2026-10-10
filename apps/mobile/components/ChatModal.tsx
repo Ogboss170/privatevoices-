@@ -686,7 +686,13 @@ export function ChatModal({
   }
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="fullScreen"
+      statusBarTranslucent={true}
+      onRequestClose={onClose}
+    >
       <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.background }]} edges={['top', 'bottom']}>
         <KeyboardAvoidingView
           style={[styles.keyboardContainer, { backgroundColor: themeColors.background }]}

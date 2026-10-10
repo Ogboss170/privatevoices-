@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
-import { X, Send, Loader2, Image as ImageIcon, ExternalLink, Trash2, Mic, Play, Pause, Square, Volume2 } from 'lucide-react'
+import { X, Send, Loader2, Image as ImageIcon, ExternalLink, Trash2, Mic, Play, Pause, Square, Volume2, Maximize2, Minimize2 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/media/imageCompression'
 
@@ -32,6 +32,7 @@ export default function ChatDrawer({
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [previewModalUrl, setPreviewModalUrl] = useState<string | null>(null)
+  const [isFullScreen, setIsFullScreen] = useState(true)
 
   // Presence & Typing State
   const [isPartnerTyping, setIsPartnerTyping] = useState(false)
@@ -578,14 +579,22 @@ export default function ChatDrawer({
   return (
     <>
       {/* Backdrop for closing */}
-      <div
-        className="fixed inset-0 z-40 bg-black/30 backdrop-blur-xs md:bg-transparent"
-        onClick={onClose}
-      />
+      {!isFullScreen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs md:bg-black/20"
+          onClick={onClose}
+        />
+      )}
 
-      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white shadow-2xl border-l border-gray-200 flex flex-col animate-in slide-in-from-right duration-200">
+      <div
+        className={`fixed z-50 bg-white shadow-2xl flex flex-col transition-all duration-200 ${
+          isFullScreen
+            ? 'inset-0 w-full h-full'
+            : 'inset-y-0 right-0 w-full max-w-lg border-l border-gray-200'
+        }`}
+      >
         {/* Header */}
-        <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-white/90 backdrop-blur-sm">
+        <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-white/95 backdrop-blur-sm sticky top-0 z-10">
           <div className="flex items-center gap-3">
             <div className="relative">
               <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center font-bold text-brand-600 overflow-hidden border border-gray-100">
@@ -625,13 +634,24 @@ export default function ChatDrawer({
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-            aria-label="Close chat"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setIsFullScreen((prev) => !prev)}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              aria-label={isFullScreen ? 'Exit full screen' : 'Full screen'}
+              title={isFullScreen ? 'Standard drawer' : 'Full screen'}
+            >
+              {isFullScreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              aria-label="Close chat"
+              title="Close chat"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Messages List */}
