@@ -218,6 +218,9 @@ export default function ChatDrawer({
     }
   }, [supabase, conversationId, currentUserId, partner.id])
 
+  // Call start timestamp ref for duration logging
+  const callStartTimeRef = useRef<number | null>(null)
+
   // --- Voice & Video Calling Handlers ---
   function handleStartCall(type: DMCallType) {
     const newCallId = 'call-' + Date.now()
@@ -226,6 +229,7 @@ export default function ChatDrawer({
     setCallStatus('outgoing_ringing')
     setIsIncomingCall(false)
     setIsCallOpen(true)
+    callStartTimeRef.current = Date.now()
 
     // Send broadcast signal
     channelRef.current?.send({
@@ -249,6 +253,7 @@ export default function ChatDrawer({
 
   function handleAcceptCall() {
     setCallStatus('connected')
+    callStartTimeRef.current = Date.now()
     channelRef.current?.send({
       type: 'broadcast',
       event: 'call_signal',
@@ -264,8 +269,33 @@ export default function ChatDrawer({
     })
   }
 
+  async function logCallRecord(finalStatus: 'connected' | 'missed' | 'declined' | 'ended' | 'cancelled') {
+    try {
+      const now = Date.now()
+      const durationSeconds = callStartTimeRef.current
+        ? Math.max(0, Math.round((now - callStartTimeRef.current) / 1000))
+        : 0
+
+      await supabase.from('dm_call_logs').insert({
+        conversation_id: conversationId,
+        caller_id: isIncomingCall ? partner.id : currentUserId,
+        receiver_id: isIncomingCall ? currentUserId : partner.id,
+        call_type: callType,
+        status: finalStatus,
+        duration_seconds: durationSeconds,
+        started_at: callStartTimeRef.current
+          ? new Date(callStartTimeRef.current).toISOString()
+          : new Date().toISOString(),
+        ended_at: new Date(now).toISOString(),
+      })
+    } catch (e) {
+      console.warn('Could not record dm_call_log:', e)
+    }
+  }
+
   function handleDeclineCall() {
     setCallStatus('declined')
+    logCallRecord('declined')
     channelRef.current?.send({
       type: 'broadcast',
       event: 'call_signal',
@@ -286,7 +316,9 @@ export default function ChatDrawer({
   }
 
   function handleEndCall() {
+    const finalStatus = callStatus === 'connected' ? 'ended' : 'cancelled'
     setCallStatus('ended')
+    logCallRecord(finalStatus)
     channelRef.current?.send({
       type: 'broadcast',
       event: 'call_signal',
@@ -1116,6 +1148,10 @@ export default function ChatDrawer({
         callStatus={callStatus}
         partner={partner}
         isIncoming={isIncomingCall}
+        callId={activeCallId}
+        conversationId={conversationId}
+        channel={channelRef.current}
+        currentUserId={currentUserId}
         onAccept={handleAcceptCall}
         onDecline={handleDeclineCall}
         onEndCall={handleEndCall}

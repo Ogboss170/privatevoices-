@@ -26,13 +26,25 @@ interface DMCallModalProps {
   callStatus: DMCallStatus
   partner: DMCallParticipant
   isIncoming: boolean
+  callId?: string | null
+  conversationId?: string
+  channel?: any
+  currentUserId?: string
   onAccept: () => void
   onDecline: () => void
   onEndCall: () => void
-  onToggleMute: (muted: boolean) => void
-  onToggleCamera: (cameraOff: boolean) => void
-  onToggleSpeaker: (speakerOn: boolean) => void
+  onToggleMute?: (muted: boolean) => void
+  onToggleCamera?: (cameraOff: boolean) => void
+  onToggleSpeaker?: (speakerOn: boolean) => void
   onSwitchCamera?: () => void
+}
+
+const ICE_SERVERS = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+  ],
 }
 
 export function DMCallModal({
@@ -41,6 +53,10 @@ export function DMCallModal({
   callStatus,
   partner,
   isIncoming,
+  callId,
+  conversationId,
+  channel,
+  currentUserId,
   onAccept,
   onDecline,
   onEndCall,
@@ -55,10 +71,14 @@ export function DMCallModal({
   const [duration, setDuration] = useState(0)
   const [localStream, setLocalStream] = useState<MediaStream | null>(null)
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null)
+  const [hasRemoteVideo, setHasRemoteVideo] = useState(false)
 
   const localVideoRef = useRef<HTMLVideoElement>(null)
   const remoteVideoRef = useRef<HTMLVideoElement>(null)
+  const remoteAudioRef = useRef<HTMLAudioElement>(null)
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
+  const localStreamRef = useRef<MediaStream | null>(null)
 
   // Manage duration timer when connected
   useEffect(() => {
@@ -75,70 +95,259 @@ export function DMCallModal({
     }
   }, [callStatus])
 
-  // Setup local WebRTC media stream when modal opens
+  // Setup WebRTC media stream and peer connection
   useEffect(() => {
-    let stream: MediaStream | null = null
-
-    async function initMedia() {
-      if (!isOpen || callStatus === 'ended' || callStatus === 'declined' || callStatus === 'missed') {
-        return
+    if (!isOpen || callStatus === 'ended' || callStatus === 'declined' || callStatus === 'missed') {
+      if (peerConnectionRef.current) {
+        peerConnectionRef.current.close()
+        peerConnectionRef.current = null
       }
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((track) => track.stop())
+        localStreamRef.current = null
+      }
+      setLocalStream(null)
+      setRemoteStream(null)
+      return
+    }
 
+    let isSubscribed = true
+
+    async function initCall() {
       try {
-        const constraints = {
+        const constraints: MediaStreamConstraints = {
           audio: true,
-          video: callType === 'video' ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } : false,
+          video:
+            callType === 'video'
+              ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
+              : false,
         }
-        stream = await navigator.mediaDevices.getUserMedia(constraints)
+
+        const stream = await navigator.mediaDevices.getUserMedia(constraints)
+        if (!isSubscribed) {
+          stream.getTracks().forEach((t) => t.stop())
+          return
+        }
+
+        localStreamRef.current = stream
         setLocalStream(stream)
 
         if (localVideoRef.current && callType === 'video') {
           localVideoRef.current.srcObject = stream
         }
+
+        // Initialize RTCPeerConnection
+        const pc = new RTCPeerConnection(ICE_SERVERS)
+        peerConnectionRef.current = pc
+
+        // Add local tracks to peer connection
+        stream.getTracks().forEach((track) => {
+          pc.addTrack(track, stream)
+        })
+
+        // Listen for remote tracks
+        pc.ontrack = (event) => {
+          const [remoteMediaStream] = event.streams
+          if (remoteMediaStream) {
+            setRemoteStream(remoteMediaStream)
+            if (remoteVideoRef.current) {
+              remoteVideoRef.current.srcObject = remoteMediaStream
+            }
+            if (remoteAudioRef.current) {
+              remoteAudioRef.current.srcObject = remoteMediaStream
+            }
+
+            // Check if there are active video tracks
+            const videoTracks = remoteMediaStream.getVideoTracks()
+            setHasRemoteVideo(videoTracks.length > 0 && videoTracks[0].enabled)
+            remoteMediaStream.onremovetrack = () => {
+              setHasRemoteVideo(remoteMediaStream.getVideoTracks().length > 0)
+            }
+          }
+        }
+
+        // Send ICE candidate to peer
+        pc.onicecandidate = (event) => {
+          if (event.candidate && channel && callId) {
+            channel.send({
+              type: 'broadcast',
+              event: 'call_signal',
+              payload: {
+                callId,
+                conversationId,
+                type: callType,
+                action: 'ice_candidate',
+                candidate: event.candidate,
+                caller: isIncoming ? partner : { id: currentUserId },
+                receiver: isIncoming ? { id: currentUserId } : partner,
+                timestamp: Date.now(),
+              },
+            })
+          }
+        }
+
+        // If caller and outgoing, wait for call_accept to send SDP offer, or create it immediately when callStatus is 'connected'
+        if (!isIncoming && callStatus === 'connected') {
+          createAndSendOffer(pc)
+        }
       } catch (err) {
-        console.warn('getUserMedia error (falling back to audio-only simulation):', err)
+        console.warn('getUserMedia error (device permission or not supported):', err)
       }
     }
 
-    initMedia()
+    async function createAndSendOffer(pc: RTCPeerConnection) {
+      try {
+        const offer = await pc.createOffer()
+        await pc.setLocalDescription(offer)
+        if (channel && callId) {
+          channel.send({
+            type: 'broadcast',
+            event: 'call_signal',
+            payload: {
+              callId,
+              conversationId,
+              type: callType,
+              action: 'sdp_offer',
+              sdp: offer,
+              caller: { id: currentUserId },
+              receiver: partner,
+              timestamp: Date.now(),
+            },
+          })
+        }
+      } catch (e) {
+        console.error('Error creating SDP offer:', e)
+      }
+    }
+
+    initCall()
 
     return () => {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop())
+      isSubscribed = false
+      if (peerConnectionRef.current) {
+        peerConnectionRef.current.close()
+        peerConnectionRef.current = null
       }
-      setLocalStream(null)
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((track) => track.stop())
+        localStreamRef.current = null
+      }
     }
-  }, [isOpen, callType, callStatus])
+  }, [isOpen, callType, callStatus, isIncoming, callId, conversationId])
+
+  // React to incoming call accepted trigger for caller to initiate offer
+  useEffect(() => {
+    if (!isIncoming && callStatus === 'connected' && peerConnectionRef.current) {
+      const pc = peerConnectionRef.current
+      if (pc.signalingState === 'stable') {
+        pc.createOffer()
+          .then((offer) => pc.setLocalDescription(offer).then(() => offer))
+          .then((offer) => {
+            channel?.send({
+              type: 'broadcast',
+              event: 'call_signal',
+              payload: {
+                callId,
+                conversationId,
+                type: callType,
+                action: 'sdp_offer',
+                sdp: offer,
+                caller: { id: currentUserId },
+                receiver: partner,
+                timestamp: Date.now(),
+              },
+            })
+          })
+          .catch((err) => console.error('Failed to create SDP offer upon connect:', err))
+      }
+    }
+  }, [callStatus, isIncoming, callId, conversationId, channel, currentUserId, partner])
+
+  // Handle incoming Realtime signaling for SDP offer, SDP answer, and ICE candidates
+  useEffect(() => {
+    if (!channel || !isOpen) return
+
+    const handleSignal = async ({ payload }: { payload: any }) => {
+      if (!payload || payload.callId !== callId) return
+      const pc = peerConnectionRef.current
+      if (!pc) return
+
+      try {
+        if (payload.action === 'sdp_offer' && payload.sdp && isIncoming) {
+          await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp))
+          const answer = await pc.createAnswer()
+          await pc.setLocalDescription(answer)
+          channel.send({
+            type: 'broadcast',
+            event: 'call_signal',
+            payload: {
+              callId,
+              conversationId,
+              type: callType,
+              action: 'sdp_answer',
+              sdp: answer,
+              caller: partner,
+              receiver: { id: currentUserId },
+              timestamp: Date.now(),
+            },
+          })
+        } else if (payload.action === 'sdp_answer' && payload.sdp && !isIncoming) {
+          if (pc.signalingState !== 'stable') {
+            await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp))
+          }
+        } else if (payload.action === 'ice_candidate' && payload.candidate) {
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(payload.candidate))
+          } catch (iceErr) {
+            console.warn('Could not add ICE candidate:', iceErr)
+          }
+        }
+      } catch (sigErr) {
+        console.error('Signaling processing error:', sigErr)
+      }
+    }
+
+    const sub = channel.on('broadcast', { event: 'call_signal' }, handleSignal)
+    return () => {
+      // channel is handled upstream
+    }
+  }, [channel, isOpen, callId, isIncoming, conversationId, callType, currentUserId, partner])
 
   // Handle local audio track mute
   const handleToggleMute = () => {
     const nextMuted = !isMuted
     setIsMuted(nextMuted)
-    if (localStream) {
-      localStream.getAudioTracks().forEach((track) => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getAudioTracks().forEach((track) => {
         track.enabled = !nextMuted
       })
     }
-    onToggleMute(nextMuted)
+    onToggleMute?.(nextMuted)
   }
 
   // Handle local video track toggle
   const handleToggleCamera = () => {
     const nextCamOff = !isCameraOff
     setIsCameraOff(nextCamOff)
-    if (localStream) {
-      localStream.getVideoTracks().forEach((track) => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getVideoTracks().forEach((track) => {
         track.enabled = !nextCamOff
       })
     }
-    onToggleCamera(nextCamOff)
+    onToggleCamera?.(nextCamOff)
   }
 
   // Handle speaker toggle
   const handleToggleSpeaker = () => {
     const nextSpeaker = !isSpeakerOn
     setIsSpeakerOn(nextSpeaker)
-    onToggleSpeaker(nextSpeaker)
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.muted = !nextSpeaker
+    }
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.muted = !nextSpeaker
+    }
+    onToggleSpeaker?.(nextSpeaker)
   }
 
   if (!isOpen) return null
@@ -228,16 +437,18 @@ export function DMCallModal({
                     ref={remoteVideoRef}
                     autoPlay
                     playsInline
-                    className="w-full h-full object-cover"
+                    className={`w-full h-full object-cover transition-opacity duration-300 ${hasRemoteVideo ? 'opacity-100' : 'opacity-0'}`}
                   />
-                  {/* Fallback avatar overlay if remote camera is off */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/80">
-                    <div className="w-24 h-24 rounded-full bg-purple-600/30 border border-purple-500/40 flex items-center justify-center text-white text-3xl font-bold mb-3 shadow-lg">
-                      {partner.displayName.charAt(0).toUpperCase()}
+                  {/* Fallback avatar overlay if remote camera is off or loading */}
+                  {!hasRemoteVideo && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/80">
+                      <div className="w-24 h-24 rounded-full bg-purple-600/30 border border-purple-500/40 flex items-center justify-center text-white text-3xl font-bold mb-3 shadow-lg">
+                        {partner.displayName.charAt(0).toUpperCase()}
+                      </div>
+                      <span className="text-sm font-semibold text-slate-300">{partner.displayName}</span>
+                      <span className="text-xs text-slate-500 mt-1">Camera paused</span>
                     </div>
-                    <span className="text-sm font-semibold text-slate-300">{partner.displayName}</span>
-                    <span className="text-xs text-slate-500 mt-1">Camera paused</span>
-                  </div>
+                  )}
                 </div>
               ) : (
                 /* Pre-connect Calling / Ringing State */
@@ -441,6 +652,9 @@ export function DMCallModal({
           )}
         </div>
       </div>
+
+      {/* Hidden Remote Audio Element for Audio Track Playback */}
+      <audio ref={remoteAudioRef} autoPlay playsInline />
     </div>
   )
 }

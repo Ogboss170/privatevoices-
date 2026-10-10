@@ -290,6 +290,32 @@ export function ChatModal({
   }, [callStatus])
 
   // Mobile Call Handlers
+  const mobileCallStartTimeRef = useRef<number | null>(null)
+
+  async function logMobileCallRecord(finalStatus: 'connected' | 'missed' | 'declined' | 'ended' | 'cancelled') {
+    try {
+      const now = Date.now()
+      const durationSeconds = mobileCallStartTimeRef.current
+        ? Math.max(0, Math.round((now - mobileCallStartTimeRef.current) / 1000))
+        : 0
+
+      await supabase.from('dm_call_logs').insert({
+        conversation_id: conversationId,
+        caller_id: isIncomingCall ? partnerId : currentUserId,
+        receiver_id: isIncomingCall ? currentUserId : partnerId,
+        call_type: callType,
+        status: finalStatus,
+        duration_seconds: durationSeconds,
+        started_at: mobileCallStartTimeRef.current
+          ? new Date(mobileCallStartTimeRef.current).toISOString()
+          : new Date().toISOString(),
+        ended_at: new Date(now).toISOString(),
+      })
+    } catch (e) {
+      console.warn('Could not record mobile dm_call_log:', e)
+    }
+  }
+
   function handleStartCall(type: DMCallType) {
     const newCallId = `call-${Date.now()}`
     setActiveCallId(newCallId)
@@ -297,6 +323,7 @@ export function ChatModal({
     setCallStatus('outgoing_ringing')
     setIsIncomingCall(false)
     setIsCallOpen(true)
+    mobileCallStartTimeRef.current = Date.now()
 
     channelRef.current?.send({
       type: 'broadcast',
@@ -324,6 +351,7 @@ export function ChatModal({
 
   function handleAcceptCall() {
     setCallStatus('connected')
+    mobileCallStartTimeRef.current = Date.now()
     channelRef.current?.send({
       type: 'broadcast',
       event: 'call_signal',
@@ -345,6 +373,7 @@ export function ChatModal({
 
   function handleDeclineCall() {
     setCallStatus('declined')
+    logMobileCallRecord('declined')
     channelRef.current?.send({
       type: 'broadcast',
       event: 'call_signal',
@@ -369,7 +398,9 @@ export function ChatModal({
   }
 
   function handleEndCall() {
+    const finalStatus = callStatus === 'connected' ? 'ended' : 'cancelled'
     setCallStatus('ended')
+    logMobileCallRecord(finalStatus)
     channelRef.current?.send({
       type: 'broadcast',
       event: 'call_signal',
