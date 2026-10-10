@@ -39,12 +39,25 @@ interface DMCallModalProps {
   onSwitchCamera?: () => void
 }
 
-const ICE_SERVERS = {
+const ICE_SERVERS: RTCConfiguration = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+    // Free public TURN servers for symmetric NAT traversal fallback
+    {
+      urls: [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:443',
+        'turn:openrelay.metered.ca:443?transport=tcp',
+      ],
+      username: 'openrelay',
+      credential: 'openrelay',
+    },
   ],
+  iceCandidatePoolSize: 10,
 }
 
 export function DMCallModal({
@@ -73,6 +86,8 @@ export function DMCallModal({
   const [localStream, setLocalStream] = useState<MediaStream | null>(null)
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null)
   const [hasRemoteVideo, setHasRemoteVideo] = useState(false)
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user')
+  const [connectionState, setConnectionState] = useState<RTCPeerConnectionState>('new')
 
   const localVideoRef = useRef<HTMLVideoElement>(null)
   const remoteVideoRef = useRef<HTMLVideoElement>(null)
@@ -184,6 +199,22 @@ export function DMCallModal({
             remoteMediaStream.onremovetrack = () => {
               setHasRemoteVideo(remoteMediaStream.getVideoTracks().length > 0)
             }
+          }
+        }
+
+        // Monitor RTCPeerConnection connectionState
+        pc.onconnectionstatechange = () => {
+          setConnectionState(pc.connectionState)
+          if (pc.connectionState === 'failed') {
+            console.warn('WebRTC connection failed. Attempting ICE restart...')
+            pc.restartIce()
+          }
+        }
+
+        pc.oniceconnectionstatechange = () => {
+          if (pc.iceConnectionState === 'failed') {
+            console.warn('ICE connection failed. Restarting ICE candidates...')
+            pc.restartIce()
           }
         }
 
@@ -385,6 +416,47 @@ export function DMCallModal({
     onToggleSpeaker?.(nextSpeaker)
   }
 
+  // Handle switching front/back camera (WebRTC replaceTrack)
+  const handleSwitchCamera = async () => {
+    if (callType !== 'video') return
+    const nextMode = facingMode === 'user' ? 'environment' : 'user'
+
+    try {
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: nextMode },
+        audio: false,
+      })
+
+      const newVideoTrack = newStream.getVideoTracks()[0]
+      if (!newVideoTrack) return
+
+      // Replace track on RTCPeerConnection sender for zero-renegotiation seamless switch
+      if (peerConnectionRef.current) {
+        const senders = peerConnectionRef.current.getSenders()
+        const videoSender = senders.find((s) => s.track && s.track.kind === 'video')
+        if (videoSender) {
+          await videoSender.replaceTrack(newVideoTrack)
+        }
+      }
+
+      // Stop old video track in localStream
+      if (localStreamRef.current) {
+        localStreamRef.current.getVideoTracks().forEach((track) => track.stop())
+        localStreamRef.current.removeTrack(localStreamRef.current.getVideoTracks()[0])
+        localStreamRef.current.addTrack(newVideoTrack)
+      }
+
+      setFacingMode(nextMode)
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = localStreamRef.current
+      }
+
+      onSwitchCamera?.()
+    } catch (err) {
+      console.warn('Could not switch camera:', err)
+    }
+  }
+
   if (!isOpen) return null
 
   const formatTimer = (sec: number) => {
@@ -504,6 +576,30 @@ export function DMCallModal({
           </div>
 
           <div className="flex items-center gap-3">
+            {callStatus === 'connected' && (
+              <span
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border backdrop-blur-md transition-colors ${
+                  connectionState === 'connected'
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                    : connectionState === 'connecting'
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/30 animate-pulse'
+                    : 'bg-white/10 text-white/80 border-white/15'
+                }`}
+                title={`WebRTC P2P Media Connection State: ${connectionState} (STUN/TURN active)`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    connectionState === 'connected'
+                      ? 'bg-emerald-400'
+                      : connectionState === 'connecting'
+                      ? 'bg-amber-400'
+                      : 'bg-white/60'
+                  }`}
+                />
+                <span className="capitalize">{connectionState === 'connected' ? 'P2P Live' : connectionState}</span>
+              </span>
+            )}
+
             <div className="px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-xs font-mono font-medium text-white shadow-sm">
               {getStatusLabel()}
             </div>
@@ -722,12 +818,12 @@ export function DMCallModal({
                 {isSpeakerOn ? <Volume2 size={22} /> : <VolumeX size={22} />}
               </button>
 
-              {/* Switch Camera (if applicable) */}
-              {callType === 'video' && onSwitchCamera && (
+              {/* Switch Camera (Front/Back) */}
+              {callType === 'video' && (
                 <button
-                  onClick={onSwitchCamera}
+                  onClick={handleSwitchCamera}
                   className="p-3.5 rounded-full bg-white/10 text-white hover:bg-white/20 transition-all cursor-pointer"
-                  title="Switch Camera"
+                  title="Switch Camera (Front/Back)"
                 >
                   <SwitchCamera size={22} />
                 </button>
