@@ -52,11 +52,12 @@ export async function registerForPushNotificationsAsync(userId: string): Promise
     // Get Expo push token
     const projectId =
       Constants.expoConfig?.extra?.eas?.projectId ||
-      Constants.easConfig?.projectId
+      Constants.easConfig?.projectId ||
+      'ae40d348-f06a-4426-ba93-8520ea36ca0e'
 
-    const pushTokenData = await Notifications.getExpoPushTokenAsync({
-      projectId,
-    })
+    const pushTokenData = await Notifications.getExpoPushTokenAsync(
+      projectId ? { projectId } : undefined
+    )
 
     const token = pushTokenData.data
 

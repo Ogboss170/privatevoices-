@@ -60,6 +60,14 @@ INSERT INTO public.notification_preferences (user_id)
 SELECT id FROM public.profiles
 ON CONFLICT (user_id) DO NOTHING;
 
+-- Ensure users can update their push tokens during upsert
+DROP POLICY IF EXISTS "Users can update own push tokens" ON public.user_push_tokens;
+CREATE POLICY "Users can update own push tokens"
+ON public.user_push_tokens FOR UPDATE
+TO authenticated
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
+
 -- 4. Update send_expo_push_notification to respect user preferences
 CREATE OR REPLACE FUNCTION public.send_expo_push_notification()
 RETURNS TRIGGER AS $fn$
@@ -133,3 +141,80 @@ BEGIN
   RETURN NEW;
 END;
 $fn$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 5. Re-bind the push notification trigger to public.notifications
+DROP TRIGGER IF EXISTS trg_send_expo_push_notification ON public.notifications;
+CREATE TRIGGER trg_send_expo_push_notification
+  AFTER INSERT ON public.notifications
+  FOR EACH ROW
+  EXECUTE FUNCTION public.send_expo_push_notification();
+
+-- 6. Enhance comment notifications to support parent comment replies
+CREATE OR REPLACE FUNCTION public.handle_new_comment_notification()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_post_author_id UUID;
+  v_parent_author_id UUID;
+  v_commenter_name TEXT;
+BEGIN
+  -- Get post author
+  SELECT author_id INTO v_post_author_id
+  FROM public.posts
+  WHERE id = NEW.post_id;
+
+  -- Get parent comment author if this is a nested reply
+  IF NEW.parent_id IS NOT NULL THEN
+    SELECT author_id INTO v_parent_author_id
+    FROM public.comments
+    WHERE id = NEW.parent_id;
+  END IF;
+
+  SELECT COALESCE(display_name, username, 'Someone') INTO v_commenter_name
+  FROM public.profiles
+  WHERE id = NEW.author_id;
+
+  -- If it's a reply to another user's comment, notify the parent comment author
+  IF v_parent_author_id IS NOT NULL AND v_parent_author_id <> NEW.author_id THEN
+    INSERT INTO public.notifications (user_id, actor_id, type, title, body, target_url, is_read)
+    VALUES (
+      v_parent_author_id,
+      NEW.author_id,
+      'comment'::notification_type,
+      'New Reply to Your Comment',
+      v_commenter_name || ' replied to your comment: "' || LEFT(NEW.content, 60) || '"',
+      '/feed',
+      FALSE
+    );
+  END IF;
+
+  -- Also notify post author if they are not the commenter and not the parent comment author (to avoid duplicate notifications)
+  IF v_post_author_id IS NOT NULL 
+     AND v_post_author_id <> NEW.author_id 
+     AND (v_parent_author_id IS NULL OR v_post_author_id <> v_parent_author_id) THEN
+    INSERT INTO public.notifications (user_id, actor_id, type, title, body, target_url, is_read)
+    VALUES (
+      v_post_author_id,
+      NEW.author_id,
+      'comment'::notification_type,
+      'New Comment on Your Post',
+      v_commenter_name || ' commented: "' || LEFT(NEW.content, 60) || '"',
+      '/feed',
+      FALSE
+    );
+  END IF;
+
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_notify_on_comment ON public.comments;
+CREATE TRIGGER trg_notify_on_comment
+  AFTER INSERT ON public.comments
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_new_comment_notification();
+
