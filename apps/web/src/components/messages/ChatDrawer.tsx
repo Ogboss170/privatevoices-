@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
-import { X, Send, Loader2, Image as ImageIcon, ExternalLink, Trash2, Mic, Play, Pause, Square, Volume2, Maximize2, Minimize2, Phone, Video, Search, Reply as ReplyIcon, Flame, Smile, Film, Sparkles, History, PhoneIncoming, PhoneOutgoing, PhoneMissed, Lock, ShieldCheck } from 'lucide-react'
+import { X, Send, Loader2, Image as ImageIcon, ExternalLink, Trash2, Mic, Play, Pause, Square, Volume2, Maximize2, Minimize2, Phone, Video, Search, Reply as ReplyIcon, Flame, Smile, Film, Sparkles, History, PhoneIncoming, PhoneOutgoing, PhoneMissed, Lock, ShieldCheck, Users, UserPlus, Settings, Crown } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/media/imageCompression'
 import { DMCallModal } from '@/components/messages/DMCallModal'
@@ -24,6 +24,8 @@ interface ChatDrawerProps {
     displayName: string
     avatarUrl: string | null
   }
+  isGroup?: boolean
+  groupTitle?: string | null
   currentUserId: string
   onClose: () => void
 }
@@ -31,6 +33,8 @@ interface ChatDrawerProps {
 export default function ChatDrawer({
   conversationId,
   partner,
+  isGroup = false,
+  groupTitle,
   currentUserId,
   onClose,
 }: ChatDrawerProps): React.JSX.Element {
@@ -43,6 +47,15 @@ export default function ChatDrawer({
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [previewModalUrl, setPreviewModalUrl] = useState<string | null>(null)
   const [isFullScreen, setIsFullScreen] = useState(true)
+
+  // Group Details & Members State
+  const [groupMembers, setGroupMembers] = useState<any[]>([])
+  const [showGroupInfo, setShowGroupInfo] = useState(false)
+  const [showAddMember, setShowAddMember] = useState(false)
+  const [userSearchText, setUserSearchText] = useState('')
+  const [userSearchResults, setUserSearchResults] = useState<any[]>([])
+  const [isSearchingUsers, setIsSearchingUsers] = useState(false)
+  const [userRole, setUserRole] = useState<'admin' | 'member'>('member')
 
   // Search in chat
   const [isSearching, setIsSearching] = useState(false)
@@ -157,12 +170,36 @@ export default function ChatDrawer({
     }
   }
 
+  // Fetch Group Members and Current User Role
+  useEffect(() => {
+    async function loadGroupMembers() {
+      if (!isGroup) return
+      try {
+        const { data, error } = await supabase
+          .from('conversation_members')
+          .select('*, profile:profiles(id, username, display_name, avatar_url)')
+          .eq('conversation_id', conversationId)
+
+        if (!error && data) {
+          setGroupMembers(data)
+          const myMembership = data.find((m: any) => m.user_id === currentUserId)
+          if (myMembership) {
+            setUserRole(myMembership.role)
+          }
+        }
+      } catch (err) {
+        console.warn('Error loading group members:', err)
+      }
+    }
+    loadGroupMembers()
+  }, [conversationId, isGroup, currentUserId, supabase])
+
   useEffect(() => {
     async function loadMessages() {
       setLoading(true)
       const { data } = await supabase
         .from('messages')
-        .select('*')
+        .select('*, sender:profiles(id, username, display_name, avatar_url)')
         .eq('conversation_id', conversationId)
         .order('created_at', { ascending: true })
 
@@ -1086,20 +1123,26 @@ export default function ChatDrawer({
         <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-white/95 backdrop-blur-sm sticky top-0 z-10">
           <div className="flex items-center gap-3">
             <div className="relative">
-              <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center font-bold text-brand-600 overflow-hidden border border-gray-100">
-                {partner.avatarUrl ? (
-                  <Image
-                    src={partner.avatarUrl}
-                    alt={partner.displayName}
-                    width={40}
-                    height={40}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  partner.displayName.charAt(0).toUpperCase()
-                )}
-              </div>
-              {isPartnerOnline && (
+              {isGroup ? (
+                <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-600 to-brand-600 flex items-center justify-center font-bold text-white shadow-xs">
+                  <Users size={20} />
+                </div>
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center font-bold text-brand-600 overflow-hidden border border-gray-100">
+                  {partner.avatarUrl ? (
+                    <Image
+                      src={partner.avatarUrl}
+                      alt={partner.displayName}
+                      width={40}
+                      height={40}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    partner.displayName.charAt(0).toUpperCase()
+                  )}
+                </div>
+              )}
+              {!isGroup && isPartnerOnline && (
                 <span
                   className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white"
                   title="Online now"
@@ -1109,8 +1152,10 @@ export default function ChatDrawer({
 
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <h3 className="font-bold text-sm text-gray-900 truncate">{partner.displayName}</h3>
-                {partnerPublicKey && (
+                <h3 className="font-bold text-sm text-gray-900 truncate">
+                  {isGroup ? (groupTitle || 'Group Chat') : partner.displayName}
+                </h3>
+                {partnerPublicKey && !isGroup && (
                   <span
                     className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-medium rounded-full border border-emerald-200"
                     title="End-to-End Encrypted: ECDH P-256 + AES-GCM 256 active"
@@ -1119,9 +1164,20 @@ export default function ChatDrawer({
                     <span>E2EE</span>
                   </span>
                 )}
+                {isGroup && (
+                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-purple-50 text-purple-700 text-[10px] font-medium rounded-full border border-purple-200">
+                    <Users size={10} className="text-purple-600" />
+                    <span>{groupMembers.length || 'Group'} members</span>
+                  </span>
+                )}
               </div>
               <p className="text-xs truncate">
-                {isPartnerTyping ? (
+                {isGroup ? (
+                  <span className="text-gray-500">
+                    {groupMembers.slice(0, 3).map((m: any) => m.profile?.display_name || m.profile?.username).join(', ')}
+                    {groupMembers.length > 3 ? ` +${groupMembers.length - 3} more` : ''}
+                  </span>
+                ) : isPartnerTyping ? (
                   <span className="text-brand-600 font-semibold animate-pulse">typing...</span>
                 ) : isPartnerOnline ? (
                   <span className="text-emerald-600 font-medium">Online</span>
@@ -1133,6 +1189,22 @@ export default function ChatDrawer({
           </div>
 
           <div className="flex items-center gap-1 sm:gap-2">
+            {/* Group Members / Settings Modal Button */}
+            {isGroup && (
+              <button
+                onClick={() => setShowGroupInfo((prev) => !prev)}
+                className={`p-2 rounded-xl transition-colors ${
+                  showGroupInfo
+                    ? 'text-purple-600 bg-purple-50'
+                    : 'text-gray-600 hover:text-purple-600 hover:bg-gray-100'
+                }`}
+                aria-label="Group details & members"
+                title="Group Members & Admin Settings"
+              >
+                <Users size={18} />
+              </button>
+            )}
+
             {/* Search messages toggle */}
             <button
               onClick={() => setIsSearching((prev) => !prev)}
@@ -1446,6 +1518,21 @@ export default function ChatDrawer({
                   )}
 
                   <div className={`flex items-end gap-1.5 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                    {/* In group chats, display sender avatar next to bubble */}
+                    {!isMe && isGroup && (
+                      <div className="w-6 h-6 rounded-full bg-brand-100 flex items-center justify-center font-bold text-[10px] text-brand-600 overflow-hidden flex-shrink-0 mb-1 border border-gray-100">
+                        {msg.sender?.avatar_url ? (
+                          <img
+                            src={msg.sender.avatar_url}
+                            alt={msg.sender.display_name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          (msg.sender?.display_name || 'U').charAt(0).toUpperCase()
+                        )}
+                      </div>
+                    )}
+
                     {/* Delete button — only visible on own messages on hover */}
                     {isMe && !isTemp && (
                       <button
@@ -1468,6 +1555,13 @@ export default function ChatDrawer({
                           : 'bg-white text-gray-900 border border-gray-200/80 rounded-bl-xs shadow-xs'
                       } ${isTemp ? 'opacity-70' : ''}`}
                     >
+                      {/* Sender Name in Group DMs */}
+                      {!isMe && isGroup && (
+                        <div className="px-3 pt-2 text-[10px] font-bold text-purple-600">
+                          {msg.sender?.display_name || `@${msg.sender?.username || 'user'}`}
+                        </div>
+                      )}
+
                       {/* Quoted Message Preview Header */}
                       {hasQuotedReply && (
                         <div
@@ -1854,6 +1948,149 @@ export default function ChatDrawer({
             alt="Full size media"
             className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
           />
+        </div>
+      )}
+
+      {/* Group Members & Admin Controls Modal */}
+      {showGroupInfo && isGroup && (
+        <div className="fixed inset-0 z-60 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center">
+                  <Users size={16} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-gray-900">{groupTitle || 'Group Info'}</h3>
+                  <p className="text-[10px] text-gray-500">{groupMembers.length} participants</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowGroupInfo(false)}
+                className="p-1.5 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Admin Action: Add Member */}
+            {userRole === 'admin' && (
+              <div className="space-y-2">
+                <button
+                  onClick={() => setShowAddMember((prev) => !prev)}
+                  className="w-full py-2 px-3 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <UserPlus size={14} />
+                  <span>{showAddMember ? 'Close Add Member' : 'Add New Member'}</span>
+                </button>
+
+                {showAddMember && (
+                  <div className="p-3 bg-gray-50 rounded-xl space-y-2 border border-gray-100">
+                    <input
+                      type="text"
+                      placeholder="Search username to invite..."
+                      value={userSearchText}
+                      onChange={async (e) => {
+                        const val = e.target.value
+                        setUserSearchText(val)
+                        if (!val.trim()) {
+                          setUserSearchResults([])
+                          return
+                        }
+                        setIsSearchingUsers(true)
+                        const { data } = await supabase
+                          .from('profiles')
+                          .select('id, username, display_name, avatar_url')
+                          .ilike('username', `%${val.trim()}%`)
+                          .limit(5)
+                        setUserSearchResults(data || [])
+                        setIsSearchingUsers(false)
+                      }}
+                      className="input-field text-xs py-1.5 px-2.5 rounded-lg bg-white"
+                    />
+
+                    {userSearchResults.length > 0 && (
+                      <div className="space-y-1 max-h-36 overflow-y-auto">
+                        {userSearchResults.map((usr) => {
+                          const isAlreadyMember = groupMembers.some((m: any) => m.user_id === usr.id)
+                          return (
+                            <div
+                              key={usr.id}
+                              className="flex items-center justify-between p-1.5 bg-white rounded-lg border border-gray-100 text-xs"
+                            >
+                              <span className="font-semibold text-gray-800 text-[11px] truncate max-w-[140px]">
+                                @{usr.username}
+                              </span>
+                              <button
+                                disabled={isAlreadyMember}
+                                onClick={async () => {
+                                  await supabase.from('conversation_members').insert({
+                                    conversation_id: conversationId,
+                                    user_id: usr.id,
+                                    role: 'member',
+                                  })
+                                  setUserSearchText('')
+                                  setUserSearchResults([])
+                                  // Refresh member list
+                                  const { data } = await supabase
+                                    .from('conversation_members')
+                                    .select('*, profile:profiles(id, username, display_name, avatar_url)')
+                                    .eq('conversation_id', conversationId)
+                                  if (data) setGroupMembers(data)
+                                }}
+                                className="px-2 py-1 rounded bg-purple-600 text-white text-[10px] font-bold disabled:opacity-40"
+                              >
+                                {isAlreadyMember ? 'Member' : 'Add'}
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Member List */}
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400">Members</span>
+              {groupMembers.map((m: any) => {
+                const isMe = m.user_id === currentUserId
+                const isAdmin = m.role === 'admin'
+                return (
+                  <div
+                    key={m.id || m.user_id}
+                    className="flex items-center justify-between p-2 rounded-xl bg-gray-50/80 border border-gray-100"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-7 h-7 rounded-full bg-brand-100 text-brand-600 font-bold text-xs flex items-center justify-center overflow-hidden flex-shrink-0">
+                        {m.profile?.avatar_url ? (
+                          <img src={m.profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          (m.profile?.display_name || 'U').charAt(0).toUpperCase()
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-bold text-xs text-gray-800 truncate">
+                          {m.profile?.display_name || 'User'} {isMe && '(You)'}
+                        </p>
+                        <p className="text-[10px] text-gray-400 truncate">@{m.profile?.username || 'user'}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      {isAdmin && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 text-[9px] font-bold">
+                          <Crown size={9} /> Admin
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         </div>
       )}
 

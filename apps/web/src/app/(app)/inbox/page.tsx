@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, Suspense } from 'react'
 import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
-import { Trash2, Share2, Shield, Flag, Check, Copy, MessageCircle, Loader2, UserPlus, Search, X } from 'lucide-react'
+import { Trash2, Share2, Shield, Flag, Check, Copy, MessageCircle, Loader2, UserPlus, Search, X, Users, Plus } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import ChatDrawer from '@/components/messages/ChatDrawer'
 
@@ -35,6 +35,12 @@ function InboxContent(): React.JSX.Element {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [searching, setSearching] = useState(false)
+
+  // New Group Chat Modal state
+  const [showNewGroupModal, setShowNewGroupModal] = useState(false)
+  const [newGroupTitle, setNewGroupTitle] = useState('')
+  const [selectedGroupUsers, setSelectedGroupUsers] = useState<any[]>([])
+  const [creatingGroup, setCreatingGroup] = useState(false)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -107,6 +113,97 @@ function InboxContent(): React.JSX.Element {
     }
   }
 
+  const handleToggleSelectGroupUser = (user: any) => {
+    setSelectedGroupUsers((prev) => {
+      const exists = prev.some((u) => u.id === user.id)
+      if (exists) {
+        return prev.filter((u) => u.id !== user.id)
+      } else {
+        return [...prev, user]
+      }
+    })
+  }
+
+  const handleCreateGroup = async () => {
+    if (!currentUserId || !newGroupTitle.trim() || selectedGroupUsers.length === 0) return
+    setCreatingGroup(true)
+    try {
+      const memberIds = [currentUserId, ...selectedGroupUsers.map((u) => u.id)]
+      
+      // Try RPC first
+      const { data: convId, error: rpcErr } = await supabase.rpc('create_group_conversation', {
+        p_title: newGroupTitle.trim(),
+        p_member_ids: memberIds,
+      })
+
+      let finalConvId = convId
+
+      if (rpcErr || !finalConvId) {
+        // Fallback: direct insert
+        const { data: newConv, error: convErr } = await supabase
+          .from('conversations')
+          .insert({
+            is_group: true,
+            title: newGroupTitle.trim(),
+            created_by: currentUserId,
+            last_message: 'Group created',
+            last_message_at: new Date().toISOString(),
+          })
+          .select()
+          .single()
+
+        if (convErr || !newConv) {
+          throw convErr || new Error('Failed to create group conversation')
+        }
+
+        finalConvId = newConv.id
+
+        // Add creator as admin
+        await supabase.from('conversation_members').insert({
+          conversation_id: finalConvId,
+          user_id: currentUserId,
+          role: 'admin',
+        })
+
+        // Add members
+        const memberRows = selectedGroupUsers.map((u) => ({
+          conversation_id: finalConvId,
+          user_id: u.id,
+          role: 'member',
+        }))
+        await supabase.from('conversation_members').insert(memberRows)
+      }
+
+      // Close modal and reset state
+      setShowNewGroupModal(false)
+      const groupName = newGroupTitle.trim()
+      setNewGroupTitle('')
+      setSelectedGroupUsers([])
+      setSearchQuery('')
+      setSearchResults([])
+
+      // Open new group chat drawer
+      setActiveConversation({
+        id: finalConvId,
+        isGroup: true,
+        title: groupName,
+        partner: {
+          id: 'group',
+          username: 'group',
+          displayName: groupName,
+          avatarUrl: null,
+        },
+      })
+
+      fetchInboxData()
+    } catch (err: any) {
+      console.error('Error creating group chat:', err)
+      alert(err.message || 'Could not create group')
+    } finally {
+      setCreatingGroup(false)
+    }
+  }
+
   const handleStartNewChat = async (targetUser: any) => {
     if (!currentUserId) return
     setShowNewChatModal(false)
@@ -175,7 +272,8 @@ function InboxContent(): React.JSX.Element {
 
         setWhispers(data ?? [])
       } else {
-        const { data } = await supabase
+        // 1. Fetch conversations where user is user_a or user_b (1-on-1)
+        const { data: directData } = await supabase
           .from('conversations')
           .select(`
             *,
@@ -185,7 +283,34 @@ function InboxContent(): React.JSX.Element {
           .or(`user_a_id.eq.${currentUserId},user_b_id.eq.${currentUserId}`)
           .order('last_message_at', { ascending: false })
 
-        const convs = data ?? []
+        // 2. Fetch group conversations user is a member of
+        let groupConvs: any[] = []
+        try {
+          const { data: memberRows } = await supabase
+            .from('conversation_members')
+            .select('conversation_id')
+            .eq('user_id', currentUserId)
+
+          if (memberRows && memberRows.length > 0) {
+            const groupIds = memberRows.map((r: any) => r.conversation_id)
+            const { data: groupData } = await supabase
+              .from('conversations')
+              .select('*')
+              .in('id', groupIds)
+              .eq('is_group', true)
+              .order('last_message_at', { ascending: false })
+
+            groupConvs = groupData || []
+          }
+        } catch (groupErr) {
+          console.warn('Group conversations query notice:', groupErr)
+        }
+
+        // Merge and sort all conversations
+        const directList = (directData ?? []).filter((c: any) => !c.is_group)
+        const convs = [...groupConvs, ...directList].sort(
+          (a, b) => new Date(b.last_message_at || 0).getTime() - new Date(a.last_message_at || 0).getTime()
+        )
         setConversations(convs)
 
         // Count unread messages per conversation
@@ -346,6 +471,14 @@ function InboxContent(): React.JSX.Element {
                     >
                       <Search size={14} className="text-gray-500" />
                       <span className="hidden sm:inline">Search</span>
+                    </button>
+                    <button
+                      onClick={() => setShowNewGroupModal(true)}
+                      className="btn-secondary text-xs py-2 px-3 flex items-center gap-1.5 shadow-xs"
+                      aria-label="Create group chat"
+                    >
+                      <Users size={14} className="text-brand-600" />
+                      <span>New Group</span>
                     </button>
                     <button
                       onClick={() => setShowNewChatModal(true)}
@@ -544,11 +677,14 @@ function InboxContent(): React.JSX.Element {
           </div>
         )
       ) : (
-        /* Direct Messages List */
+        /* Direct & Group Messages List */
         (() => {
           const cleanQuery = inboxSearchQuery.trim().toLowerCase().replace(/^@/, '')
           const filteredConversations = cleanQuery
             ? conversations.filter((conv) => {
+                if (conv.is_group) {
+                  return (conv.title || 'Group Chat').toLowerCase().includes(cleanQuery)
+                }
                 const partner = conv.user_a?.id === currentUserId ? conv.user_b : conv.user_a
                 if (!partner) return false
                 const name = (partner.display_name || '').toLowerCase()
@@ -561,17 +697,26 @@ function InboxContent(): React.JSX.Element {
             return (
               <div className="card p-12 text-center space-y-3">
                 <div className="text-5xl">💬</div>
-                <h3 className="font-bold text-gray-900">No Direct Conversations</h3>
+                <h3 className="font-bold text-gray-900">No Conversations Yet</h3>
                 <p className="text-xs text-gray-500 max-w-xs mx-auto">
-                  Start an identity-verified chat with users directly or search for a user with the New Chat button.
+                  Start an identity-verified chat with users directly or create a group chat.
                 </p>
-                <button
-                  onClick={() => setShowNewChatModal(true)}
-                  className="btn-primary text-xs py-2 px-4 inline-flex items-center gap-1.5 shadow-sm mt-2"
-                >
-                  <UserPlus size={14} />
-                  <span>Start New Chat</span>
-                </button>
+                <div className="pt-2 flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => setShowNewGroupModal(true)}
+                    className="btn-secondary text-xs py-2 px-3.5 inline-flex items-center gap-1.5 shadow-xs"
+                  >
+                    <Users size={14} className="text-brand-600" />
+                    <span>Create Group</span>
+                  </button>
+                  <button
+                    onClick={() => setShowNewChatModal(true)}
+                    className="btn-primary text-xs py-2 px-4 inline-flex items-center gap-1.5 shadow-sm"
+                  >
+                    <UserPlus size={14} />
+                    <span>Start New Chat</span>
+                  </button>
+                </div>
               </div>
             )
           }
@@ -627,25 +772,46 @@ function InboxContent(): React.JSX.Element {
           return (
             <div className="card divide-y divide-gray-100 overflow-hidden shadow-xs">
               {filteredConversations.map((conv) => {
-                const partner = conv.user_a?.id === currentUserId ? conv.user_b : conv.user_a
-                if (!partner) return null
+                const isGroup = !!conv.is_group
+                const partner = !isGroup
+                  ? conv.user_a?.id === currentUserId
+                    ? conv.user_b
+                    : conv.user_a
+                  : null
+
+                if (!isGroup && !partner) return null
 
                 const unread = unreadCounts[conv.id] || 0
-                const isOnline = onlineUsers.has(partner.id)
+                const isOnline = partner ? onlineUsers.has(partner.id) : false
 
                 return (
                   <div
                     key={conv.id}
                     onClick={() => {
-                      setActiveConversation({
-                        id: conv.id,
-                        partner: {
-                          id: partner.id,
-                          username: partner.username,
-                          displayName: partner.display_name,
-                          avatarUrl: partner.avatar_url,
-                        },
-                      })
+                      if (isGroup) {
+                        setActiveConversation({
+                          id: conv.id,
+                          isGroup: true,
+                          title: conv.title || 'Group Chat',
+                          partner: {
+                            id: 'group',
+                            username: 'group',
+                            displayName: conv.title || 'Group Chat',
+                            avatarUrl: conv.avatar_url || null,
+                          },
+                        })
+                      } else {
+                        setActiveConversation({
+                          id: conv.id,
+                          isGroup: false,
+                          partner: {
+                            id: partner.id,
+                            username: partner.username,
+                            displayName: partner.display_name,
+                            avatarUrl: partner.avatar_url,
+                          },
+                        })
+                      }
                       // Clear unread badge locally
                       setUnreadCounts((prev) => ({ ...prev, [conv.id]: 0 }))
                     }}
@@ -653,40 +819,56 @@ function InboxContent(): React.JSX.Element {
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="relative">
-                        <div className="w-12 h-12 rounded-full bg-brand-100 flex items-center justify-center font-bold text-brand-600 flex-shrink-0 overflow-hidden border border-gray-100">
-                          {partner.avatar_url ? (
-                            <Image
-                              src={partner.avatar_url}
-                              alt={partner.display_name || partner.username || 'User'}
-                              width={48}
-                              height={48}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            partner.display_name?.charAt(0)?.toUpperCase() || '?'
-                          )}
-                        </div>
-                        {isOnline && (
-                          <span
-                            className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-white shadow-xs"
-                            title="Active now"
-                          />
+                        {isGroup ? (
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-brand-600 to-indigo-600 flex items-center justify-center text-white font-bold flex-shrink-0 shadow-xs">
+                            <Users size={20} />
+                          </div>
+                        ) : (
+                          <>
+                            <div className="w-12 h-12 rounded-full bg-brand-100 flex items-center justify-center font-bold text-brand-600 flex-shrink-0 overflow-hidden border border-gray-100">
+                              {partner.avatar_url ? (
+                                <Image
+                                  src={partner.avatar_url}
+                                  alt={partner.display_name || partner.username || 'User'}
+                                  width={48}
+                                  height={48}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                partner.display_name?.charAt(0)?.toUpperCase() || '?'
+                              )}
+                            </div>
+                            {isOnline && (
+                              <span
+                                className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-white shadow-xs"
+                                title="Active now"
+                              />
+                            )}
+                          </>
                         )}
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <h4 className="text-sm font-bold text-gray-900 truncate group-hover:text-brand-600 transition-colors">
-                            {partner.display_name}
+                            {isGroup ? conv.title || 'Group Chat' : partner.display_name}
                           </h4>
-                          <span className="text-xs text-gray-400">@{partner.username}</span>
-                          {isOnline && (
-                            <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-1.5 py-0.2 rounded-full">
-                              Online
+                          {isGroup ? (
+                            <span className="text-[10px] font-semibold text-brand-600 bg-brand-50 px-2 py-0.5 rounded-full">
+                              Group
                             </span>
+                          ) : (
+                            <>
+                              <span className="text-xs text-gray-400">@{partner.username}</span>
+                              {isOnline && (
+                                <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-1.5 py-0.2 rounded-full">
+                                  Online
+                                </span>
+                              )}
+                            </>
                           )}
                         </div>
                         <p className="text-xs text-gray-500 truncate max-w-sm mt-0.5">
-                          {conv.last_message || 'Tap to start chatting'}
+                          {conv.last_message || (isGroup ? 'Tap to view group' : 'Tap to start chatting')}
                         </p>
                       </div>
                     </div>
@@ -719,6 +901,8 @@ function InboxContent(): React.JSX.Element {
         <ChatDrawer
           conversationId={activeConversation.id}
           partner={activeConversation.partner}
+          isGroup={activeConversation.isGroup}
+          groupTitle={activeConversation.title}
           currentUserId={currentUserId}
           onClose={() => setActiveConversation(null)}
         />
@@ -799,6 +983,182 @@ function InboxContent(): React.JSX.Element {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Group Modal */}
+      {showNewGroupModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-xl animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
+                <Users size={18} className="text-brand-600" />
+                <span>Create Group Chat</span>
+              </h3>
+              <button
+                onClick={() => {
+                  setShowNewGroupModal(false)
+                  setNewGroupTitle('')
+                  setSelectedGroupUsers([])
+                  setSearchQuery('')
+                  setSearchResults([])
+                }}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Group Name Input */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Group Name
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Campus Study Group, Weekend Trip..."
+                value={newGroupTitle}
+                onChange={(e) => setNewGroupTitle(e.target.value)}
+                className="w-full px-3.5 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition-all text-gray-900 placeholder-gray-400"
+              />
+            </div>
+
+            {/* Selected Members Chips */}
+            {selectedGroupUsers.length > 0 && (
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-500 mb-1.5">
+                  Selected Members ({selectedGroupUsers.length})
+                </label>
+                <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1.5 bg-gray-50 rounded-xl border border-gray-100">
+                  {selectedGroupUsers.map((user) => (
+                    <span
+                      key={user.id}
+                      className="inline-flex items-center gap-1.5 bg-brand-50 border border-brand-200 text-brand-700 text-xs px-2.5 py-1 rounded-full font-medium"
+                    >
+                      <span>{user.display_name || user.username}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleSelectGroupUser(user)}
+                        className="text-brand-500 hover:text-brand-800"
+                      >
+                        <X size={12} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* User Search Input */}
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold text-gray-700">
+                Add Participants
+              </label>
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-3 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search members by username or name..."
+                  value={searchQuery}
+                  onChange={(e) => handleSearchUsers(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Search Results */}
+            <div className="max-h-48 overflow-y-auto space-y-1 divide-y divide-gray-50 border border-gray-100 rounded-xl p-1 bg-white">
+              {searching ? (
+                <div className="py-6 text-center text-gray-400">
+                  <Loader2 size={18} className="animate-spin text-brand-600 mx-auto mb-1" />
+                  <span className="text-xs">Searching users...</span>
+                </div>
+              ) : searchResults.length === 0 ? (
+                <div className="py-6 text-center text-gray-400 text-xs">
+                  {searchQuery.trim()
+                    ? 'No users found matching query.'
+                    : 'Search users to add them to your group.'}
+                </div>
+              ) : (
+                searchResults.map((user) => {
+                  const isSelected = selectedGroupUsers.some((u) => u.id === user.id)
+                  return (
+                    <div
+                      key={user.id}
+                      onClick={() => handleToggleSelectGroupUser(user)}
+                      className={`p-2.5 flex items-center justify-between rounded-lg transition-colors cursor-pointer ${
+                        isSelected ? 'bg-brand-50/70 border border-brand-200' : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center font-bold text-brand-600 overflow-hidden text-xs">
+                          {user.avatar_url ? (
+                            <Image
+                              src={user.avatar_url}
+                              alt={user.display_name || user.username}
+                              width={32}
+                              height={32}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            (user.display_name || user.username).charAt(0).toUpperCase()
+                          )}
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-bold text-gray-900">
+                            {user.display_name || user.username}
+                          </h4>
+                          <p className="text-[10px] text-gray-400">@{user.username}</p>
+                        </div>
+                      </div>
+                      <div
+                        className={`w-5 h-5 rounded-md flex items-center justify-center transition-colors ${
+                          isSelected
+                            ? 'bg-brand-600 text-white'
+                            : 'border border-gray-300 bg-white'
+                        }`}
+                      >
+                        {isSelected && <Check size={12} />}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="pt-2 flex items-center justify-end gap-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNewGroupModal(false)
+                  setNewGroupTitle('')
+                  setSelectedGroupUsers([])
+                }}
+                className="btn-secondary text-xs py-2 px-3.5"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateGroup}
+                disabled={creatingGroup || !newGroupTitle.trim() || selectedGroupUsers.length === 0}
+                className="btn-primary text-xs py-2 px-4 flex items-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {creatingGroup ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Creating Group...</span>
+                  </>
+                ) : (
+                  <>
+                    <Users size={14} />
+                    <span>Create Group ({selectedGroupUsers.length + 1})</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

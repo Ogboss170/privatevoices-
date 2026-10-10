@@ -647,4 +647,28 @@ export interface DMCallSignalPayload {
   timestamp: number;
 }
 
+// ─── Group Direct Messaging Types ─────────────────────────────────────────────
+
+export interface GroupMember {
+  id: string;
+  userId: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  role: 'admin' | 'member';
+  joinedAt: string;
+}
+
+export interface GroupConversation {
+  id: string;
+  isGroup: boolean;
+  title: string | null;
+  avatarUrl: string | null;
+  createdBy: string | null;
+  lastMessage: string | null;
+  lastMessageAt: string | null;
+  members: GroupMember[];
+  memberCount?: number;
+}
+
 
