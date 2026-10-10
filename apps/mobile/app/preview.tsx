@@ -425,7 +425,7 @@ export default function PreviewScreen() {
 
           {/* Filter Pills */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterPills}>
-            {['all', 'audio', 'whispers', 'community', 'core'].map((cat) => (
+            {['all', 'audio', 'reels', 'premium', 'livestream', 'whispers', 'community', 'core'].map((cat) => (
               <TouchableOpacity
                 key={cat}
                 style={[
@@ -440,7 +440,7 @@ export default function PreviewScreen() {
                     activeCategory === cat ? styles.filterPillTextActive : { color: themeColors.textSecondary },
                   ]}
                 >
-                  {cat.toUpperCase()}
+                  {cat === 'livestream' ? 'LIVE STREAM' : cat.toUpperCase()}
                 </Text>
               </TouchableOpacity>
             ))}

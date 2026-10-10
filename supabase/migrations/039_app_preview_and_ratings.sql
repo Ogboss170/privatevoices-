@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS public.preview_features (
   slug TEXT NOT NULL UNIQUE,
   description TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'coming_soon' CHECK (status IN ('coming_soon', 'available_for_preview', 'testing', 'released')),
-  category TEXT NOT NULL DEFAULT 'core' CHECK (category IN ('core', 'audio', 'whispers', 'community', 'security')),
+  category TEXT NOT NULL DEFAULT 'core' CHECK (category IN ('core', 'audio', 'whispers', 'community', 'security', 'reels', 'premium', 'livestream', 'media')),
   demo_url TEXT,
   badge_highlight TEXT,
   sort_order INT NOT NULL DEFAULT 0,
@@ -78,6 +78,33 @@ VALUES
     'core',
     'Beta Tester',
     4
+  ),
+  (
+    'Private Voices Reels & Short-Form Video',
+    'voice-reels',
+    'Vertical, full-screen immersive video reels paired with encrypted audio tracks, audio filters, and creator tagging.',
+    'coming_soon',
+    'reels',
+    'Beta Tester',
+    5
+  ),
+  (
+    'Premium Subscriptions & Exclusive Creator Circles',
+    'premium-memberships',
+    'Private supporter tiers, subscriber-only voice drops, verified creator badges, and high-fidelity lossless audio streaming.',
+    'coming_soon',
+    'premium',
+    'Early Supporter',
+    6
+  ),
+  (
+    'Interactive Audio & Video Live Streaming',
+    'live-stream',
+    'Low-latency interactive live broadcasts with real-time audience voice call-ins, live chat bubbles, and creator host rooms.',
+    'coming_soon',
+    'livestream',
+    'Beta Tester',
+    7
   )
 ON CONFLICT (slug) DO UPDATE SET
   title = EXCLUDED.title,

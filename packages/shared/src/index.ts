@@ -478,7 +478,7 @@ export const DEFAULT_APPEARANCE: AppearancePreferences = {
 // ─── App Preview & Ratings Types ──────────────────────────────────────────────
 
 export type PreviewFeatureStatus = 'coming_soon' | 'available_for_preview' | 'testing' | 'released';
-export type PreviewFeatureCategory = 'core' | 'audio' | 'whispers' | 'community' | 'security';
+export type PreviewFeatureCategory = 'core' | 'audio' | 'whispers' | 'community' | 'security' | 'reels' | 'premium' | 'livestream' | 'media';
 
 export interface PreviewFeature {
   id: string;
