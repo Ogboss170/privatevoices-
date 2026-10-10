@@ -709,5 +709,33 @@ export interface LiveSpace {
   participants?: SpaceParticipant[];
 }
 
+export interface SpacePollOption {
+  id: string;
+  pollId: string;
+  optionText: string;
+  voteCount: number;
+}
+
+export interface SpacePoll {
+  id: string;
+  spaceId: string;
+  question: string;
+  createdBy: string;
+  status: 'active' | 'ended';
+  createdAt: string;
+  options: SpacePollOption[];
+  userVotedOptionId?: string | null;
+  totalVotes?: number;
+}
+
+export interface FloatingSpaceReaction {
+  id: string;
+  emoji: string;
+  userId: string;
+  xOffset: number;
+  createdAt: number;
+}
+
+
 
 

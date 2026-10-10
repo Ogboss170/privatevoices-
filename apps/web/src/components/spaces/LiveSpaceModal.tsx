@@ -18,9 +18,19 @@ import {
   Award,
   MoreVertical,
   X,
+  BarChart2,
+  Heart,
+  Smile,
+  Check,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import { LiveSpace, SpaceParticipant, SpaceRole } from '@private-voices/shared'
+import {
+  LiveSpace,
+  SpaceParticipant,
+  SpaceRole,
+  SpacePoll,
+  FloatingSpaceReaction,
+} from '@private-voices/shared'
 import {
   VoiceFilterType,
   VOICE_FILTERS,
@@ -53,6 +63,19 @@ export function LiveSpaceModal({
   const [isMinimized, setIsMinimized] = useState(false)
   const [audioStream, setAudioStream] = useState<MediaStream | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // Floating Emoji Confetti Reactions State
+  const [floatingReactions, setFloatingReactions] = useState<FloatingSpaceReaction[]>([])
+  const [showReactionPicker, setShowReactionPicker] = useState(false)
+
+  // Quick Polls State
+  const [activePoll, setActivePoll] = useState<SpacePoll | null>(null)
+  const [showCreatePollModal, setShowCreatePollModal] = useState(false)
+  const [pollQuestion, setPollQuestion] = useState('')
+  const [pollOption1, setPollOption1] = useState('')
+  const [pollOption2, setPollOption2] = useState('')
+  const [pollOption3, setPollOption3] = useState('')
+  const [creatingPoll, setCreatingPoll] = useState(false)
 
   const voiceModifierCleanupRef = useRef<(() => void) | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -123,6 +146,51 @@ export function LiveSpaceModal({
           setHandRaised(me.handRaised)
         }
       }
+
+      // Fetch active poll in the space
+      const { data: pollData } = await supabase
+        .from('space_polls')
+        .select(`
+          *,
+          options:space_poll_options(id, poll_id, option_text, vote_count)
+        `)
+        .eq('space_id', spaceId)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (pollData) {
+        // Check if current user voted
+        const { data: userVote } = await supabase
+          .from('space_poll_votes')
+          .select('option_id')
+          .eq('poll_id', pollData.id)
+          .eq('user_id', currentUserId)
+          .maybeSingle()
+
+        const options = (pollData.options || []).map((o: any) => ({
+          id: o.id,
+          pollId: o.poll_id,
+          optionText: o.option_text,
+          voteCount: o.vote_count || 0,
+        }))
+        const totalVotes = options.reduce((sum: number, o: any) => sum + o.voteCount, 0)
+
+        setActivePoll({
+          id: pollData.id,
+          spaceId: pollData.space_id,
+          question: pollData.question,
+          createdBy: pollData.created_by,
+          status: pollData.status,
+          createdAt: pollData.created_at,
+          options,
+          userVotedOptionId: userVote?.option_id || null,
+          totalVotes,
+        })
+      } else {
+        setActivePoll(null)
+      }
     } catch (err) {
       console.error('Error fetching space details:', err)
     } finally {
@@ -162,7 +230,7 @@ export function LiveSpaceModal({
     joinSpace()
   }, [isOpen, spaceId, currentUserId, supabase, fetchSpaceData])
 
-  // Subscribe to realtime channel for presence and voice signaling
+  // Subscribe to realtime channel for presence, voice signaling, reactions, and polls
   useEffect(() => {
     if (!isOpen || !spaceId) return
 
@@ -187,9 +255,39 @@ export function LiveSpaceModal({
           })
         }
       })
+      .on('broadcast', { event: 'live_reaction' }, ({ payload }) => {
+        if (payload?.emoji) {
+          const newReaction: FloatingSpaceReaction = {
+            id: 'react-' + Date.now() + '-' + Math.random(),
+            emoji: payload.emoji,
+            userId: payload.userId,
+            xOffset: payload.xOffset ?? (15 + Math.random() * 70),
+            createdAt: Date.now(),
+          }
+          setFloatingReactions((prev) => [...prev, newReaction])
+
+          setTimeout(() => {
+            setFloatingReactions((prev) => prev.filter((r) => r.id !== newReaction.id))
+          }, 2400)
+        }
+      })
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'space_participants', filter: `space_id=eq.${spaceId}` },
+        () => {
+          fetchSpaceData()
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'space_polls', filter: `space_id=eq.${spaceId}` },
+        () => {
+          fetchSpaceData()
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'space_poll_options' },
         () => {
           fetchSpaceData()
         }
@@ -374,6 +472,113 @@ export function LiveSpaceModal({
       .eq('user_id', targetUserId)
   }
 
+  // Send Floating Emoji Confetti Reaction
+  const handleSendReaction = (emoji: string) => {
+    const xOffset = 15 + Math.random() * 70
+    const newReaction: FloatingSpaceReaction = {
+      id: 'react-' + Date.now() + '-' + Math.random(),
+      emoji,
+      userId: currentUserId,
+      xOffset,
+      createdAt: Date.now(),
+    }
+    setFloatingReactions((prev) => [...prev, newReaction])
+
+    setTimeout(() => {
+      setFloatingReactions((prev) => prev.filter((r) => r.id !== newReaction.id))
+    }, 2400)
+
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'live_reaction',
+        payload: { emoji, userId: currentUserId, xOffset },
+      })
+    }
+  }
+
+  // Create Quick Poll
+  const handleCreatePoll = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!pollQuestion.trim() || !pollOption1.trim() || !pollOption2.trim()) return
+
+    setCreatingPoll(true)
+    try {
+      const { data: poll, error: pollErr } = await supabase
+        .from('space_polls')
+        .insert({
+          space_id: spaceId,
+          question: pollQuestion.trim(),
+          created_by: currentUserId,
+          status: 'active',
+        })
+        .select()
+        .single()
+
+      if (pollErr || !poll) throw pollErr || new Error('Failed to create poll')
+
+      const optionRows = [
+        { poll_id: poll.id, option_text: pollOption1.trim() },
+        { poll_id: poll.id, option_text: pollOption2.trim() },
+      ]
+      if (pollOption3.trim()) {
+        optionRows.push({ poll_id: poll.id, option_text: pollOption3.trim() })
+      }
+
+      await supabase.from('space_poll_options').insert(optionRows)
+
+      setShowCreatePollModal(false)
+      setPollQuestion('')
+      setPollOption1('')
+      setPollOption2('')
+      setPollOption3('')
+      fetchSpaceData()
+    } catch (err: any) {
+      alert(err.message || 'Could not start quick poll')
+    } finally {
+      setCreatingPoll(false)
+    }
+  }
+
+  // Vote on active poll
+  const handleVotePoll = async (optionId: string) => {
+    if (!activePoll || activePoll.userVotedOptionId) return
+
+    // Optimistic UI update
+    setActivePoll((prev) => {
+      if (!prev) return null
+      return {
+        ...prev,
+        userVotedOptionId: optionId,
+        totalVotes: (prev.totalVotes || 0) + 1,
+        options: prev.options.map((opt) =>
+          opt.id === optionId ? { ...opt, voteCount: opt.voteCount + 1 } : opt
+        ),
+      }
+    })
+
+    try {
+      await supabase.from('space_poll_votes').insert({
+        poll_id: activePoll.id,
+        option_id: optionId,
+        user_id: currentUserId,
+      })
+    } catch (err) {
+      console.error('Error voting on poll:', err)
+      fetchSpaceData()
+    }
+  }
+
+  // End active poll (Host/Creator only)
+  const handleEndPoll = async () => {
+    if (!activePoll) return
+    await supabase
+      .from('space_polls')
+      .update({ status: 'ended' })
+      .eq('id', activePoll.id)
+    setActivePoll(null)
+  }
+
   if (!isOpen) return null
 
   const isHost = myParticipant?.role === 'host'
@@ -476,7 +681,95 @@ export function LiveSpaceModal({
         )}
 
         {/* Participants Stage */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 relative overflow-x-hidden">
+          {/* Floating Emoji Reactions Layer */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden z-20">
+            {floatingReactions.map((reaction) => (
+              <div
+                key={reaction.id}
+                className="absolute bottom-6 text-3xl animate-in fade-in slide-in-from-bottom-20 duration-1000 transition-all"
+                style={{
+                  left: `${reaction.xOffset}%`,
+                  animation: 'floatUp 2.4s ease-out forwards',
+                }}
+              >
+                {reaction.emoji}
+              </div>
+            ))}
+          </div>
+
+          {/* Active Quick Poll Banner Card */}
+          {activePoll && (
+            <div className="card p-4 bg-gradient-to-br from-purple-950/80 to-indigo-950/80 border border-purple-500/30 text-white rounded-2xl shadow-xl space-y-3 animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-purple-300">
+                  <BarChart2 size={15} className="text-purple-400" />
+                  <span>Live Audience Poll</span>
+                  <span className="text-[10px] bg-purple-500/20 px-1.5 py-0.2 rounded-full border border-purple-500/30 text-purple-300">
+                    {activePoll.totalVotes || 0} votes
+                  </span>
+                </div>
+
+                {isHost && (
+                  <button
+                    onClick={handleEndPoll}
+                    className="text-[10px] text-gray-400 hover:text-rose-400 font-semibold underline"
+                  >
+                    End Poll
+                  </button>
+                )}
+              </div>
+
+              <h4 className="text-sm font-bold text-white leading-snug">
+                {activePoll.question}
+              </h4>
+
+              <div className="space-y-2 pt-1">
+                {activePoll.options.map((option) => {
+                  const isVoted = activePoll.userVotedOptionId === option.id
+                  const hasVotedAny = Boolean(activePoll.userVotedOptionId)
+                  const percentage =
+                    (activePoll.totalVotes || 0) > 0
+                      ? Math.round((option.voteCount / (activePoll.totalVotes || 1)) * 100)
+                      : 0
+
+                  return (
+                    <div
+                      key={option.id}
+                      onClick={() => !hasVotedAny && handleVotePoll(option.id)}
+                      className={`relative overflow-hidden p-2.5 rounded-xl border transition-all ${
+                        hasVotedAny ? 'cursor-default' : 'cursor-pointer hover:border-purple-400'
+                      } ${
+                        isVoted
+                          ? 'border-purple-400 bg-purple-500/20'
+                          : 'border-white/10 bg-white/5'
+                      }`}
+                    >
+                      {/* Vote Progress Bar */}
+                      {hasVotedAny && (
+                        <div
+                          className="absolute inset-y-0 left-0 bg-purple-500/20 transition-all duration-500"
+                          style={{ width: `${percentage}%` }}
+                        />
+                      )}
+
+                      <div className="relative flex items-center justify-between text-xs z-10">
+                        <span className="font-semibold text-gray-100 flex items-center gap-2">
+                          {isVoted && <Check size={13} className="text-purple-400" />}
+                          <span>{option.optionText}</span>
+                        </span>
+                        {hasVotedAny && (
+                          <span className="font-mono text-[11px] text-purple-300 font-bold">
+                            {percentage}% ({option.voteCount})
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
           {/* Speakers Section */}
           <div className="space-y-3">
             <div className="flex items-center justify-between text-xs font-bold text-gray-400 uppercase tracking-wider">
@@ -624,6 +917,45 @@ export function LiveSpaceModal({
           </button>
 
           <div className="flex items-center gap-2">
+            {/* Reaction Emoji Button & Popover */}
+            <div className="relative">
+              <button
+                onClick={() => setShowReactionPicker((prev) => !prev)}
+                className="p-2 rounded-xl bg-white/10 text-gray-300 hover:text-white hover:bg-white/15 transition-all"
+                title="Send Floating Live Reaction"
+              >
+                <Smile size={16} />
+              </button>
+
+              {showReactionPicker && (
+                <div className="absolute bottom-12 right-0 z-30 bg-gray-900 border border-white/10 rounded-2xl shadow-2xl p-2 flex items-center gap-1.5 animate-in fade-in zoom-in-95 duration-150">
+                  {['❤️', '🔥', '👏', '😂', '😮', '💯', '🎉'].map((emoji) => (
+                    <button
+                      key={emoji}
+                      onClick={() => {
+                        handleSendReaction(emoji)
+                        setShowReactionPicker(false)
+                      }}
+                      className="text-xl hover:scale-130 transition-transform p-1 rounded-lg hover:bg-white/10"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Host/Speaker Quick Poll Creator Button */}
+            {isSpeaker && (
+              <button
+                onClick={() => setShowCreatePollModal(true)}
+                className="p-2 rounded-xl bg-purple-600/30 text-purple-300 hover:bg-purple-600/50 hover:text-white border border-purple-500/30 transition-all"
+                title="Start a Quick Audience Poll"
+              >
+                <BarChart2 size={16} />
+              </button>
+            )}
+
             {!isSpeaker && (
               <button
                 onClick={handleToggleHandRaise}
@@ -703,6 +1035,89 @@ export function LiveSpaceModal({
             )}
           </div>
         </div>
+
+        {/* Create Quick Poll Modal */}
+        {showCreatePollModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-60 flex items-center justify-center p-4">
+            <div className="bg-gray-900 text-white rounded-3xl max-w-sm w-full p-5 border border-white/10 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <h3 className="text-sm font-bold flex items-center gap-2">
+                  <BarChart2 size={16} className="text-purple-400" />
+                  <span>Start Audience Poll</span>
+                </h3>
+                <button
+                  onClick={() => setShowCreatePollModal(false)}
+                  className="p-1 rounded-full text-gray-400 hover:text-white hover:bg-white/10"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <form onSubmit={handleCreatePoll} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-300 mb-1">
+                    Question *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Should we host this space weekly?"
+                    value={pollQuestion}
+                    onChange={(e) => setPollQuestion(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-white placeholder-gray-500"
+                    autoFocus
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold text-gray-300">
+                    Options *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Option 1 (e.g. Yes definitely)"
+                    value={pollOption1}
+                    onChange={(e) => setPollOption1(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-white placeholder-gray-500"
+                  />
+                  <input
+                    type="text"
+                    required
+                    placeholder="Option 2 (e.g. No)"
+                    value={pollOption2}
+                    onChange={(e) => setPollOption2(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-white placeholder-gray-500"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Option 3 (Optional)"
+                    value={pollOption3}
+                    onChange={(e) => setPollOption3(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-white placeholder-gray-500"
+                  />
+                </div>
+
+                <div className="pt-2 flex items-center justify-end gap-2 border-t border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreatePollModal(false)}
+                    className="px-3 py-1.5 rounded-xl bg-white/5 text-xs text-gray-300 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={creatingPoll || !pollQuestion.trim() || !pollOption1.trim() || !pollOption2.trim()}
+                    className="px-4 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white shadow-md disabled:opacity-50"
+                  >
+                    {creatingPoll ? 'Starting...' : 'Launch Poll'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
