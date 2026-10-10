@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
-import { X, Send, Loader2, Image as ImageIcon, ExternalLink, Trash2, Mic, Play, Pause, Square, Volume2, Maximize2, Minimize2, Phone, Video, Search, Reply as ReplyIcon, Flame, Smile, Film, Sparkles } from 'lucide-react'
+import { X, Send, Loader2, Image as ImageIcon, ExternalLink, Trash2, Mic, Play, Pause, Square, Volume2, Maximize2, Minimize2, Phone, Video, Search, Reply as ReplyIcon, Flame, Smile, Film, Sparkles, History, PhoneIncoming, PhoneOutgoing, PhoneMissed } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/media/imageCompression'
 import { DMCallModal } from '@/components/messages/DMCallModal'
@@ -39,6 +39,11 @@ export default function ChatDrawer({
   // Search in chat
   const [isSearching, setIsSearching] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+
+  // Call history panel
+  const [showCallHistory, setShowCallHistory] = useState(false)
+  const [callLogs, setCallLogs] = useState<any[]>([])
+  const [loadingCallLogs, setLoadingCallLogs] = useState(false)
 
   // Reply quoting
   const [replyingTo, setReplyingTo] = useState<{
@@ -324,8 +329,35 @@ export default function ChatDrawer({
           : new Date().toISOString(),
         ended_at: new Date(now).toISOString(),
       })
+      loadCallLogs()
     } catch (e) {
       console.warn('Could not record dm_call_log:', e)
+    }
+  }
+
+  async function loadCallLogs() {
+    setLoadingCallLogs(true)
+    try {
+      const { data, error } = await supabase
+        .from('dm_call_logs')
+        .select('*')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: false })
+      if (!error && data) {
+        setCallLogs(data)
+      }
+    } catch (err) {
+      console.warn('Error loading call logs:', err)
+    } finally {
+      setLoadingCallLogs(false)
+    }
+  }
+
+  function handleToggleCallHistory() {
+    const nextVal = !showCallHistory
+    setShowCallHistory(nextVal)
+    if (nextVal) {
+      loadCallLogs()
     }
   }
 
@@ -983,6 +1015,20 @@ export default function ChatDrawer({
               <Flame size={18} className={isVanishMode ? 'animate-pulse' : ''} />
             </button>
 
+            {/* Call History Button */}
+            <button
+              onClick={handleToggleCallHistory}
+              className={`p-2 rounded-xl transition-colors ${
+                showCallHistory
+                  ? 'text-purple-600 bg-purple-50'
+                  : 'text-gray-600 hover:text-purple-600 hover:bg-gray-100'
+              }`}
+              aria-label="View Call History"
+              title="Call History"
+            >
+              <History size={18} />
+            </button>
+
             {/* Voice Call Button */}
             <button
               onClick={() => handleStartCall('audio')}
@@ -1060,6 +1106,101 @@ export default function ChatDrawer({
             >
               Turn off
             </button>
+          </div>
+        )}
+
+        {/* Call History Panel */}
+        {showCallHistory && (
+          <div className="px-4 py-3 bg-purple-50/70 border-b border-purple-100 animate-in slide-in-from-top-2 duration-150 max-h-56 overflow-y-auto">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5 font-bold text-xs text-purple-900">
+                <History size={14} className="text-purple-600" />
+                <span>Call History</span>
+              </div>
+              <button
+                onClick={() => setShowCallHistory(false)}
+                className="text-purple-400 hover:text-purple-700 p-0.5 rounded-full"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            {loadingCallLogs ? (
+              <div className="py-4 flex items-center justify-center text-xs text-purple-500 gap-2">
+                <Loader2 size={14} className="animate-spin" />
+                <span>Loading call records...</span>
+              </div>
+            ) : callLogs.length === 0 ? (
+              <div className="py-4 text-center text-xs text-purple-500/80">
+                No calls yet with @{partner.username}.
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {callLogs.map((log) => {
+                  const isOutgoing = log.caller_id === currentUserId
+                  const isVideo = log.call_type === 'video'
+                  const isMissed = log.status === 'missed' || log.status === 'declined'
+
+                  return (
+                    <div
+                      key={log.id}
+                      className="flex items-center justify-between bg-white/90 p-2 rounded-xl border border-purple-100 shadow-2xs text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`w-7 h-7 rounded-full flex items-center justify-center ${
+                            isMissed
+                              ? 'bg-red-50 text-red-500'
+                              : 'bg-emerald-50 text-emerald-600'
+                          }`}
+                        >
+                          {isMissed ? (
+                            <PhoneMissed size={13} />
+                          ) : isOutgoing ? (
+                            <PhoneOutgoing size={13} />
+                          ) : (
+                            <PhoneIncoming size={13} />
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-gray-900 text-[11px] leading-tight flex items-center gap-1">
+                            {isVideo ? <Video size={11} className="text-purple-500" /> : <Phone size={11} className="text-purple-500" />}
+                            <span>{isOutgoing ? 'Outgoing' : 'Incoming'} {isVideo ? 'Video' : 'Voice'}</span>
+                          </p>
+                          <p className="text-[10px] text-gray-500 font-mono">
+                            {log.duration_seconds > 0
+                              ? `${Math.floor(log.duration_seconds / 60)}m ${log.duration_seconds % 60}s`
+                              : log.status === 'declined'
+                              ? 'Declined'
+                              : 'Missed'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-gray-400">
+                          {new Date(log.created_at).toLocaleDateString([], {
+                            month: 'short',
+                            day: 'numeric',
+                          })}{' '}
+                          {new Date(log.created_at).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                        <button
+                          onClick={() => handleStartCall(isVideo ? 'video' : 'audio')}
+                          className="p-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 transition-colors"
+                          title="Call back"
+                        >
+                          <Phone size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )}
 
