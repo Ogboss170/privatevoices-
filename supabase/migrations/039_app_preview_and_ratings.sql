@@ -114,6 +114,112 @@ ON CONFLICT (slug) DO UPDATE SET
   badge_highlight = EXCLUDED.badge_highlight,
   sort_order = EXCLUDED.sort_order;
 
+-- ─── 1B. ENSURE PREVIEW PROGRAM TABLES EXIST (IDEMPOTENT PREREQUISITES) ───────
+CREATE TABLE IF NOT EXISTS public.preview_programs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  description TEXT,
+  rules TEXT,
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('draft', 'open', 'paused', 'closed', 'finalized')),
+  starts_at TIMESTAMPTZ,
+  ends_at TIMESTAMPTZ,
+  registration_deadline TIMESTAMPTZ,
+  min_tasks_required INT NOT NULL DEFAULT 1,
+  min_valid_feedback_required INT NOT NULL DEFAULT 1,
+  early_supporter_badge_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  beta_tester_badge_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  created_by UUID REFERENCES public.profiles(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+CREATE TABLE IF NOT EXISTS public.preview_tasks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  program_id UUID NOT NULL REFERENCES public.preview_programs(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT,
+  task_type TEXT NOT NULL DEFAULT 'feature_testing' CHECK (task_type IN ('feature_testing', 'bug_hunt', 'ux_feedback', 'stress_test', 'custom')),
+  sort_order INT NOT NULL DEFAULT 0,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+CREATE TABLE IF NOT EXISTS public.preview_participants (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  program_id UUID NOT NULL REFERENCES public.preview_programs(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'registered' CHECK (status IN ('registered', 'active', 'eligible', 'completed', 'disqualified')),
+  tasks_completed INT NOT NULL DEFAULT 0,
+  valid_feedback_count INT NOT NULL DEFAULT 0,
+  early_supporter_awarded BOOLEAN NOT NULL DEFAULT FALSE,
+  beta_tester_awarded BOOLEAN NOT NULL DEFAULT FALSE,
+  internal_notes TEXT,
+  registered_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT uq_preview_participant UNIQUE (program_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.preview_feedback (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  program_id UUID NOT NULL REFERENCES public.preview_programs(id) ON DELETE CASCADE,
+  task_id UUID REFERENCES public.preview_tasks(id) ON DELETE SET NULL,
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  category TEXT NOT NULL CHECK (category IN ('bug', 'ux', 'performance', 'suggestion', 'security')),
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  device_info JSONB DEFAULT '{}'::jsonb,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'valid', 'duplicate', 'invalid', 'need_info', 'escalated')),
+  internal_notes TEXT,
+  reviewed_by UUID REFERENCES public.profiles(id),
+  reviewed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+ALTER TABLE public.preview_programs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.preview_tasks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.preview_participants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.preview_feedback ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Preview programs viewable by authenticated users" ON public.preview_programs;
+CREATE POLICY "Preview programs viewable by authenticated users"
+  ON public.preview_programs FOR SELECT
+  TO authenticated, anon
+  USING (TRUE);
+
+DROP POLICY IF EXISTS "Preview tasks viewable by authenticated users" ON public.preview_tasks;
+CREATE POLICY "Preview tasks viewable by authenticated users"
+  ON public.preview_tasks FOR SELECT
+  TO authenticated, anon
+  USING (TRUE);
+
+DROP POLICY IF EXISTS "Preview participants view own or admins view all" ON public.preview_participants;
+CREATE POLICY "Preview participants view own or admins view all"
+  ON public.preview_participants FOR SELECT
+  TO authenticated
+  USING (user_id = auth.uid() OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND is_admin = TRUE));
+
+DROP POLICY IF EXISTS "Preview feedback view own or admins view all" ON public.preview_feedback;
+CREATE POLICY "Preview feedback view own or admins view all"
+  ON public.preview_feedback FOR SELECT
+  TO authenticated
+  USING (user_id = auth.uid() OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND is_admin = TRUE));
+
+-- Seed default Genesis Preview program if missing
+INSERT INTO public.preview_programs (title, slug, description, rules, status, min_tasks_required, min_valid_feedback_required)
+VALUES (
+  'Private Voices Genesis Preview',
+  'genesis-preview',
+  'Exclusive pioneer preview group testing encrypted whispers, voice reels, live presence, and upcoming community features.',
+  'Complete at least 1 testing task and submit valid feedback to earn the permanent Early Supporter badge.',
+  'open',
+  1,
+  1
+) ON CONFLICT (slug) DO UPDATE SET
+  title = EXCLUDED.title,
+  description = EXCLUDED.description,
+  status = EXCLUDED.status;
+
 -- ─── 2. PREVIEW TASK COMPLETIONS TABLE ─────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.preview_task_completions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
