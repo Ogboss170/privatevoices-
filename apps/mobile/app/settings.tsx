@@ -44,6 +44,9 @@ import {
   Check,
   EyeOff,
   Bookmark,
+  Search,
+  X,
+  Laptop,
 } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import { supabase } from '../lib/supabase'
@@ -135,6 +138,13 @@ export default function SettingsScreen() {
   const [showSavedPostsModal, setShowSavedPostsModal] = useState(false)
   const [savedPosts, setSavedPosts] = useState<Post[]>([])
   const [loadingSaved, setLoadingSaved] = useState(false)
+
+  // Search & Navigation State
+  const [searchQuery, setSearchQuery] = useState('')
+
+  // Active Sessions & Device Manager State
+  const [showSessionsModal, setShowSessionsModal] = useState(false)
+  const [signingOutOthers, setSigningOutOthers] = useState(false)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -331,6 +341,19 @@ export default function SettingsScreen() {
     if (!userId) return
     await supabase.from('user_mutes').delete().eq('muter_id', userId).eq('muted_id', mutedId)
     setMutedUsers((prev) => prev.filter((item) => item.muted_id !== mutedId))
+  }
+
+  async function handleRevokeOtherSessions() {
+    setSigningOutOthers(true)
+    try {
+      await supabase.auth.signOut({ scope: 'others' })
+      Alert.alert('Sessions Revoked', 'All other devices and active sessions have been signed out.')
+      setShowSessionsModal(false)
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to revoke other sessions.')
+    } finally {
+      setSigningOutOthers(false)
+    }
   }
 
   function handleLogoutAllDevices() {
@@ -534,6 +557,51 @@ export default function SettingsScreen() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t.settings}</Text>
       </View>
+
+      {/* ── Search Bar ── */}
+      <View style={styles.searchBarWrapper}>
+        <Search size={18} color={colors.gray400} style={styles.searchIcon} />
+        <TextInput
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search settings..."
+          placeholderTextColor={colors.gray400}
+          style={styles.searchInput}
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearSearchBtn}>
+            <X size={16} color={colors.gray400} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* ── Hub Category Pills ── */}
+      {!searchQuery && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.hubScroll}
+          contentContainerStyle={styles.hubScrollContent}
+        >
+          {[
+            { id: 'account', label: 'Account', icon: User, color: '#3b82f6', bg: '#eff6ff' },
+            { id: 'privacy', label: 'Privacy', icon: Lock, color: '#10b981', bg: '#ecfdf5' },
+            { id: 'notifications', label: 'Alerts', icon: Bell, color: '#f59e0b', bg: '#fffbeb' },
+            { id: 'appearance', label: 'Theme', icon: SunMoon, color: '#8b5cf6', bg: '#f5f3ff' },
+            { id: 'security', label: 'Security', icon: Shield, color: '#ef4444', bg: '#fef2f2' },
+          ].map((pill) => {
+            const Icon = pill.icon
+            return (
+              <View key={pill.id} style={styles.hubPillItem}>
+                <View style={[styles.hubPillIconWrapper, { backgroundColor: pill.bg }]}>
+                  <Icon size={14} color={pill.color} />
+                </View>
+                <Text style={styles.hubPillLabel}>{pill.label}</Text>
+              </View>
+            )
+          })}
+        </ScrollView>
+      )}
 
       {/* ── 1. ACCOUNT ── */}
       <View style={styles.sectionCard}>
@@ -796,10 +864,17 @@ export default function SettingsScreen() {
           />
         </View>
 
-        <TouchableOpacity style={styles.rowItem} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.rowItem}
+          activeOpacity={0.7}
+          onPress={() => setShowSessionsModal(true)}
+        >
           <View style={styles.rowLeft}>
             <History size={18} color={colors.gray600} />
-            <Text style={styles.rowLabel}>Login Sessions</Text>
+            <View>
+              <Text style={styles.rowLabel}>Login Sessions & Devices</Text>
+              <Text style={styles.rowSubLabel}>Manage active logins across devices</Text>
+            </View>
           </View>
           <ChevronRight size={18} color={colors.gray400} />
         </TouchableOpacity>
@@ -807,12 +882,23 @@ export default function SettingsScreen() {
 
       {/* ── 5. NOTIFICATIONS ── */}
       <View style={styles.sectionCard}>
-        <Text style={styles.sectionCategoryTitle}>NOTIFICATIONS</Text>
+        <View style={styles.sectionHeaderRowFlex}>
+          <Text style={styles.sectionCategoryTitle}>NOTIFICATIONS & ALERTS</Text>
+          <View style={styles.badgePillSmall}>
+            <Text style={styles.badgePillTextSmall}>Granular</Text>
+          </View>
+        </View>
 
-        <View style={styles.rowItemNoClick}>
+        {/* Master Switch */}
+        <View style={styles.masterNotifCard}>
           <View style={styles.rowLeft}>
-            <Bell size={18} color={colors.gray600} />
-            <Text style={styles.rowLabel}>Push Notifications</Text>
+            <View style={styles.iconCircleBrand}>
+              <Bell size={18} color="#fff" />
+            </View>
+            <View>
+              <Text style={styles.rowLabel}>Allow Push Notifications</Text>
+              <Text style={styles.rowSubLabel}>Master alert switch for this device</Text>
+            </View>
           </View>
           <Switch
             value={pushNotifs}
@@ -824,88 +910,123 @@ export default function SettingsScreen() {
           />
         </View>
 
-        <View style={styles.rowItemNoClickSub}>
-          <Text style={styles.rowSubLabel}>Comments & Replies</Text>
-          <Switch
-            value={commentsNotifs}
-            onValueChange={(val) => {
-              setCommentsNotifs(val)
-              handleUpdateNotifPref('comments_enabled', val)
-            }}
-            trackColor={{ false: '#e2e8f0', true: colors.brand }}
-          />
-        </View>
+        <View style={{ opacity: pushNotifs ? 1 : 0.5, pointerEvents: pushNotifs ? 'auto' : 'none' }}>
+          {/* Group 1: Activity */}
+          <Text style={styles.subGroupHeading}>ACTIVITY & INTERACTIONS</Text>
+          <View style={styles.subGroupCard}>
+            <View style={styles.rowItemNoClickSub}>
+              <View>
+                <Text style={styles.rowSubLabelTitle}>Comments & Replies</Text>
+                <Text style={styles.rowSubLabelMuted}>When someone comments on your Voices</Text>
+              </View>
+              <Switch
+                value={commentsNotifs}
+                onValueChange={(val) => {
+                  setCommentsNotifs(val)
+                  handleUpdateNotifPref('comments_enabled', val)
+                }}
+                trackColor={{ false: '#e2e8f0', true: colors.brand }}
+              />
+            </View>
 
-        <View style={styles.rowItemNoClickSub}>
-          <Text style={styles.rowSubLabel}>Mentions (@you)</Text>
-          <Switch
-            value={mentionNotifs}
-            onValueChange={(val) => {
-              setMentionNotifs(val)
-              handleUpdateNotifPref('mentions_enabled', val)
-            }}
-            trackColor={{ false: '#e2e8f0', true: colors.brand }}
-          />
-        </View>
+            <View style={styles.rowItemNoClickSub}>
+              <View>
+                <Text style={styles.rowSubLabelTitle}>Mentions (@you)</Text>
+                <Text style={styles.rowSubLabelMuted}>When someone tags your handle</Text>
+              </View>
+              <Switch
+                value={mentionNotifs}
+                onValueChange={(val) => {
+                  setMentionNotifs(val)
+                  handleUpdateNotifPref('mentions_enabled', val)
+                }}
+                trackColor={{ false: '#e2e8f0', true: colors.brand }}
+              />
+            </View>
 
-        <View style={styles.rowItemNoClickSub}>
-          <Text style={styles.rowSubLabel}>Direct Messages</Text>
-          <Switch
-            value={messageNotifs}
-            onValueChange={(val) => {
-              setMessageNotifs(val)
-              handleUpdateNotifPref('direct_messages_enabled', val)
-            }}
-            trackColor={{ false: '#e2e8f0', true: colors.brand }}
-          />
-        </View>
+            <View style={styles.rowItemNoClickSub}>
+              <View>
+                <Text style={styles.rowSubLabelTitle}>Likes & Reactions</Text>
+                <Text style={styles.rowSubLabelMuted}>When someone likes your posts</Text>
+              </View>
+              <Switch
+                value={likeCommentNotifs}
+                onValueChange={(val) => {
+                  setLikeCommentNotifs(val)
+                  handleUpdateNotifPref('likes_enabled', val)
+                }}
+                trackColor={{ false: '#e2e8f0', true: colors.brand }}
+              />
+            </View>
+          </View>
 
-        <View style={styles.rowItemNoClickSub}>
-          <Text style={styles.rowSubLabel}>Anonymous Whispers</Text>
-          <Switch
-            value={whisperNotifs}
-            onValueChange={(val) => {
-              setWhisperNotifs(val)
-              handleUpdateNotifPref('whispers_enabled', val)
-            }}
-            trackColor={{ false: '#e2e8f0', true: colors.brand }}
-          />
-        </View>
+          {/* Group 2: Direct & Social */}
+          <Text style={styles.subGroupHeading}>DIRECT & SOCIAL</Text>
+          <View style={styles.subGroupCard}>
+            <View style={styles.rowItemNoClickSub}>
+              <View>
+                <Text style={styles.rowSubLabelTitle}>Direct Messages</Text>
+                <Text style={styles.rowSubLabelMuted}>1-on-1 private conversations</Text>
+              </View>
+              <Switch
+                value={messageNotifs}
+                onValueChange={(val) => {
+                  setMessageNotifs(val)
+                  handleUpdateNotifPref('direct_messages_enabled', val)
+                }}
+                trackColor={{ false: '#e2e8f0', true: colors.brand }}
+              />
+            </View>
 
-        <View style={styles.rowItemNoClickSub}>
-          <Text style={styles.rowSubLabel}>Likes & Reactions</Text>
-          <Switch
-            value={likeCommentNotifs}
-            onValueChange={(val) => {
-              setLikeCommentNotifs(val)
-              handleUpdateNotifPref('likes_enabled', val)
-            }}
-            trackColor={{ false: '#e2e8f0', true: colors.brand }}
-          />
-        </View>
+            <View style={styles.rowItemNoClickSub}>
+              <View>
+                <Text style={styles.rowSubLabelTitle}>Anonymous Whispers</Text>
+                <Text style={styles.rowSubLabelMuted}>Secret whispers from other users</Text>
+              </View>
+              <Switch
+                value={whisperNotifs}
+                onValueChange={(val) => {
+                  setWhisperNotifs(val)
+                  handleUpdateNotifPref('whispers_enabled', val)
+                }}
+                trackColor={{ false: '#e2e8f0', true: colors.brand }}
+              />
+            </View>
 
-        <View style={styles.rowItemNoClickSub}>
-          <Text style={styles.rowSubLabel}>New Followers</Text>
-          <Switch
-            value={followerNotifs}
-            onValueChange={(val) => {
-              setFollowerNotifs(val)
-              handleUpdateNotifPref('followers_enabled', val)
-            }}
-            trackColor={{ false: '#e2e8f0', true: colors.brand }}
-          />
-        </View>
+            <View style={styles.rowItemNoClickSub}>
+              <View>
+                <Text style={styles.rowSubLabelTitle}>New Followers</Text>
+                <Text style={styles.rowSubLabelMuted}>When someone follows your profile</Text>
+              </View>
+              <Switch
+                value={followerNotifs}
+                onValueChange={(val) => {
+                  setFollowerNotifs(val)
+                  handleUpdateNotifPref('followers_enabled', val)
+                }}
+                trackColor={{ false: '#e2e8f0', true: colors.brand }}
+              />
+            </View>
+          </View>
 
-        <View style={styles.rowItemNoClickSub}>
-          <Text style={styles.rowSubLabel}>Community Announcements</Text>
-          <Switch
-            value={communityNotifs}
-            onValueChange={(val) => {
-              setCommunityNotifs(val)
-              handleUpdateNotifPref('community_announcements_enabled', val)
-            }}
-            trackColor={{ false: '#e2e8f0', true: colors.brand }}
-          />
+          {/* Group 3: Communities */}
+          <Text style={styles.subGroupHeading}>COMMUNITIES</Text>
+          <View style={styles.subGroupCard}>
+            <View style={styles.rowItemNoClickSub}>
+              <View>
+                <Text style={styles.rowSubLabelTitle}>Community Announcements</Text>
+                <Text style={styles.rowSubLabelMuted}>Broadcasts from joined groups</Text>
+              </View>
+              <Switch
+                value={communityNotifs}
+                onValueChange={(val) => {
+                  setCommunityNotifs(val)
+                  handleUpdateNotifPref('community_announcements_enabled', val)
+                }}
+                trackColor={{ false: '#e2e8f0', true: colors.brand }}
+              />
+            </View>
+          </View>
         </View>
       </View>
 
@@ -1329,6 +1450,69 @@ export default function SettingsScreen() {
                 <Text style={styles.modalDangerText}>
                   {deleting ? 'Deleting...' : 'Delete Permanently'}
                 </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Active Sessions & Devices Modal ── */}
+      <Modal visible={showSessionsModal} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeaderRow}>
+              <View style={[styles.hubPillIconWrapper, { backgroundColor: '#eff6ff', marginRight: 8 }]}>
+                <Laptop size={18} color="#3b82f6" />
+              </View>
+              <Text style={[styles.modalTitleRed, { color: colors.gray900 }]}>Active Sessions</Text>
+            </View>
+
+            <Text style={styles.modalBodyText}>
+              Manage devices currently logged into your Private Voices account.
+            </Text>
+
+            {/* Current Device Item */}
+            <View style={styles.currentDeviceCard}>
+              <View style={styles.rowLeft}>
+                <View style={styles.deviceIconCircle}>
+                  <Smartphone size={18} color="#10b981" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.sessionDeviceName}>Mobile App</Text>
+                    <View style={styles.thisDeviceBadge}>
+                      <Text style={styles.thisDeviceBadgeText}>This device</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.sessionDeviceSub}>Active Now • Expo / React Native</Text>
+                </View>
+              </View>
+              <View style={styles.onlineDot} />
+            </View>
+
+            {/* Security Explanation */}
+            <View style={styles.sessionSecurityCard}>
+              <Shield size={14} color="#6366f1" style={{ marginTop: 2 }} />
+              <Text style={styles.sessionSecurityText}>
+                If you suspect unauthorized access or logged in on another phone/browser, you can revoke all other active sessions right now.
+              </Text>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalActionBtn, { backgroundColor: '#fef3c7', borderColor: '#fde68a', borderWidth: 1 }]}
+                disabled={signingOutOthers}
+                onPress={handleRevokeOtherSessions}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#b45309' }}>
+                  {signingOutOthers ? 'Revoking...' : 'Sign out other devices'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setShowSessionsModal(false)}
+              >
+                <Text style={styles.modalCancelText}>Close</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2085,5 +2269,188 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#ffffff',
   },
+  // Search Bar styles
+  searchBarWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    paddingHorizontal: 12,
+    height: 44,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.gray900,
+  },
+  clearSearchBtn: {
+    padding: 4,
+  },
+  // Hub Category Pills styles
+  hubScroll: {
+    marginHorizontal: -4,
+  },
+  hubScrollContent: {
+    gap: 8,
+    paddingVertical: 2,
+  },
+  hubPillItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    gap: 6,
+  },
+  hubPillIconWrapper: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hubPillLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.gray700,
+  },
+  // Granular Notifications styles
+  sectionHeaderRowFlex: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray100,
+    paddingBottom: 6,
+  },
+  badgePillSmall: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  badgePillTextSmall: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#3b82f6',
+  },
+  masterNotifCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  iconCircleBrand: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subGroupHeading: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.gray400,
+    letterSpacing: 0.6,
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  subGroupCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 6,
+    gap: 4,
+  },
+  rowSubLabelTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.gray800,
+  },
+  rowSubLabelMuted: {
+    fontSize: 11,
+    color: colors.gray400,
+  },
+  // Active Sessions styles
+  currentDeviceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    borderRadius: 14,
+    padding: 12,
+    marginVertical: 10,
+  },
+  deviceIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#dcfce7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sessionDeviceName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.gray900,
+  },
+  thisDeviceBadge: {
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  thisDeviceBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#15803d',
+  },
+  sessionDeviceSub: {
+    fontSize: 11,
+    color: colors.gray500,
+    marginTop: 2,
+  },
+  onlineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#22c55e',
+  },
+  sessionSecurityCard: {
+    flexDirection: 'row',
+    gap: 8,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 10,
+  },
+  sessionSecurityText: {
+    flex: 1,
+    fontSize: 11,
+    color: colors.gray600,
+    lineHeight: 16,
+  },
+  modalActionBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+  },
 })
+
 
