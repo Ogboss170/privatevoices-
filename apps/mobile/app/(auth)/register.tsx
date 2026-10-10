@@ -123,6 +123,13 @@ export default function RegisterScreen() {
 
     setSendingCode(targetType)
     try {
+      if (targetType === 'email') {
+        await supabase.auth.signInWithOtp({
+          email: targetValue,
+          options: { shouldCreateUser: false },
+        }).catch(() => null)
+      }
+
       const { data, error } = await supabase.rpc('request_verification_code', {
         p_target_type: targetType,
         p_target_value: targetValue,
@@ -131,11 +138,17 @@ export default function RegisterScreen() {
       if (error) {
         Alert.alert('Error', error.message)
       } else if (data?.success) {
-        if (targetType === 'email') setEmailCodeSent(true)
-        if (targetType === 'phone') setPhoneCodeSent(true)
+        if (targetType === 'email') {
+          setEmailCodeSent(true)
+          if (data?.dev_code) setEmailOtp(data.dev_code)
+        }
+        if (targetType === 'phone') {
+          setPhoneCodeSent(true)
+          if (data?.dev_code) setPhoneOtp(data.dev_code)
+        }
         Alert.alert(
-          'Code Sent',
-          `A 6-digit verification code was sent to ${targetValue}.${data?.dev_code ? ` (Dev Code: ${data.dev_code})` : ''}`
+          'Verification Code',
+          `Your 6-digit code for ${targetValue} is: ${data?.dev_code || 'Sent via email/SMS'}.\n\nIt has been automatically filled in for you.`
         )
       } else {
         Alert.alert('Notice', data?.message || 'Could not send verification code.')

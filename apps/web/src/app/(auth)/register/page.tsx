@@ -192,6 +192,21 @@ export default function RegisterPage() {
     setSendingCode(targetType)
 
     try {
+      // 1. If verifying email, request Supabase to send real email confirmation code/magic link
+      if (targetType === 'email') {
+        const { error: otpError } = await supabase.auth.signInWithOtp({
+          email: targetValue,
+          options: {
+            shouldCreateUser: false,
+          },
+        }).catch(() => ({ error: null })) as any
+
+        if (otpError) {
+          console.warn('Supabase signInWithOtp notice (using RPC OTP):', otpError.message)
+        }
+      }
+
+      // 2. Call verification code RPC
       const { data, error: rpcError } = await supabase.rpc('request_verification_code', {
         p_target_type: targetType,
         p_target_value: targetValue,
@@ -199,11 +214,20 @@ export default function RegisterPage() {
 
       if (rpcError) {
         console.error('request_verification_code error:', rpcError)
-        setError(rpcError.message || 'Could not send verification code. Please make sure the SQL migration has been applied.')
+        setError(rpcError.message || 'Could not generate verification code.')
       } else if (data?.success) {
-        if (targetType === 'phone') setPhoneCodeSent(true)
-        if (targetType === 'email') setEmailCodeSent(true)
-        const msg = `Verification code generated for ${targetValue}.${data?.dev_code ? ` Your code is: ${data.dev_code}` : ''}`
+        if (targetType === 'phone') {
+          setPhoneCodeSent(true)
+          if (data?.dev_code) setPhoneOtp(data.dev_code)
+        }
+        if (targetType === 'email') {
+          setEmailCodeSent(true)
+          if (data?.dev_code) setEmailOtp(data.dev_code)
+        }
+
+        const msg = data?.dev_code
+          ? `Code generated for ${targetValue}: ${data.dev_code} (Auto-filled below for quick verification)`
+          : `Verification code sent to ${targetValue}. Please check your inbox and spam folder.`
         setCodeFeedback(msg)
       } else {
         setError(data?.message || 'Could not send verification code.')
