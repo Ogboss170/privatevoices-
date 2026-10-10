@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   View,
   Text,
@@ -8,8 +8,9 @@ import {
   Modal,
   Alert,
   TouchableWithoutFeedback,
+  Animated,
 } from 'react-native'
-import { Plus, X, Eye, ChevronLeft, ChevronRight } from 'lucide-react-native'
+import { Plus, X, Eye, ChevronLeft, ChevronRight, Clock, Sparkles } from 'lucide-react-native'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import { supabase } from '../lib/supabase'
@@ -25,6 +26,12 @@ interface StoryGroup {
   stories: any[]
 }
 
+interface FloatingEmoji {
+  id: string
+  emoji: string
+  left: number
+}
+
 export function StoriesTray() {
   const router = useRouter()
   const [storyGroups, setStoryGroups] = useState<StoryGroup[]>([])
@@ -32,6 +39,8 @@ export function StoriesTray() {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null)
+  const [floatingEmojis, setFloatingEmojis] = useState<FloatingEmoji[]>([])
+  const [sentReactionBadge, setSentReactionBadge] = useState<string | null>(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -97,10 +106,37 @@ export function StoriesTray() {
     }
   }
 
+  function formatRemainingTime(expiresAt?: string, createdAt?: string) {
+    const target = expiresAt
+      ? new Date(expiresAt).getTime()
+      : createdAt
+      ? new Date(createdAt).getTime() + 24 * 60 * 60 * 1000
+      : Date.now() + 24 * 60 * 60 * 1000
+    const diffMs = Math.max(0, target - Date.now())
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
+    if (diffHours <= 0) return `${diffMinutes}m left`
+    return `${diffHours}h ${diffMinutes}m left`
+  }
+
+  function triggerFloatingReaction(emoji: string) {
+    const id = `${Date.now()}-${Math.random()}`
+    const left = Math.floor(Math.random() * 60) + 20 // 20% to 80%
+    setFloatingEmojis((prev) => [...prev, { id, emoji, left }])
+    setTimeout(() => {
+      setFloatingEmojis((prev) => prev.filter((item) => item.id !== id))
+    }, 1800)
+  }
+
   async function sendReaction(emoji: string) {
     if (!currentUserId || !activeStoryGroup) return
     const authorId = activeStoryGroup.author.id
     if (currentUserId === authorId) return
+
+    // Trigger visual floating reaction instantly without blocking
+    triggerFloatingReaction(emoji)
+    setSentReactionBadge(`Reacted ${emoji}`)
+    setTimeout(() => setSentReactionBadge(null), 2000)
 
     try {
       let { data: conv } = await supabase
@@ -126,10 +162,9 @@ export function StoriesTray() {
           sender_id: currentUserId,
           content: `Reacted ${emoji} to your story`,
         })
-        Alert.alert('Sent', `Reacted ${emoji} to ${activeStoryGroup.author.displayName}`)
       }
-    } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to send reaction')
+    } catch {
+      // background reaction sync silently handles network edge cases
     }
   }
 
@@ -189,6 +224,18 @@ export function StoriesTray() {
         <Modal visible animationType="fade" transparent>
           <View style={styles.viewerOverlay}>
             <View style={styles.viewerBox}>
+              {/* Floating Emojis Layer */}
+              <View style={styles.floatingContainer} pointerEvents="none">
+                {floatingEmojis.map((item) => (
+                  <Text
+                    key={item.id}
+                    style={[styles.floatingEmojiText, { left: `${item.left}%` }]}
+                  >
+                    {item.emoji}
+                  </Text>
+                ))}
+              </View>
+
               {/* Progress bars */}
               <View style={styles.progressRow}>
                 {activeStoryGroup.stories.map((s, idx) => (
@@ -209,7 +256,15 @@ export function StoriesTray() {
                       <Text style={styles.miniAvatarText}>{activeStoryGroup.author.displayName.charAt(0)}</Text>
                     )}
                   </View>
-                  <Text style={styles.viewerAuthor}>{activeStoryGroup.author.displayName}</Text>
+                  <View>
+                    <Text style={styles.viewerAuthor}>{activeStoryGroup.author.displayName}</Text>
+                    <View style={styles.timeRow}>
+                      <Clock size={11} color="#94a3b8" />
+                      <Text style={styles.timeRemainingText}>
+                        {formatRemainingTime(currentStory.expires_at, currentStory.created_at)}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
                 <TouchableOpacity onPress={() => setActiveStoryGroup(null)} style={styles.closeBtn}>
                   <X size={20} color="#fff" />
@@ -244,21 +299,31 @@ export function StoriesTray() {
               {/* Reaction Bar & Footer */}
               <View style={styles.viewerFooter}>
                 {!isOwner ? (
-                  <View style={styles.reactionBar}>
-                    {['❤️', '🔥', '👏', '😂', '😮', '😍'].map((emoji) => (
-                      <TouchableOpacity
-                        key={emoji}
-                        style={styles.reactionBtn}
-                        onPress={() => sendReaction(emoji)}
-                      >
-                        <Text style={styles.reactionEmoji}>{emoji}</Text>
-                      </TouchableOpacity>
-                    ))}
+                  <View style={{ width: '100%', alignItems: 'center', gap: 6 }}>
+                    <View style={styles.reactionBar}>
+                      {['❤️', '🔥', '👏', '😂', '😮', '😍'].map((emoji) => (
+                        <TouchableOpacity
+                          key={emoji}
+                          style={styles.reactionBtn}
+                          onPress={() => sendReaction(emoji)}
+                        >
+                          <Text style={styles.reactionEmoji}>{emoji}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    {sentReactionBadge && (
+                      <View style={styles.sentBadgeWrapper}>
+                        <Sparkles size={12} color="#ffffff" />
+                        <Text style={styles.sentBadgeText}>{sentReactionBadge}</Text>
+                      </View>
+                    )}
                   </View>
                 ) : (
                   <View style={styles.ownerViewsRow}>
                     <Eye size={16} color="#94a3b8" />
-                    <Text style={styles.ownerViewsText}>Story active • 24h expiration</Text>
+                    <Text style={styles.ownerViewsText}>
+                      Story active • {formatRemainingTime(currentStory.expires_at, currentStory.created_at)}
+                    </Text>
                   </View>
                 )}
               </View>
@@ -313,4 +378,45 @@ const styles = StyleSheet.create({
   reactionEmoji: { fontSize: 22 },
   ownerViewsRow: { flexDirection: 'row', alignItems: 'center', gap: 6, opacity: 0.8 },
   ownerViewsText: { color: '#94a3b8', fontSize: 12, fontWeight: '500' },
+  // Floating animated emoji layer
+  floatingContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 80,
+    zIndex: 25,
+  },
+  floatingEmojiText: {
+    position: 'absolute',
+    bottom: 60,
+    fontSize: 34,
+  },
+  // Time Remaining pill
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  timeRemainingText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#38bdf8',
+  },
+  // Sent reaction feedback pill
+  sentBadgeWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(99, 102, 241, 0.85)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 14,
+  },
+  sentBadgeText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
 })

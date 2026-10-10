@@ -1,8 +1,14 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import { X, ChevronLeft, ChevronRight, Eye } from 'lucide-react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import { X, ChevronLeft, ChevronRight, Eye, Clock, Sparkles } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+
+interface FloatingEmoji {
+  id: string
+  emoji: string
+  left: number
+}
 
 interface StoryGroup {
   author: {
@@ -29,6 +35,8 @@ export default function StoryViewerModal({
   const [currentIndex, setCurrentIndex] = useState(0)
   const [viewers, setViewers] = useState<any[]>([])
   const [showViewers, setShowViewers] = useState(false)
+  const [floatingEmojis, setFloatingEmojis] = useState<FloatingEmoji[]>([])
+  const [reactionSentBadge, setReactionSentBadge] = useState<string | null>(null)
 
   const stories = storyGroup?.stories ?? []
   const currentStory = stories[currentIndex]
@@ -80,12 +88,47 @@ export default function StoryViewerModal({
     }
   }
 
+  const formatRemainingTime = useCallback((expiresAt?: string, createdAt?: string) => {
+    const target = expiresAt
+      ? new Date(expiresAt).getTime()
+      : createdAt
+      ? new Date(createdAt).getTime() + 24 * 60 * 60 * 1000
+      : Date.now() + 24 * 60 * 60 * 1000
+    const diffMs = Math.max(0, target - Date.now())
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
+    if (diffHours <= 0) return `${diffMinutes}m left`
+    return `${diffHours}h ${diffMinutes}m left`
+  }, [])
+
+  const triggerFloatingReaction = useCallback((emoji: string) => {
+    const id = `${Date.now()}-${Math.random()}`
+    const left = Math.floor(Math.random() * 60) + 20 // 20% to 80%
+    setFloatingEmojis((prev) => [...prev, { id, emoji, left }])
+    setTimeout(() => {
+      setFloatingEmojis((prev) => prev.filter((item) => item.id !== id))
+    }, 1800)
+  }, [])
+
   const initialLetter = author.displayName ? author.displayName.charAt(0).toUpperCase() : 'U'
 
   return (
     <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
       {/* Viewer Box */}
       <div className="relative w-full max-w-sm h-[560px] bg-gradient-to-b from-brand-900 to-gray-950 rounded-3xl overflow-hidden shadow-2xl flex flex-col justify-between p-5 text-white">
+        {/* Floating Animated Reaction Emojis */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-30">
+          {floatingEmojis.map((item) => (
+            <div
+              key={item.id}
+              style={{ left: `${item.left}%`, bottom: '80px' }}
+              className="absolute text-4xl select-none animate-bounce transition-all duration-1000 ease-out transform -translate-x-1/2 opacity-90"
+            >
+              {item.emoji}
+            </div>
+          ))}
+        </div>
+
         {/* Progress Bars Header */}
         <div className="space-y-3 z-10">
           <div className="flex gap-1">
@@ -114,11 +157,18 @@ export default function StoryViewerModal({
               )}
               <div>
                 <h4 className="font-bold text-xs text-white">{author.displayName}</h4>
-                <p className="text-[10px] text-white/70">
-                  {currentStory.created_at
-                    ? new Date(currentStory.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                    : ''}
-                </p>
+                <div className="flex items-center gap-1.5 text-[10px] text-white/70">
+                  <span>
+                    {currentStory.created_at
+                      ? new Date(currentStory.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      : ''}
+                  </span>
+                  <span>•</span>
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-white/10 text-brand-300 font-semibold border border-white/10">
+                    <Clock size={10} />
+                    {formatRemainingTime(currentStory.expires_at, currentStory.created_at)}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -182,7 +232,12 @@ export default function StoryViewerModal({
                   key={emoji}
                   onClick={async () => {
                     if (!currentUserId || !author.id) return
-                    // Send reaction directly to author conversation
+                    // Trigger visual floating reaction instantly
+                    triggerFloatingReaction(emoji)
+                    setReactionSentBadge(`Reacted ${emoji}`)
+                    setTimeout(() => setReactionSentBadge(null), 2200)
+
+                    // Send reaction directly to author conversation in background
                     const userA = currentUserId < author.id ? currentUserId : author.id
                     const userB = currentUserId < author.id ? author.id : currentUserId
 
@@ -209,15 +264,23 @@ export default function StoryViewerModal({
                         sender_id: currentUserId,
                         content: `Reacted ${emoji} to your story`,
                       })
-                      alert(`Sent ${emoji} reaction to @${author.username}!`)
                     }
                   }}
-                  className="text-lg hover:scale-125 transition-transform"
+                  className="text-lg hover:scale-130 active:scale-95 transition-transform"
                 >
                   {emoji}
                 </button>
               ))}
             </div>
+
+            {reactionSentBadge && (
+              <div className="text-center">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-500/80 backdrop-blur-md text-white text-[11px] font-bold shadow-lg animate-fade-in">
+                  <Sparkles size={12} />
+                  <span>{reactionSentBadge}</span>
+                </span>
+              </div>
+            )}
           </div>
         )}
       </div>
