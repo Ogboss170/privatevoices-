@@ -198,15 +198,18 @@ export default function RegisterPage() {
       })
 
       if (rpcError) {
-        setError(rpcError.message)
+        console.error('request_verification_code error:', rpcError)
+        setError(rpcError.message || 'Could not send verification code. Please make sure the SQL migration has been applied.')
       } else if (data?.success) {
         if (targetType === 'phone') setPhoneCodeSent(true)
         if (targetType === 'email') setEmailCodeSent(true)
-        setCodeFeedback(`6-digit verification code sent to ${targetValue}${data?.dev_code ? ` (Code: ${data.dev_code})` : ''}`)
+        const msg = `Verification code generated for ${targetValue}.${data?.dev_code ? ` Your code is: ${data.dev_code}` : ''}`
+        setCodeFeedback(msg)
       } else {
         setError(data?.message || 'Could not send verification code.')
       }
     } catch (err: any) {
+      console.error('RPC call error:', err)
       setError(err?.message || 'Failed to request verification code.')
     } finally {
       setSendingCode(null)
