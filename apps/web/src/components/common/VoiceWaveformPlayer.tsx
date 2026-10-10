@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useState, useRef, useEffect } from 'react'
-import { Play, Pause, Volume2, VolumeX } from 'lucide-react'
+import { Play, Pause, Volume2, VolumeX, CheckCircle2 } from 'lucide-react'
+import { getPlayableAudioUrl, cacheAudioForOffline, isAudioCached } from '@/lib/audio/offlineAudioCache'
 
 interface VoiceWaveformPlayerProps {
   audioUrl: string
@@ -31,33 +32,64 @@ export default function VoiceWaveformPlayer({
   const [totalDuration, setTotalDuration] = useState(initialDuration || 0)
   const [playbackSpeed, setPlaybackSpeed] = useState<1 | 1.5 | 2>(1)
   const [isMuted, setIsMuted] = useState(false)
+  const [isCachedOffline, setIsCachedOffline] = useState(false)
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const waveformContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const audio = new window.Audio(audioUrl)
-    audioRef.current = audio
-    audio.preload = 'metadata'
+    let activeAudio: HTMLAudioElement | null = null
+    let objectUrlToRevoke: string | null = null
 
-    audio.onloadedmetadata = () => {
-      if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
-        setTotalDuration(audio.duration)
+    async function initAudio() {
+      // 1. Check if already stored in local cache
+      const cached = await isAudioCached(audioUrl)
+      setIsCachedOffline(cached)
+
+      // 2. Resolve offline Blob URL or original URL
+      const playableUrl = await getPlayableAudioUrl(audioUrl)
+      if (playableUrl.startsWith('blob:')) {
+        objectUrlToRevoke = playableUrl
+      }
+
+      const audio = new window.Audio(playableUrl)
+      audioRef.current = audio
+      activeAudio = audio
+      audio.preload = 'metadata'
+
+      audio.onloadedmetadata = () => {
+        if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+          setTotalDuration(audio.duration)
+        }
+      }
+
+      audio.ontimeupdate = () => {
+        setCurrentTime(audio.currentTime)
+      }
+
+      audio.onended = () => {
+        setIsPlaying(false)
+        setCurrentTime(0)
+      }
+
+      // 3. Pre-cache in background if online and not yet cached
+      if (!cached && typeof navigator !== 'undefined' && navigator.onLine) {
+        cacheAudioForOffline(audioUrl).then((success) => {
+          if (success) setIsCachedOffline(true)
+        })
       }
     }
 
-    audio.ontimeupdate = () => {
-      setCurrentTime(audio.currentTime)
-    }
-
-    audio.onended = () => {
-      setIsPlaying(false)
-      setCurrentTime(0)
-    }
+    initAudio()
 
     return () => {
-      audio.pause()
-      audio.src = ''
+      if (activeAudio) {
+        activeAudio.pause()
+        activeAudio.src = ''
+      }
+      if (objectUrlToRevoke) {
+        URL.revokeObjectURL(objectUrlToRevoke)
+      }
     }
   }, [audioUrl])
 
@@ -197,11 +229,22 @@ export default function VoiceWaveformPlayer({
           })}
         </div>
 
-        {/* Time display & Speed badge */}
+        {/* Time display, Offline indicator & Speed badge */}
         <div className="flex items-center justify-between text-[10px] opacity-80 font-medium">
-          <span>
-            {formatTime(currentTime)} / {formatTime(totalDuration)}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span>
+              {formatTime(currentTime)} / {formatTime(totalDuration)}
+            </span>
+            {isCachedOffline && (
+              <span
+                className="inline-flex items-center gap-0.5 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded-full border border-emerald-500/20"
+                title="Cached locally for instant offline playback"
+              >
+                <CheckCircle2 size={9} />
+                <span>Offline ready</span>
+              </span>
+            )}
+          </div>
 
           <div className="flex items-center gap-1.5">
             <button

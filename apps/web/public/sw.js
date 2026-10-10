@@ -16,7 +16,7 @@ const STATIC_ASSETS = [
 ]
 
 // Install Service Worker
-self.addEventListener('install', (event: any) => {
+self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE_NAME).then((cache) => {
       return cache.addAll(STATIC_ASSETS).catch((err) => {
@@ -28,7 +28,7 @@ self.addEventListener('install', (event: any) => {
 })
 
 // Activate and remove old caches
-self.addEventListener('activate', (event: any) => {
+self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
@@ -44,7 +44,7 @@ self.addEventListener('activate', (event: any) => {
 })
 
 // Fetch event: Cache-First for audio notes, Network-First for other requests
-self.addEventListener('fetch', (event: any) => {
+self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
 
   // Cache audio notes & sounds (mp3, wav, ogg, webm, m4a, audio/*)
@@ -57,6 +57,7 @@ self.addEventListener('fetch', (event: any) => {
     url.pathname.includes('/storage/v1/object/public/whispers') ||
     url.pathname.includes('/storage/v1/object/public/chat_audio') ||
     url.pathname.includes('/storage/v1/object/public/post_audio') ||
+    url.pathname.includes('/storage/v1/object/public/') ||
     event.request.headers.get('accept')?.includes('audio/')
 
   if (isAudio) {
@@ -92,11 +93,11 @@ self.addEventListener('fetch', (event: any) => {
 })
 
 // Background sync for queued offline whispers
-self.addEventListener('sync', (event: any) => {
+self.addEventListener('sync', (event) => {
   if (event.tag === 'sync-offline-whispers') {
     event.waitUntil(
-      (self as any).clients.matchAll().then((clients: any[]) => {
-        clients.forEach((client: any) => {
+      self.clients.matchAll().then((clients) => {
+        clients.forEach((client) => {
           client.postMessage({ type: 'TRIGGER_OFFLINE_SYNC' })
         })
       })
