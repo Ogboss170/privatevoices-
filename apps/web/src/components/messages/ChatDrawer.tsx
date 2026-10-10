@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
-import { X, Send, Loader2, Image as ImageIcon, ExternalLink, Trash2, Mic, Play, Pause, Square, Volume2, Maximize2, Minimize2, Phone, Video, Search, Reply as ReplyIcon, Flame, Smile, Film, Sparkles, History, PhoneIncoming, PhoneOutgoing, PhoneMissed, Lock, ShieldCheck, Users, UserPlus, Settings, Crown } from 'lucide-react'
+import { X, Send, Loader2, Image as ImageIcon, ExternalLink, Trash2, Mic, Play, Pause, Square, Volume2, Maximize2, Minimize2, Phone, Video, Search, Reply as ReplyIcon, Flame, Smile, Film, Sparkles, History, PhoneIncoming, PhoneOutgoing, PhoneMissed, Lock, ShieldCheck, Users, UserPlus, Settings, Crown, Pin } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/media/imageCompression'
 import { DMCallModal } from '@/components/messages/DMCallModal'
+import { ChatMediaGalleryDrawer } from '@/components/messages/ChatMediaGalleryDrawer'
 import { playDMSound, startRingtone, stopRingtone } from '@/lib/sound/soundEffects'
 import { requestNotificationPermission, isDocumentHidden, showDesktopNotification } from '@/lib/notifications/desktopNotifications'
 import {
@@ -60,6 +61,9 @@ export default function ChatDrawer({
   // Search in chat
   const [isSearching, setIsSearching] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+
+  // Media & Pinned Assets Gallery
+  const [showMediaGallery, setShowMediaGallery] = useState(false)
 
   // Call history panel
   const [showCallHistory, setShowCallHistory] = useState(false)
@@ -892,6 +896,30 @@ export default function ChatDrawer({
     }
   }
 
+  async function handleTogglePinMessage(messageId: string, nextPinned: boolean) {
+    // Optimistic UI update
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, is_pinned: nextPinned, pinned_at: nextPinned ? new Date().toISOString() : null } : m))
+    )
+
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .update({
+          is_pinned: nextPinned,
+          pinned_at: nextPinned ? new Date().toISOString() : null,
+          pinned_by: nextPinned ? currentUserId : null,
+        })
+        .eq('id', messageId)
+
+      if (error) {
+        console.warn('Error pinning message:', error)
+      }
+    } catch (e) {
+      console.error('Error toggling pin:', e)
+    }
+  }
+
   async function handleToggleVanishMode() {
     const nextVal = !isVanishMode
     setIsVanishMode(nextVal)
@@ -1205,6 +1233,20 @@ export default function ChatDrawer({
               </button>
             )}
 
+            {/* Media & Pinned Gallery Button */}
+            <button
+              onClick={() => setShowMediaGallery(true)}
+              className={`p-2 rounded-xl transition-colors ${
+                showMediaGallery
+                  ? 'text-purple-600 bg-purple-50'
+                  : 'text-gray-600 hover:text-purple-600 hover:bg-gray-100'
+              }`}
+              aria-label="Media & Pinned Assets"
+              title="Media, Voice Notes & Pinned Assets"
+            >
+              <Pin size={18} />
+            </button>
+
             {/* Search messages toggle */}
             <button
               onClick={() => setIsSearching((prev) => !prev)}
@@ -1514,6 +1556,20 @@ export default function ChatDrawer({
                       >
                         <ReplyIcon size={13} />
                       </button>
+
+                      {/* Pin Asset Button */}
+                      <button
+                        type="button"
+                        onClick={() => handleTogglePinMessage(msg.id, !msg.is_pinned)}
+                        className={`p-1 rounded-full transition-colors ${
+                          msg.is_pinned
+                            ? 'text-purple-600 bg-purple-50'
+                            : 'text-gray-400 hover:text-purple-600 hover:bg-purple-50'
+                        }`}
+                        title={msg.is_pinned ? 'Unpin message' : 'Pin message'}
+                      >
+                        <Pin size={13} className={msg.is_pinned ? 'fill-purple-600' : ''} />
+                      </button>
                     </div>
                   )}
 
@@ -1555,6 +1611,14 @@ export default function ChatDrawer({
                           : 'bg-white text-gray-900 border border-gray-200/80 rounded-bl-xs shadow-xs'
                       } ${isTemp ? 'opacity-70' : ''}`}
                     >
+                      {/* Pinned Message Badge Indicator */}
+                      {msg.is_pinned && (
+                        <div className={`px-2.5 pt-1.5 pb-0.5 text-[9px] font-bold flex items-center gap-1 ${isMe ? 'text-white/80' : 'text-purple-600'}`}>
+                          <Pin size={10} className="fill-current" />
+                          <span>Pinned Asset</span>
+                        </div>
+                      )}
+
                       {/* Sender Name in Group DMs */}
                       {!isMe && isGroup && (
                         <div className="px-3 pt-2 text-[10px] font-bold text-purple-600">
@@ -2111,6 +2175,18 @@ export default function ChatDrawer({
         onToggleMute={() => {}}
         onToggleCamera={() => {}}
         onToggleSpeaker={() => {}}
+      />
+
+      {/* Shared Media & Pinned Assets Drawer */}
+      <ChatMediaGalleryDrawer
+        isOpen={showMediaGallery}
+        onClose={() => setShowMediaGallery(false)}
+        messages={messages}
+        partnerName={partner.username}
+        isGroup={isGroup}
+        currentUserId={currentUserId}
+        onTogglePinMessage={handleTogglePinMessage}
+        onSelectImagePreview={(url) => setPreviewModalUrl(url)}
       />
     </>
   )
