@@ -27,8 +27,8 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
 
   const mobileBottomNavItems = [
     { href: '/feed',        label: t.home,      Icon: Home },
-    { href: '/spaces',      label: 'Spaces',    Icon: Radio },
     { href: '/explore',     label: t.explore,   Icon: Search },
+    { href: '/communities', label: t.community, Icon: Users },
     { href: '/inbox',       label: t.inbox,     Icon: Inbox },
     { href: '/profile',     label: t.profile,   Icon: User },
   ]
@@ -185,9 +185,12 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
         <RightSidebar />
       </div>
 
-        {/* ── Bottom tab bar (mobile view: X minimalist icon dock) ── */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-t border-gray-100 dark:border-slate-800 flex items-center justify-around px-2 py-2.5 z-20 transition-colors">
-        {mobileBottomNavItems.map(({ href, Icon }) => {
+        {/* ── Bottom tab bar (mobile view: fixed icon dock) ── */}
+      <nav
+        aria-label="Mobile Navigation"
+        className="md:hidden fixed bottom-0 inset-x-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-gray-100 dark:border-slate-800 flex items-center justify-around px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] z-20 transition-colors shadow-lg"
+      >
+        {mobileBottomNavItems.map(({ href, label, Icon }) => {
           const isActive = pathname === href || pathname.startsWith(href + '/')
           const badgeCount =
             href === '/notifications' ? unreadNotifications : href === '/inbox' ? unreadMessages : 0
@@ -196,7 +199,8 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
             <Link
               key={href}
               href={href}
-              className={`p-2 rounded-full transition-transform active:scale-90 relative ${
+              aria-label={label}
+              className={`p-2.5 rounded-full transition-transform active:scale-90 relative ${
                 isActive ? 'text-gray-950 dark:text-white' : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'
               }`}
             >

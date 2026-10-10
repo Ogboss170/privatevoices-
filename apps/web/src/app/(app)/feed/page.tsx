@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { Bell, Sparkles, SlidersHorizontal } from 'lucide-react'
+import { Bell, Sparkles, SlidersHorizontal, Plus, Radio } from 'lucide-react'
 import PostCard from '@/components/feed/PostCard'
 import StoriesTray from '@/components/stories/StoriesTray'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
@@ -25,11 +25,33 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true)
   const [currentUserId, setCurrentUserId] = useState<string | undefined>()
   const [visibleCount, setVisibleCount] = useState(25)
+  const [unreadNotifications, setUnreadNotifications] = useState(0)
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) setCurrentUserId(data.user.id)
-    })
+    async function loadUserAndNotifs() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        setCurrentUserId(user.id)
+        const { count } = await supabase
+          .from('notifications')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('is_read', false)
+        setUnreadNotifications(count || 0)
+      }
+    }
+    loadUserAndNotifs()
+
+    const channel = supabase
+      .channel('feed:notifications')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => {
+        loadUserAndNotifs()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [supabase])
 
   const fetchPosts = useCallback(async (isInitial = false) => {
@@ -240,36 +262,52 @@ export default function FeedPage() {
 
   return (
     <div className="space-y-0 max-w-xl mx-auto pb-12">
-      {/* ── 1. Top Header: X Minimalist Top Bar with Logo & Actions ── */}
-      <header className="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-100 dark:border-slate-800 transition-colors">
-        <div className="flex items-center justify-between px-4 py-3">
-          {/* Left: Brand / X Icon */}
-          <Link href="/feed" className="flex items-center gap-2 group">
-            <div className="w-8 h-8 rounded-full bg-gray-900 dark:bg-white flex items-center justify-center text-white dark:text-gray-900 font-black text-sm tracking-tighter shadow-xs group-hover:scale-105 transition-transform">
-              𝕏
-            </div>
-            <span className="font-bold text-base text-gray-900 dark:text-gray-100 tracking-tight hidden sm:inline">
-              Private Voices
-            </span>
-          </Link>
+      {/* ── 1. Top Header: Home Page Only Natural Scrolling Header ── */}
+      <header className="relative z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-100 dark:border-slate-800 transition-colors">
+        <div className="relative flex items-center justify-between px-3 py-2.5 sm:px-4 sm:py-3 min-h-[52px]">
+          {/* Left: Create (+) icon button */}
+          <div className="flex items-center z-10">
+            <Link
+              href="/create"
+              aria-label="Create post"
+              title="Create"
+              className="p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-800 active:scale-95 transition-transform flex items-center justify-center"
+            >
+              <Plus size={22} strokeWidth={2.4} />
+            </Link>
+          </div>
 
-          {/* Center / Right: Notifications & Quick Filter */}
-          <div className="flex items-center gap-1 sm:gap-2">
+          {/* Center: PRIVATE VOICES perfectly centered */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <Link
+              href="/feed"
+              className="pointer-events-auto font-black text-sm sm:text-base tracking-widest uppercase text-gray-950 dark:text-white select-none hover:opacity-90 transition-opacity"
+            >
+              PRIVATE VOICES
+            </Link>
+          </div>
+
+          {/* Right: Notifications bell & Spaces icon */}
+          <div className="flex items-center gap-1 sm:gap-1.5 z-10">
             <Link
               href="/notifications"
-              className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-300 transition-colors relative"
+              aria-label="Notifications"
               title="Notifications"
+              className="p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-800 active:scale-95 transition-transform relative flex items-center justify-center"
             >
-              <Bell size={20} strokeWidth={2} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-brand-600 rounded-full ring-2 ring-white dark:ring-slate-900" />
+              <Bell size={21} strokeWidth={2} />
+              {unreadNotifications > 0 && (
+                <span className="absolute top-1.5 right-1.5 min-w-[8px] h-2 px-0.5 bg-brand-600 rounded-full ring-2 ring-white dark:ring-slate-900" />
+              )}
             </Link>
 
             <Link
-              href="/settings"
-              className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-300 transition-colors"
-              title="Feed Preferences"
+              href="/spaces"
+              aria-label="Spaces"
+              title="Spaces"
+              className="p-2 rounded-full text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/40 active:scale-95 transition-transform flex items-center justify-center"
             >
-              <SlidersHorizontal size={18} strokeWidth={2} />
+              <Radio size={21} strokeWidth={2.2} />
             </Link>
           </div>
         </div>
