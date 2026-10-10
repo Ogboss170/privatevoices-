@@ -110,7 +110,7 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
   const [showMenu, setShowMenu] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [showInsightsModal, setShowInsightsModal] = useState(false)
-
+  const [showHeartAnim, setShowHeartAnim] = useState(false)
   const isOwner = currentUserId === post.authorId
 
   // Meaningful View Recording (1-second visibility threshold, excludes author, 24h dedup)
@@ -662,38 +662,62 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
     }
   }
 
+  function handleImageDoubleTap(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!isLiked) {
+      handleToggleLike()
+    }
+    setShowHeartAnim(true)
+    setTimeout(() => setShowHeartAnim(false), 900)
+  }
+
   return (
-    <article ref={cardRef} className="card p-5 space-y-4 hover:border-gray-300 transition-colors">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <Link href={`/@${post.author.username}`} className="flex items-center gap-3 group">
-          <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center font-bold text-brand-600 flex-shrink-0">
-            {post.author.avatarUrl ? (
-              <Image
-                src={post.author.avatarUrl}
-                alt={post.author.displayName}
-                width={40}
-                height={40}
-                className="rounded-full object-cover"
-              />
-            ) : (
-              post.author.displayName.charAt(0).toUpperCase()
-            )}
+    <article
+      ref={cardRef}
+      className="bg-white dark:bg-slate-900 border-y sm:border sm:rounded-3xl border-gray-100 dark:border-slate-800/80 shadow-2xs overflow-hidden transition-colors"
+    >
+      {/* ── 1. Instagram-Style Post Author Header ── */}
+      <div className="flex items-center justify-between px-3.5 py-3">
+        <Link href={`/@${post.author.username}`} className="flex items-center gap-2.5 group min-w-0">
+          {/* Instagram Story Gradient Ring around Avatar */}
+          <div className="relative p-[2px] rounded-full bg-gradient-to-tr from-amber-400 via-rose-500 to-purple-600 shrink-0 group-hover:scale-105 transition-transform">
+            <div className="w-9 h-9 rounded-full bg-white dark:bg-slate-900 p-0.5">
+              <div className="w-full h-full rounded-full bg-brand-100 dark:bg-slate-800 flex items-center justify-center font-bold text-xs text-brand-600 overflow-hidden">
+                {post.author.avatarUrl ? (
+                  <Image
+                    src={post.author.avatarUrl}
+                    alt={post.author.displayName}
+                    width={36}
+                    height={36}
+                    className="rounded-full object-cover"
+                  />
+                ) : (
+                  post.author.displayName.charAt(0).toUpperCase()
+                )}
+              </div>
+            </div>
           </div>
-          <div>
+
+          <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <h3 className="font-semibold text-gray-900 group-hover:text-brand-600 transition-colors">
+              <h3 className="font-bold text-xs text-gray-900 dark:text-gray-100 group-hover:text-brand-600 transition-colors truncate">
                 {post.author.displayName}
               </h3>
-              <UserBadgesRow badges={authorBadges} size={15} />
-              {authorCommunityRole && <CommunityRoleBadge role={authorCommunityRole} size={14} />}
+              <UserBadgesRow badges={authorBadges} size={13} />
+              {authorCommunityRole && <CommunityRoleBadge role={authorCommunityRole} size={12} />}
             </div>
-            <p className="text-xs text-gray-500">@{post.author.username}</p>
+            <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
+              <span className="font-mono">@{post.author.username}</span>
+              <span>•</span>
+              <span>
+                {new Date(post.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+              </span>
+            </div>
             {post.community && (
               <Link
                 href={`/community/${post.community.slug}`}
                 onClick={(e) => e.stopPropagation()}
-                className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-600 hover:underline mt-0.5"
+                className="inline-flex items-center gap-1 text-[10px] font-semibold text-brand-600 hover:underline mt-0.5"
               >
                 <span>📌</span>
                 <span>{post.community.name}</span>
@@ -780,10 +804,12 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
         </div>
       )}
 
-      {/* Content */}
-      <div className="text-gray-800 text-sm whitespace-pre-line leading-relaxed">
-        <FormattedText text={post.content} />
-      </div>
+      {/* Text-only Content (shown here only if no images/video, otherwise styled as Instagram caption below) */}
+      {(!post.imageUrls || post.imageUrls.length === 0) && !post.videoUrl && post.content && (
+        <div className="px-3.5 text-gray-800 dark:text-gray-200 text-sm whitespace-pre-line leading-relaxed">
+          <FormattedText text={post.content} />
+        </div>
+      )}
 
       {/* Interactive Poll */}
       <InteractivePoll
@@ -825,8 +851,9 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
         <div className="mt-2">
           {post.imageUrls.length === 1 && (
             <div
-              className="relative w-full aspect-[16/9] max-h-[440px] rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 cursor-pointer group"
+              className="relative w-full aspect-square sm:aspect-[4/5] max-h-[520px] rounded-2xl overflow-hidden bg-black/5 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-800 cursor-pointer group select-none"
               onClick={() => setLightboxIndex(0)}
+              onDoubleClick={handleImageDoubleTap}
             >
               <Image
                 src={post.imageUrls[0]}
@@ -834,6 +861,18 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
                 fill
                 className="object-cover group-hover:scale-[1.01] transition-transform duration-200"
               />
+
+              {/* Instagram Floating Pop Heart Animation on Double Tap */}
+              {showHeartAnim && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                  <div className="animate-in zoom-in-50 fade-in duration-200">
+                    <Heart
+                      size={96}
+                      className="text-white fill-white drop-shadow-[0_8px_24px_rgba(0,0,0,0.5)] animate-bounce"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -979,120 +1018,152 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
         </div>
       )}
 
-      {/* Action buttons (Minimal horizontal action row: Comment -> Repost -> Like -> Views -> Bookmark -> Share) */}
-      <div className="flex items-center justify-between pt-2 border-t border-gray-100 text-gray-500 text-xs select-none">
-        {/* 1. Comment */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            handleLoadComments()
-          }}
-          aria-label={`Comment. ${commentCount} comments`}
-          className="flex items-center gap-1.5 p-2 -m-2 rounded-full hover:text-brand-600 hover:bg-brand-50/50 transition-colors cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 min-w-[44px] min-h-[44px] justify-center"
-        >
-          <MessageCircle size={18} className="transition-transform group-active:scale-90" />
-          <span className="text-xs font-medium">{commentCount}</span>
-        </button>
-
-        {/* 2. Repost */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            handleToggleRepost()
-          }}
-          aria-label={`Repost. ${repostCount} reposts`}
-          aria-pressed={isReposted}
-          className={`flex items-center gap-1.5 p-2 -m-2 rounded-full hover:text-emerald-600 hover:bg-emerald-50/50 transition-colors cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 min-w-[44px] min-h-[44px] justify-center ${
-            isReposted ? 'text-emerald-600 font-semibold' : ''
-          }`}
-        >
-          <Repeat size={18} className="transition-transform group-active:rotate-45" />
-          <span className="text-xs font-medium">{repostCount}</span>
-        </button>
-
-        {/* 3. Like */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            handleToggleLike()
-          }}
-          aria-label={`Like. ${likeCount} likes`}
-          aria-pressed={isLiked}
-          className={`flex items-center gap-1.5 p-2 -m-2 rounded-full hover:text-rose-500 hover:bg-rose-50/50 transition-colors cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 min-w-[44px] min-h-[44px] justify-center ${
-            isLiked ? 'text-rose-500 font-semibold' : ''
-          }`}
-        >
-          <Heart
-            size={18}
-            fill={isLiked ? 'currentColor' : 'none'}
-            className={`transition-all duration-200 ${
-              isLiked ? 'scale-110 animate-[bounce_0.3s_ease-in-out_1]' : 'group-active:scale-125'
-            }`}
-          />
-          <span className="text-xs font-medium">{likeCount}</span>
-        </button>
-
-        {/* 4. Views: Author can tap to view Analytics & Insights; Public cannot tap (display-only) */}
-        {isOwner ? (
+      {/* ── 2. Instagram Action Row: Like, Comment, Share (left) + Views, Bookmark (right) ── */}
+      <div className="flex items-center justify-between px-3.5 pt-3 pb-2 text-gray-800 dark:text-gray-200 select-none">
+        <div className="flex items-center gap-4">
+          {/* 1. Like (Instagram Heart) */}
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation()
-              setShowInsightsModal(true)
+              handleToggleLike()
             }}
-            aria-label={`Views. ${viewCount} views. Tap to open analytics`}
-            title="Post Analytics & Insights"
-            className="flex items-center gap-1.5 p-2 -m-2 rounded-full text-brand-600 hover:text-brand-700 hover:bg-brand-50/50 transition-colors cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 min-w-[44px] min-h-[44px] justify-center"
+            aria-label={`Like. ${likeCount} likes`}
+            aria-pressed={isLiked}
+            className={`p-1 -m-1 transition-transform active:scale-125 cursor-pointer ${
+              isLiked ? 'text-rose-500' : 'text-gray-800 dark:text-gray-200 hover:text-gray-500'
+            }`}
           >
-            <BarChart2 size={18} className="transition-transform group-active:scale-90" />
-            <span className="text-xs font-semibold">{viewCount}</span>
+            <Heart
+              size={24}
+              strokeWidth={1.8}
+              fill={isLiked ? 'currentColor' : 'none'}
+              className={isLiked ? 'animate-[bounce_0.3s_ease-in-out_1]' : ''}
+            />
           </button>
-        ) : (
-          <div
-            aria-label={`Views. ${viewCount} views`}
-            className="flex items-center gap-1.5 p-2 -m-2 rounded-full text-gray-500 min-w-[44px] min-h-[44px] justify-center select-none"
+
+          {/* 2. Comment (Instagram Speech Bubble) */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleLoadComments()
+            }}
+            aria-label={`Comment. ${commentCount} comments`}
+            className="p-1 -m-1 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-transform active:scale-90 cursor-pointer"
           >
-            <BarChart2 size={18} />
-            <span className="text-xs font-medium">{viewCount}</span>
+            <MessageCircle size={24} strokeWidth={1.8} className="-scale-x-100" />
+          </button>
+
+          {/* 3. Share / Send (Instagram Paper Plane) */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              navigator.clipboard.writeText(`${window.location.origin}/post/${post.id}`)
+              alert('Post link copied to clipboard!')
+            }}
+            aria-label="Share post"
+            className="p-1 -m-1 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-transform active:scale-90 cursor-pointer"
+          >
+            <Share2 size={22} strokeWidth={1.8} />
+          </button>
+
+          {/* 4. Repost */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleToggleRepost()
+            }}
+            aria-label={`Repost. ${repostCount} reposts`}
+            aria-pressed={isReposted}
+            className={`p-1 -m-1 transition-transform active:rotate-45 cursor-pointer ${
+              isReposted ? 'text-emerald-500' : 'text-gray-800 dark:text-gray-200 hover:text-gray-500'
+            }`}
+            title="Repost"
+          >
+            <Repeat size={21} strokeWidth={1.8} />
+          </button>
+        </div>
+
+        {/* Right side: Views & Bookmark */}
+        <div className="flex items-center gap-3">
+          {/* Views Analytics */}
+          {isOwner ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowInsightsModal(true)
+              }}
+              title="Post Analytics & Insights"
+              className="flex items-center gap-1 text-xs font-semibold text-brand-600 dark:text-brand-400 hover:opacity-80 transition-opacity cursor-pointer"
+            >
+              <BarChart2 size={18} strokeWidth={2} />
+              <span>{viewCount}</span>
+            </button>
+          ) : (
+            <div className="flex items-center gap-1 text-xs text-gray-400">
+              <BarChart2 size={18} strokeWidth={1.8} />
+              <span>{viewCount}</span>
+            </div>
+          )}
+
+          {/* Bookmark / Save */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleToggleSave()
+            }}
+            aria-label="Bookmark post"
+            aria-pressed={isSaved}
+            className={`p-1 -m-1 transition-transform active:scale-110 cursor-pointer ${
+              isSaved ? 'text-gray-900 dark:text-gray-100' : 'text-gray-800 dark:text-gray-200 hover:text-gray-500'
+            }`}
+          >
+            <Bookmark
+              size={24}
+              strokeWidth={1.8}
+              fill={isSaved ? 'currentColor' : 'none'}
+            />
+          </button>
+        </div>
+      </div>
+
+      {/* ── 3. Instagram Likes & Caption Block ── */}
+      <div className="px-3.5 pb-3 space-y-1 text-xs">
+        {/* Likes Count */}
+        <div className="font-bold text-gray-900 dark:text-gray-100">
+          {likeCount.toLocaleString()} {likeCount === 1 ? 'like' : 'likes'}
+        </div>
+
+        {/* Caption: Username + Content (only displayed here if post has media, otherwise shown above) */}
+        {((post.imageUrls && post.imageUrls.length > 0) || post.videoUrl) && post.content && (
+          <div className="text-gray-800 dark:text-gray-200 text-xs leading-relaxed">
+            <Link
+              href={`/@${post.author.username}`}
+              className="font-bold mr-1.5 text-gray-900 dark:text-gray-100 hover:underline"
+            >
+              {post.author.username}
+            </Link>
+            <span className="whitespace-pre-line">
+              <FormattedText text={post.content} />
+            </span>
           </div>
         )}
 
-        {/* 5. Bookmark */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            handleToggleSave()
-          }}
-          aria-label="Bookmark post"
-          aria-pressed={isSaved}
-          className={`flex items-center p-2 -m-2 rounded-full hover:text-brand-600 hover:bg-brand-50/50 transition-colors cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 min-w-[44px] min-h-[44px] justify-center ${
-            isSaved ? 'text-brand-600' : ''
-          }`}
-        >
-          <Bookmark
-            size={18}
-            fill={isSaved ? 'currentColor' : 'none'}
-            className="transition-transform group-active:scale-110"
-          />
-        </button>
-
-        {/* 6. Share */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            navigator.clipboard.writeText(`${window.location.origin}/post/${post.id}`)
-            alert('Post link copied to clipboard!')
-          }}
-          aria-label="Share post"
-          className="flex items-center p-2 -m-2 rounded-full hover:text-brand-600 hover:bg-brand-50/50 transition-colors cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 min-w-[44px] min-h-[44px] justify-center"
-        >
-          <Share2 size={18} className="transition-transform group-active:scale-90" />
-        </button>
+        {/* View all comments link */}
+        {commentCount > 0 && !showComments && (
+          <button
+            type="button"
+            onClick={handleLoadComments}
+            className="text-gray-400 dark:text-gray-500 text-xs hover:text-gray-600 dark:hover:text-gray-300 pt-0.5 block cursor-pointer"
+          >
+            View all {commentCount} comments
+          </button>
+        )}
       </div>
 
       {/* Comments section */}

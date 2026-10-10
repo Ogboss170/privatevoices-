@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { Bell, Plus } from 'lucide-react'
+import { Plus, Heart, Send } from 'lucide-react'
 import PostCard from '@/components/feed/PostCard'
 import StoriesTray from '@/components/stories/StoriesTray'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
@@ -238,57 +238,74 @@ export default function FeedPage() {
   }
 
   return (
-    <div className="space-y-4 max-w-2xl mx-auto">
-      {/* 1. Header: ＋ left, PRIVATE VOICES center, 🔔 right — scrollable with feed */}
-      <header className="relative flex items-center justify-between py-2 px-1 border-b border-gray-100">
-        {/* Left: ＋ Create */}
-        <Link
-          href="/create"
-          className="p-2 rounded-xl text-brand-600 hover:bg-brand-50 transition-colors flex items-center justify-center z-10"
-          aria-label="Create"
-        >
-          <Plus size={22} strokeWidth={2.4} />
-        </Link>
-
-        {/* Center: PRIVATE VOICES */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <span
-            className="text-sm font-extrabold tracking-[0.16em] text-gray-900 uppercase"
-            style={{ letterSpacing: '1.6px' }}
-          >
+    <div className="space-y-3 max-w-xl mx-auto pb-12">
+      {/* 1. Header: Instagram-style sleek top app bar with logo + action glyphs */}
+      <header className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md flex items-center justify-between py-2.5 px-3 border-b border-gray-100 dark:border-slate-800 transition-colors">
+        {/* Left: Instagram-aesthetic App Brand Typography */}
+        <Link href="/feed" className="flex items-center gap-1.5 group select-none">
+          <span className="text-xl font-black tracking-tight text-gray-900 dark:text-gray-100 font-serif italic group-hover:opacity-80 transition-opacity">
             Private Voices
           </span>
-        </div>
-
-        {/* Right: 🔔 Notifications */}
-        <Link
-          href="/notifications"
-          className="relative p-2 rounded-xl hover:bg-gray-100 transition-colors text-gray-700 z-10"
-          aria-label="Notifications"
-        >
-          <Bell size={22} strokeWidth={2} />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white" />
+          <span className="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 animate-pulse" />
         </Link>
+
+        {/* Right: Instagram Actions (New Post, Notifications Heart, DMs Paper Plane) */}
+        <div className="flex items-center gap-1 sm:gap-2">
+          {/* New Post / Story */}
+          <Link
+            href="/create"
+            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-800 dark:text-gray-200 transition-all hover:scale-105 active:scale-95"
+            aria-label="New Post"
+            title="Create Post"
+          >
+            <Plus size={22} strokeWidth={2.2} />
+          </Link>
+
+          {/* Activity / Notifications Heart */}
+          <Link
+            href="/notifications"
+            className="relative p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-800 dark:text-gray-200 transition-all hover:scale-105 active:scale-95"
+            aria-label="Activity"
+            title="Notifications"
+          >
+            <Heart size={21} strokeWidth={2.2} />
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-white dark:ring-slate-900 animate-ping" />
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-white dark:ring-slate-900" />
+          </Link>
+
+          {/* Direct Messages Paper Plane */}
+          <Link
+            href="/messages"
+            className="relative p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-800 dark:text-gray-200 transition-all hover:scale-105 active:scale-95"
+            aria-label="Direct Messages"
+            title="Direct Messages"
+          >
+            <Send size={20} strokeWidth={2.2} className="-rotate-12 translate-x-0.5 -translate-y-0.5" />
+          </Link>
+        </div>
       </header>
 
       {/* 2. 24-Hour Temporary Stories Tray */}
       <StoriesTray />
 
-      {/* 3. Feed Filter Tabs */}
-      <div className="flex gap-1 border-b border-gray-200 bg-white px-2 rounded-lg overflow-x-auto">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as FeedMode)}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-              activeTab === tab.id
-                ? 'text-brand-600 border-brand-600'
-                : 'text-gray-500 border-transparent hover:text-gray-900 hover:border-gray-300'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      {/* 3. Feed Filter Tabs (Instagram-style modern pill selector) */}
+      <div className="flex items-center gap-1.5 px-1 overflow-x-auto scrollbar-none py-1">
+        {TABS.map((tab) => {
+          const isActive = activeTab === tab.id
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as FeedMode)}
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded-full transition-all whitespace-nowrap cursor-pointer select-none ${
+                isActive
+                  ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900 shadow-xs'
+                  : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-200/70 dark:hover:bg-slate-700'
+              }`}
+            >
+              {tab.label}
+            </button>
+          )
+        })}
       </div>
 
       {/* 4. Feed Content */}

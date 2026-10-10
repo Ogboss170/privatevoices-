@@ -107,19 +107,26 @@ export default function StoriesTray(): React.JSX.Element {
   }, [])
 
   return (
-    <div className="card p-3 flex items-center gap-3 overflow-x-auto no-scrollbar">
-      {/* Add Story Button */}
+    <div className="bg-white dark:bg-slate-900 border-y sm:border sm:rounded-2xl border-gray-100 dark:border-slate-800/80 p-3 flex items-center gap-3.5 overflow-x-auto scrollbar-none shadow-2xs">
+      {/* Add Story Button (Instagram "Your Story" style) */}
       <button
         onClick={() => setShowCreateModal(true)}
-        className="flex flex-col items-center gap-1 flex-shrink-0 group"
+        className="flex flex-col items-center gap-1.5 flex-shrink-0 group cursor-pointer"
       >
-        <div className="w-14 h-14 rounded-full border-2 border-dashed border-brand-400 bg-brand-50 flex items-center justify-center text-brand-600 group-hover:scale-105 transition-transform">
-          <Plus size={22} />
+        <div className="relative">
+          <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-slate-800 p-0.5 border border-gray-200 dark:border-slate-700 flex items-center justify-center overflow-hidden">
+            <div className="w-full h-full rounded-full bg-brand-50 dark:bg-brand-950/40 flex items-center justify-center font-bold text-base text-brand-600 group-hover:scale-105 transition-transform">
+              {currentUserId ? '✨' : '+'}
+            </div>
+          </div>
+          <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-brand-600 text-white flex items-center justify-center border-2 border-white dark:border-slate-900 shadow-xs group-hover:scale-110 transition-transform">
+            <Plus size={13} strokeWidth={3} />
+          </div>
         </div>
-        <span className="text-[11px] font-medium text-gray-700">Add Story</span>
+        <span className="text-[11px] font-medium text-gray-700 dark:text-gray-300">Your story</span>
       </button>
 
-      {/* Stories Tray */}
+      {/* Stories Tray with Instagram Rainbow Gradient Ring */}
       {storyGroups.map((group) => {
         const hasVoice = group.stories.some(
           (s) => s.media_type === 'audio' || s.media_url?.match(/\.(mp3|wav|ogg|m4a|aac|webm)(\?.*)?$/i)
@@ -132,12 +139,13 @@ export default function StoriesTray(): React.JSX.Element {
           <button
             key={group.author.id}
             onClick={() => setActiveStoryGroup(group)}
-            className="flex flex-col items-center gap-1 flex-shrink-0 group"
+            className="flex flex-col items-center gap-1.5 flex-shrink-0 group cursor-pointer"
           >
             <div className="relative">
-              <div className="w-14 h-14 rounded-full p-0.5 bg-gradient-to-tr from-brand-500 via-purple-500 to-pink-500 group-hover:scale-105 transition-transform shadow-2xs">
-                <div className="w-full h-full rounded-full bg-white p-0.5">
-                  <div className="w-full h-full rounded-full bg-brand-100 flex items-center justify-center font-bold text-sm text-brand-600 overflow-hidden">
+              {/* Instagram Multi-stop Gradient Ring */}
+              <div className="w-16 h-16 rounded-full p-[2.5px] bg-gradient-to-tr from-amber-400 via-rose-500 to-purple-600 group-hover:scale-105 transition-transform shadow-xs">
+                <div className="w-full h-full rounded-full bg-white dark:bg-slate-900 p-0.5">
+                  <div className="w-full h-full rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center font-bold text-sm text-brand-600 overflow-hidden">
                     {group.author.avatarUrl ? (
                       <img
                         src={group.author.avatarUrl}
