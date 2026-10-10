@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { Plus, Heart, Send } from 'lucide-react'
+import { Bell, Sparkles, SlidersHorizontal } from 'lucide-react'
 import PostCard from '@/components/feed/PostCard'
 import StoriesTray from '@/components/stories/StoriesTray'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
@@ -24,6 +24,7 @@ export default function FeedPage() {
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [currentUserId, setCurrentUserId] = useState<string | undefined>()
+  const [visibleCount, setVisibleCount] = useState(25)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -238,74 +239,71 @@ export default function FeedPage() {
   }
 
   return (
-    <div className="space-y-3 max-w-xl mx-auto pb-12">
-      {/* 1. Header: Instagram-style sleek top app bar with logo + action glyphs */}
-      <header className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md flex items-center justify-between py-2.5 px-3 border-b border-gray-100 dark:border-slate-800 transition-colors">
-        {/* Left: Instagram-aesthetic App Brand Typography */}
-        <Link href="/feed" className="flex items-center gap-1.5 group select-none">
-          <span className="text-xl font-black tracking-tight text-gray-900 dark:text-gray-100 font-serif italic group-hover:opacity-80 transition-opacity">
-            Private Voices
-          </span>
-          <span className="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 animate-pulse" />
-        </Link>
-
-        {/* Right: Instagram Actions (New Post, Notifications Heart, DMs Paper Plane) */}
-        <div className="flex items-center gap-1 sm:gap-2">
-          {/* New Post / Story */}
-          <Link
-            href="/create"
-            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-800 dark:text-gray-200 transition-all hover:scale-105 active:scale-95"
-            aria-label="New Post"
-            title="Create Post"
-          >
-            <Plus size={22} strokeWidth={2.2} />
+    <div className="space-y-0 max-w-xl mx-auto pb-12">
+      {/* ── 1. Top Header: X Minimalist Top Bar with Logo & Actions ── */}
+      <header className="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-100 dark:border-slate-800 transition-colors">
+        <div className="flex items-center justify-between px-4 py-3">
+          {/* Left: Brand / X Icon */}
+          <Link href="/feed" className="flex items-center gap-2 group">
+            <div className="w-8 h-8 rounded-full bg-gray-900 dark:bg-white flex items-center justify-center text-white dark:text-gray-900 font-black text-sm tracking-tighter shadow-xs group-hover:scale-105 transition-transform">
+              𝕏
+            </div>
+            <span className="font-bold text-base text-gray-900 dark:text-gray-100 tracking-tight hidden sm:inline">
+              Private Voices
+            </span>
           </Link>
 
-          {/* Activity / Notifications Heart */}
-          <Link
-            href="/notifications"
-            className="relative p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-800 dark:text-gray-200 transition-all hover:scale-105 active:scale-95"
-            aria-label="Activity"
-            title="Notifications"
-          >
-            <Heart size={21} strokeWidth={2.2} />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-white dark:ring-slate-900 animate-ping" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-white dark:ring-slate-900" />
-          </Link>
+          {/* Center / Right: Notifications & Quick Filter */}
+          <div className="flex items-center gap-1 sm:gap-2">
+            <Link
+              href="/notifications"
+              className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-300 transition-colors relative"
+              title="Notifications"
+            >
+              <Bell size={20} strokeWidth={2} />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-brand-600 rounded-full ring-2 ring-white dark:ring-slate-900" />
+            </Link>
 
-          {/* Direct Messages Paper Plane */}
-          <Link
-            href="/messages"
-            className="relative p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-800 dark:text-gray-200 transition-all hover:scale-105 active:scale-95"
-            aria-label="Direct Messages"
-            title="Direct Messages"
-          >
-            <Send size={20} strokeWidth={2.2} className="-rotate-12 translate-x-0.5 -translate-y-0.5" />
-          </Link>
+            <Link
+              href="/settings"
+              className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-300 transition-colors"
+              title="Feed Preferences"
+            >
+              <SlidersHorizontal size={18} strokeWidth={2} />
+            </Link>
+          </div>
+        </div>
+
+        {/* ── 2. X-Style 'For You' / 'Following' Sub-Header Tabs ── */}
+        <div className="flex border-t border-gray-100 dark:border-slate-800/80 overflow-x-auto scrollbar-none">
+          {TABS.map((tab) => {
+            const isActive = activeTab === tab.id
+            return (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id as FeedMode)
+                  setVisibleCount(25)
+                }}
+                className={`flex-1 py-3 px-3 text-sm font-semibold transition-colors relative whitespace-nowrap cursor-pointer text-center select-none ${
+                  isActive
+                    ? 'text-gray-900 dark:text-white font-bold'
+                    : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-50/50 dark:hover:bg-slate-800/40'
+                }`}
+              >
+                <span>{tab.label}</span>
+                {isActive && (
+                  <span className="absolute bottom-0 inset-x-4 sm:inset-x-8 h-1 rounded-full bg-brand-600 shadow-xs" />
+                )}
+              </button>
+            )
+          })}
         </div>
       </header>
 
-      {/* 2. 24-Hour Temporary Stories Tray */}
-      <StoriesTray />
-
-      {/* 3. Feed Filter Tabs (Instagram-style modern pill selector) */}
-      <div className="flex items-center gap-1.5 px-1 overflow-x-auto scrollbar-none py-1">
-        {TABS.map((tab) => {
-          const isActive = activeTab === tab.id
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as FeedMode)}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-full transition-all whitespace-nowrap cursor-pointer select-none ${
-                isActive
-                  ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900 shadow-xs'
-                  : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-200/70 dark:hover:bg-slate-700'
-              }`}
-            >
-              {tab.label}
-            </button>
-          )
-        })}
+      {/* ── 3. Stories Tray (Subtle separator) ── */}
+      <div className="py-2.5 px-1 border-b border-gray-100 dark:border-slate-800/80 bg-white/50 dark:bg-slate-900/50">
+        <StoriesTray />
       </div>
 
       {/* 4. Feed Content */}
@@ -322,8 +320,8 @@ export default function FeedPage() {
           </p>
         </div>
       ) : (
-        <div className="space-y-4">
-          {posts.map((post) => (
+        <div className="space-y-3.5">
+          {posts.slice(0, visibleCount).map((post) => (
             <PostCard
               key={post.id}
               post={post}
@@ -331,6 +329,22 @@ export default function FeedPage() {
               onDelete={handleDeletePost}
             />
           ))}
+
+          {/* ── 'See More' Progressive Batch Loading ── */}
+          {posts.length > visibleCount && (
+            <div className="pt-2 pb-6 text-center">
+              <button
+                type="button"
+                onClick={() => setVisibleCount((prev) => prev + 25)}
+                className="w-full py-3.5 px-6 rounded-2xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 hover:border-brand-500/50 hover:bg-gray-50/80 dark:hover:bg-slate-850 text-gray-900 dark:text-gray-100 font-bold text-sm shadow-2xs transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer group"
+              >
+                <span>See more posts</span>
+                <span className="text-xs text-gray-400 font-normal">
+                  ({posts.length - visibleCount} more available)
+                </span>
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

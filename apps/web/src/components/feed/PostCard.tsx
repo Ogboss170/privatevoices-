@@ -111,6 +111,7 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [showInsightsModal, setShowInsightsModal] = useState(false)
   const [showHeartAnim, setShowHeartAnim] = useState(false)
+  const [isContentExpanded, setIsContentExpanded] = useState(false)
   const isOwner = currentUserId === post.authorId
 
   // Meaningful View Recording (1-second visibility threshold, excludes author, 24h dedup)
@@ -804,10 +805,44 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
         </div>
       )}
 
-      {/* Text-only Content (shown here only if no images/video, otherwise styled as Instagram caption below) */}
+      {/* Text-only Content (with clean X-style 'See more' truncation threshold for long posts) */}
       {(!post.imageUrls || post.imageUrls.length === 0) && !post.videoUrl && post.content && (
-        <div className="px-3.5 text-gray-800 dark:text-gray-200 text-sm whitespace-pre-line leading-relaxed">
-          <FormattedText text={post.content} />
+        <div className="px-3.5 text-gray-900 dark:text-gray-100 text-[15px] sm:text-base leading-relaxed break-words">
+          {post.content.length > 280 && !isContentExpanded ? (
+            <div className="space-y-1">
+              <span className="whitespace-pre-line">
+                <FormattedText text={post.content.slice(0, 260).trim() + '...'} />
+              </span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setIsContentExpanded(true)
+                }}
+                className="text-brand-600 dark:text-brand-400 font-bold hover:underline block text-sm cursor-pointer"
+              >
+                See more
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <span className="whitespace-pre-line">
+                <FormattedText text={post.content} />
+              </span>
+              {post.content.length > 280 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setIsContentExpanded(false)
+                  }}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 font-semibold text-xs block cursor-pointer pt-0.5"
+                >
+                  Show less
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -1139,7 +1174,7 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
           {likeCount.toLocaleString()} {likeCount === 1 ? 'like' : 'likes'}
         </div>
 
-        {/* Caption: Username + Content (only displayed here if post has media, otherwise shown above) */}
+        {/* Caption: Username + Content (with See more truncation for long captions) */}
         {((post.imageUrls && post.imageUrls.length > 0) || post.videoUrl) && post.content && (
           <div className="text-gray-800 dark:text-gray-200 text-xs leading-relaxed">
             <Link
@@ -1148,9 +1183,41 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
             >
               {post.author.username}
             </Link>
-            <span className="whitespace-pre-line">
-              <FormattedText text={post.content} />
-            </span>
+            {post.content.length > 140 && !isContentExpanded ? (
+              <span>
+                <span className="whitespace-pre-line">
+                  <FormattedText text={post.content.slice(0, 120).trim() + '...'} />
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setIsContentExpanded(true)
+                  }}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 font-semibold ml-1 cursor-pointer"
+                >
+                  more
+                </button>
+              </span>
+            ) : (
+              <span>
+                <span className="whitespace-pre-line">
+                  <FormattedText text={post.content} />
+                </span>
+                {post.content.length > 140 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setIsContentExpanded(false)
+                    }}
+                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 font-semibold ml-1 cursor-pointer"
+                  >
+                    less
+                  </button>
+                )}
+              </span>
+            )}
           </div>
         )}
 
