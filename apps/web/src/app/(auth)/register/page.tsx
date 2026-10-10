@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import { Check, X } from 'lucide-react'
+import { Check, X, Phone, Mail, ShieldCheck } from 'lucide-react'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -12,10 +12,22 @@ export default function RegisterPage() {
 
   const [form, setForm] = useState({
     email: '',
+    phone: '',
     password: '',
     username: '',
     displayName: '',
   })
+
+  // Verification code states
+  const [phoneOtp, setPhoneOtp] = useState('')
+  const [emailOtp, setEmailOtp] = useState('')
+  const [phoneCodeSent, setPhoneCodeSent] = useState(false)
+  const [emailCodeSent, setEmailCodeSent] = useState(false)
+  const [isPhoneVerified, setIsPhoneVerified] = useState(false)
+  const [isEmailVerified, setIsEmailVerified] = useState(false)
+  const [sendingCode, setSendingCode] = useState<'phone' | 'email' | null>(null)
+  const [verifyingCode, setVerifyingCode] = useState<'phone' | 'email' | null>(null)
+  const [codeFeedback, setCodeFeedback] = useState<string | null>(null)
   
   // Consent Checkbox state — starts UNCHECKED
   const [hasConsented, setHasConsented] = useState(false)
@@ -26,6 +38,74 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  async function handleSendVerificationCode(targetType: 'phone' | 'email') {
+    const targetValue = targetType === 'phone' ? form.phone.trim() : form.email.trim()
+    if (!targetValue) {
+      setError(`Please provide your ${targetType} first to receive a verification code.`)
+      return
+    }
+
+    setError(null)
+    setCodeFeedback(null)
+    setSendingCode(targetType)
+
+    try {
+      const { data, error: rpcError } = await supabase.rpc('request_verification_code', {
+        p_target_type: targetType,
+        p_target_value: targetValue,
+      })
+
+      if (rpcError) {
+        setError(rpcError.message)
+      } else if (data?.success) {
+        if (targetType === 'phone') setPhoneCodeSent(true)
+        if (targetType === 'email') setEmailCodeSent(true)
+        setCodeFeedback(`6-digit verification code sent to ${targetValue}${data?.dev_code ? ` (Code: ${data.dev_code})` : ''}`)
+      } else {
+        setError(data?.message || 'Could not send verification code.')
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Failed to request verification code.')
+    } finally {
+      setSendingCode(null)
+    }
+  }
+
+  async function handleConfirmVerificationCode(targetType: 'phone' | 'email') {
+    const targetValue = targetType === 'phone' ? form.phone.trim() : form.email.trim()
+    const code = targetType === 'phone' ? phoneOtp.trim() : emailOtp.trim()
+
+    if (!code || code.length < 6) {
+      setError('Please enter the 6-digit verification code.')
+      return
+    }
+
+    setError(null)
+    setVerifyingCode(targetType)
+
+    try {
+      const { data, error: rpcError } = await supabase.rpc('confirm_verification_code', {
+        p_target_type: targetType,
+        p_target_value: targetValue,
+        p_code: code,
+      })
+
+      if (rpcError) {
+        setError(rpcError.message)
+      } else if (data?.success) {
+        if (targetType === 'phone') setIsPhoneVerified(true)
+        if (targetType === 'email') setIsEmailVerified(true)
+        setCodeFeedback(`${targetType === 'phone' ? 'Phone number' : 'Email'} verified successfully!`)
+      } else {
+        setError(data?.message || 'Invalid or expired verification code.')
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Failed to verify code.')
+    } finally {
+      setVerifyingCode(null)
+    }
+  }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const { name, value } = e.target
@@ -150,6 +230,20 @@ export default function RegisterPage() {
       }
     }
 
+    // 3. Save phone number and verification states if present
+    if (form.phone.trim()) {
+      await supabase
+        .from('profiles')
+        .update({
+          phone: form.phone.trim(),
+          is_phone_verified: isPhoneVerified,
+          is_email_verified: isEmailVerified,
+          phone_verified_at: isPhoneVerified ? new Date().toISOString() : null,
+          email_verified_at: isEmailVerified ? new Date().toISOString() : null,
+        })
+        .eq('id', data.user.id)
+    }
+
     // Check if session was granted or requires email verification
     if (!data.session) {
       setSuccessMessage('Account created! Please check your email to confirm your account before logging in.')
@@ -206,8 +300,24 @@ export default function RegisterPage() {
         </div>
 
         <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
-            Email
+          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <Mail className="w-4 h-4 text-gray-500" /> Email
+            </span>
+            {isEmailVerified ? (
+              <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1">
+                <Check className="w-3.5 h-3.5" /> Verified
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleSendVerificationCode('email')}
+                disabled={sendingCode === 'email' || !form.email}
+                className="text-xs font-medium text-brand-600 hover:text-brand-700 cursor-pointer disabled:text-gray-400"
+              >
+                {sendingCode === 'email' ? 'Sending code...' : 'Send verification code'}
+              </button>
+            )}
           </label>
           <input
             id="email"
@@ -220,6 +330,82 @@ export default function RegisterPage() {
             className="input-field"
             placeholder="you@example.com"
           />
+
+          {emailCodeSent && !isEmailVerified && (
+            <div className="mt-2 p-3 bg-brand-50/60 border border-brand-200 rounded-xl flex items-center gap-2">
+              <input
+                type="text"
+                maxLength={6}
+                value={emailOtp}
+                onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, ''))}
+                placeholder="6-digit email code"
+                className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-mono tracking-widest flex-1 text-center"
+              />
+              <button
+                type="button"
+                onClick={() => handleConfirmVerificationCode('email')}
+                disabled={verifyingCode === 'email' || emailOtp.length < 6}
+                className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold disabled:bg-gray-300"
+              >
+                {verifyingCode === 'email' ? 'Verifying...' : 'Verify'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div>
+          <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <Phone className="w-4 h-4 text-gray-500" /> Phone number (optional)
+            </span>
+            {isPhoneVerified ? (
+              <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1">
+                <Check className="w-3.5 h-3.5" /> Verified
+              </span>
+            ) : (
+              form.phone && (
+                <button
+                  type="button"
+                  onClick={() => handleSendVerificationCode('phone')}
+                  disabled={sendingCode === 'phone' || !form.phone}
+                  className="text-xs font-medium text-brand-600 hover:text-brand-700 cursor-pointer disabled:text-gray-400"
+                >
+                  {sendingCode === 'phone' ? 'Sending SMS...' : 'Send SMS code'}
+                </button>
+              )
+            )}
+          </label>
+          <input
+            id="phone"
+            name="phone"
+            type="tel"
+            autoComplete="tel"
+            value={form.phone}
+            onChange={handleChange}
+            className="input-field"
+            placeholder="+1 (555) 000-0000"
+          />
+
+          {phoneCodeSent && !isPhoneVerified && (
+            <div className="mt-2 p-3 bg-brand-50/60 border border-brand-200 rounded-xl flex items-center gap-2">
+              <input
+                type="text"
+                maxLength={6}
+                value={phoneOtp}
+                onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, ''))}
+                placeholder="6-digit SMS code"
+                className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-mono tracking-widest flex-1 text-center"
+              />
+              <button
+                type="button"
+                onClick={() => handleConfirmVerificationCode('phone')}
+                disabled={verifyingCode === 'phone' || phoneOtp.length < 6}
+                className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold disabled:bg-gray-300"
+              >
+                {verifyingCode === 'phone' ? 'Verifying...' : 'Verify'}
+              </button>
+            </div>
+          )}
         </div>
 
         <div>
@@ -239,6 +425,12 @@ export default function RegisterPage() {
             placeholder="At least 8 characters"
           />
         </div>
+
+        {codeFeedback && (
+          <p className="text-xs text-brand-700 bg-brand-50/80 border border-brand-200 rounded-lg px-3 py-2">
+            {codeFeedback}
+          </p>
+        )}
 
         {error && (
           <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">

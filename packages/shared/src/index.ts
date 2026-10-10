@@ -8,6 +8,9 @@ export interface User {
   bio: string | null;
   avatarUrl: string | null;
   isPrivate: boolean;
+  phone?: string | null;
+  isPhoneVerified?: boolean;
+  isEmailVerified?: boolean;
   createdAt: string;
 }
 
