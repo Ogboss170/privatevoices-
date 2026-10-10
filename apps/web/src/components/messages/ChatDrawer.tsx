@@ -6,6 +6,7 @@ import { X, Send, Loader2, Image as ImageIcon, ExternalLink, Trash2, Mic, Play, 
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/media/imageCompression'
 import { DMCallModal } from '@/components/messages/DMCallModal'
+import { playDMSound, startRingtone, stopRingtone } from '@/lib/sound/soundEffects'
 import type { DMCallType, DMCallStatus } from '@private-voices/shared'
 
 interface ChatDrawerProps {
@@ -157,6 +158,7 @@ export default function ChatDrawer({
 
           // Mark newly received message as read if drawer is open
           if (payload.new.sender_id !== currentUserId) {
+            playDMSound('message_receive')
             supabase
               .from('messages')
               .update({ is_read: true })
@@ -207,15 +209,22 @@ export default function ChatDrawer({
           setCallStatus('incoming_ringing')
           setIsIncomingCall(true)
           setIsCallOpen(true)
+          startRingtone('incoming')
         } else if (payload.action === 'call_accept') {
+          stopRingtone()
+          playDMSound('call_connected')
           setCallStatus('connected')
         } else if (payload.action === 'call_decline') {
+          stopRingtone()
+          playDMSound('call_ended')
           setCallStatus('declined')
           setTimeout(() => {
             setIsCallOpen(false)
             setCallStatus('idle')
           }, 1800)
         } else if (payload.action === 'call_end') {
+          stopRingtone()
+          playDMSound('call_ended')
           setCallStatus('ended')
           setTimeout(() => {
             setIsCallOpen(false)
@@ -270,6 +279,7 @@ export default function ChatDrawer({
     setCallStatus('outgoing_ringing')
     setIsIncomingCall(false)
     setIsCallOpen(true)
+    startRingtone('outgoing')
     callStartTimeRef.current = Date.now()
 
     // Send broadcast signal
@@ -293,6 +303,8 @@ export default function ChatDrawer({
   }
 
   function handleAcceptCall() {
+    stopRingtone()
+    playDMSound('call_connected')
     setCallStatus('connected')
     callStartTimeRef.current = Date.now()
     channelRef.current?.send({
@@ -362,6 +374,8 @@ export default function ChatDrawer({
   }
 
   function handleDeclineCall() {
+    stopRingtone()
+    playDMSound('call_ended')
     setCallStatus('declined')
     logCallRecord('declined')
     channelRef.current?.send({
@@ -384,6 +398,8 @@ export default function ChatDrawer({
   }
 
   function handleEndCall() {
+    stopRingtone()
+    playDMSound('call_ended')
     const finalStatus = callStatus === 'connected' ? 'ended' : 'cancelled'
     setCallStatus('ended')
     logCallRecord(finalStatus)
@@ -524,6 +540,7 @@ export default function ChatDrawer({
         setMessages((prev) => prev.filter((m) => m.id !== tempId))
         alert(`Failed to send voice note: ${error.message}`)
       } else if (newMsg) {
+        playDMSound('voice_note_sent')
         setMessages((prev) => prev.map((m) => (m.id === tempId ? newMsg : m)))
         await supabase
           .from('conversations')
@@ -811,6 +828,7 @@ export default function ChatDrawer({
 
     setMessages((prev) => [...prev, optimisticMsg])
     scrollToBottom()
+    playDMSound('message_send')
 
     try {
       let uploadedImgUrl: string | null = null
