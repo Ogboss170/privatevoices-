@@ -35,6 +35,14 @@ import {
   VolumeX,
   SwitchCamera,
   ShieldCheck,
+  Flame,
+  Reply,
+  History,
+  PhoneIncoming,
+  PhoneOutgoing,
+  PhoneMissed,
+  Search,
+  Smile,
 } from 'lucide-react-native'
 import { Image } from 'expo-image'
 import * as ImagePicker from 'expo-image-picker'
@@ -75,6 +83,28 @@ export function ChatModal({
   const [sending, setSending] = useState(false)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [fullscreenImageUrl, setFullscreenImageUrl] = useState<string | null>(null)
+
+  // Reply quoting
+  const [replyingTo, setReplyingTo] = useState<{
+    id: string
+    content: string
+    senderName: string
+  } | null>(null)
+
+  // Long-press reaction modal / picker
+  const [reactionModalMsgId, setReactionModalMsgId] = useState<string | null>(null)
+
+  // Vanishing mode
+  const [isVanishMode, setIsVanishMode] = useState(false)
+
+  // Call history modal/sheet
+  const [showCallHistory, setShowCallHistory] = useState(false)
+  const [callLogs, setCallLogs] = useState<any[]>([])
+  const [loadingCallLogs, setLoadingCallLogs] = useState(false)
+
+  // In-chat search
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
 
   // Voice & Video Calling State
   const [isCallOpen, setIsCallOpen] = useState(false)
@@ -131,6 +161,20 @@ export function ChatModal({
           setTimeout(() => {
             flatListRef.current?.scrollToEnd({ animated: false })
           }, 150)
+        }
+
+        // Fetch conversation settings (e.g. vanish mode)
+        try {
+          const { data: convData } = await supabase
+            .from('conversations')
+            .select('vanish_mode_enabled')
+            .eq('id', conversationId)
+            .single()
+          if (convData?.vanish_mode_enabled !== undefined) {
+            setIsVanishMode(Boolean(convData.vanish_mode_enabled))
+          }
+        } catch (e) {
+          // Ignore if column not present yet
         }
 
         // Mark unread messages as read
@@ -197,7 +241,7 @@ export function ChatModal({
         },
         (payload) => {
           setMessages((prev) =>
-            prev.map((m) => (m.id === payload.new.id ? { ...m, is_read: payload.new.is_read } : m))
+            prev.map((m) => (m.id === payload.new.id ? { ...m, ...payload.new } : m))
           )
         }
       )
@@ -311,8 +355,90 @@ export function ChatModal({
           : new Date().toISOString(),
         ended_at: new Date(now).toISOString(),
       })
+      loadMobileCallLogs()
     } catch (e) {
       console.warn('Could not record mobile dm_call_log:', e)
+    }
+  }
+
+  async function loadMobileCallLogs() {
+    setLoadingCallLogs(true)
+    try {
+      const { data, error } = await supabase
+        .from('dm_call_logs')
+        .select('*')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: false })
+      if (!error && data) {
+        setCallLogs(data)
+      }
+    } catch (err) {
+      console.warn('Error loading mobile call logs:', err)
+    } finally {
+      setLoadingCallLogs(false)
+    }
+  }
+
+  function handleToggleCallHistory() {
+    const nextVal = !showCallHistory
+    setShowCallHistory(nextVal)
+    if (nextVal) {
+      loadMobileCallLogs()
+    }
+  }
+
+  async function handleToggleVanishMode() {
+    const nextVal = !isVanishMode
+    setIsVanishMode(nextVal)
+    try {
+      await supabase.rpc('toggle_conversation_vanish_mode', {
+        p_conversation_id: conversationId,
+        p_enabled: nextVal,
+        p_duration_seconds: 86400,
+      })
+    } catch (e) {
+      console.warn('Vanish mode RPC fallback:', e)
+      await supabase
+        .from('conversations')
+        .update({ vanish_mode_enabled: nextVal })
+        .eq('id', conversationId)
+    }
+  }
+
+  async function handleToggleReaction(messageId: string, emoji: string) {
+    setReactionModalMsgId(null)
+
+    // Optimistic UI update
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== messageId) return m
+        const currentReactions: Record<string, string[]> = m.reactions ? { ...m.reactions } : {}
+        const existingUsers: string[] = currentReactions[emoji] ? [...currentReactions[emoji]] : []
+        const userIndex = existingUsers.indexOf(currentUserId)
+
+        if (userIndex > -1) {
+          existingUsers.splice(userIndex, 1)
+          if (existingUsers.length === 0) {
+            delete currentReactions[emoji]
+          } else {
+            currentReactions[emoji] = existingUsers
+          }
+        } else {
+          existingUsers.push(currentUserId)
+          currentReactions[emoji] = existingUsers
+        }
+
+        return { ...m, reactions: currentReactions }
+      })
+    )
+
+    try {
+      await supabase.rpc('toggle_dm_reaction', {
+        p_message_id: messageId,
+        p_emoji: emoji,
+      })
+    } catch (err) {
+      console.error('Error toggling reaction on mobile:', err)
     }
   }
 
@@ -758,9 +884,11 @@ export function ChatModal({
 
     const messageContent = text.trim() || '📷 Photo'
     const imageUriToSend = selectedImage
+    const quotedReply = replyingTo
 
     setText('')
     setSelectedImage(null)
+    setReplyingTo(null)
     setSending(true)
 
     // Optimistic message
@@ -771,6 +899,12 @@ export function ChatModal({
       sender_id: currentUserId,
       content: messageContent,
       image_url: imageUriToSend,
+      media_type: imageUriToSend ? 'image' : 'text',
+      is_disappearing: isVanishMode,
+      reply_to_message_id: quotedReply?.id || null,
+      reply_to_content: quotedReply?.content || null,
+      reply_to_sender: quotedReply?.senderName || null,
+      reactions: {},
       is_read: false,
       created_at: new Date().toISOString(),
     }
@@ -828,6 +962,11 @@ export function ChatModal({
           sender_id: currentUserId,
           content: messageContent,
           image_url: uploadedUrl,
+          media_type: uploadedUrl ? 'image' : 'text',
+          is_disappearing: isVanishMode,
+          reply_to_message_id: quotedReply?.id || null,
+          reply_to_content: quotedReply?.content || null,
+          reply_to_sender: quotedReply?.senderName || null,
         })
         .select('*')
         .single()
@@ -943,6 +1082,42 @@ export function ChatModal({
             </View>
 
             <View style={styles.headerRightActions}>
+              {/* Search toggle */}
+              <TouchableOpacity
+                onPress={() => setIsSearching((prev) => !prev)}
+                style={[
+                  styles.headerCallBtn,
+                  { backgroundColor: isSearching ? colors.brandLight : isDark ? '#27272a' : '#f4f4f5' },
+                ]}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Search size={18} color={isSearching ? colors.brand : themeColors.text} />
+              </TouchableOpacity>
+
+              {/* Vanish Mode Toggle */}
+              <TouchableOpacity
+                onPress={handleToggleVanishMode}
+                style={[
+                  styles.headerCallBtn,
+                  { backgroundColor: isVanishMode ? '#fff7ed' : isDark ? '#27272a' : '#f4f4f5' },
+                ]}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Flame size={19} color={isVanishMode ? '#f97316' : themeColors.textSecondary} />
+              </TouchableOpacity>
+
+              {/* Call History Button */}
+              <TouchableOpacity
+                onPress={handleToggleCallHistory}
+                style={[
+                  styles.headerCallBtn,
+                  { backgroundColor: showCallHistory ? '#f3e8ff' : isDark ? '#27272a' : '#f4f4f5' },
+                ]}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <History size={18} color={showCallHistory ? '#9333ea' : themeColors.text} />
+              </TouchableOpacity>
+
               {/* Phone Voice Call Button */}
               <TouchableOpacity
                 onPress={() => handleStartCall('audio')}
@@ -971,6 +1146,113 @@ export function ChatModal({
             </View>
           </View>
 
+          {/* Search Bar */}
+          {isSearching && (
+            <View style={[styles.mobileSearchBar, { backgroundColor: themeColors.surfaceBorder }]}>
+              <Search size={16} color={themeColors.textSecondary} />
+              <TextInput
+                style={[styles.mobileSearchInput, { color: themeColors.text }]}
+                placeholder="Search messages..."
+                placeholderTextColor={themeColors.textSecondary}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoFocus
+              />
+              {searchQuery ? (
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <X size={16} color={themeColors.textSecondary} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          )}
+
+          {/* Vanish Mode Active Banner */}
+          {isVanishMode && (
+            <View style={styles.mobileVanishBanner}>
+              <Flame size={14} color="#f97316" />
+              <Text style={styles.mobileVanishText}>
+                Vanish Mode: Messages disappear after viewing
+              </Text>
+            </View>
+          )}
+
+          {/* Call History Dropdown Panel */}
+          {showCallHistory && (
+            <View style={[styles.mobileCallHistoryPanel, { backgroundColor: isDark ? '#18181b' : '#faf5ff' }]}>
+              <View style={styles.callHistoryHeaderRow}>
+                <Text style={styles.callHistoryTitle}>Recent Calls</Text>
+                <TouchableOpacity onPress={() => setShowCallHistory(false)}>
+                  <X size={16} color={themeColors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              {loadingCallLogs ? (
+                <View style={{ padding: 12, alignItems: 'center' }}>
+                  <ActivityIndicator size="small" color="#9333ea" />
+                </View>
+              ) : callLogs.length === 0 ? (
+                <Text style={styles.callHistoryEmptyText}>No previous calls recorded.</Text>
+              ) : (
+                <View style={{ gap: 8 }}>
+                  {callLogs.slice(0, 5).map((log) => {
+                    const isOutgoing = log.caller_id === currentUserId
+                    const isVideo = log.call_type === 'video'
+                    const isMissed = log.status === 'missed' || log.status === 'declined'
+
+                    return (
+                      <View
+                        key={log.id}
+                        style={[
+                          styles.mobileCallLogItem,
+                          { backgroundColor: isDark ? '#27272a' : '#ffffff' },
+                        ]}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <View
+                            style={[
+                              styles.callLogIconBadge,
+                              { backgroundColor: isMissed ? '#fef2f2' : '#f0fdf4' },
+                            ]}
+                          >
+                            {isMissed ? (
+                              <PhoneMissed size={14} color="#ef4444" />
+                            ) : isOutgoing ? (
+                              <PhoneOutgoing size={14} color="#16a34a" />
+                            ) : (
+                              <PhoneIncoming size={14} color="#16a34a" />
+                            )}
+                          </View>
+                          <View>
+                            <Text style={[styles.callLogTitleText, { color: themeColors.text }]}>
+                              {isOutgoing ? 'Outgoing' : 'Incoming'} {isVideo ? 'Video' : 'Voice'}
+                            </Text>
+                            <Text style={styles.callLogDurationText}>
+                              {log.duration_seconds > 0
+                                ? `${Math.floor(log.duration_seconds / 60)}m ${log.duration_seconds % 60}s`
+                                : log.status === 'declined'
+                                ? 'Declined'
+                                : 'Missed'}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <TouchableOpacity
+                          style={styles.callBackBtn}
+                          onPress={() => {
+                            setShowCallHistory(false)
+                            handleStartCall(isVideo ? 'video' : 'audio')
+                          }}
+                        >
+                          <Phone size={13} color="#ffffff" />
+                        </TouchableOpacity>
+                      </View>
+                    )
+                  })}
+                </View>
+              )}
+            </View>
+          )}
+
           {/* Messages */}
           <View style={styles.messagesContainer}>
             {loading ? (
@@ -989,7 +1271,10 @@ export function ChatModal({
             ) : (
               <FlatList
                 ref={flatListRef}
-                data={messages}
+                data={messages.filter((m) => {
+                  if (!searchQuery.trim()) return true
+                  return (m.content || '').toLowerCase().includes(searchQuery.toLowerCase())
+                })}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.listContent}
                 onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
@@ -1000,6 +1285,11 @@ export function ChatModal({
                   const hasAudio = !!item.audio_url
                   const isPlayingThisAudio = playingAudioId === item.id
                   const showText = item.content && item.content !== '📷 Photo' && item.content !== '🎙️ Voice note'
+                  const reactionsObj = item.reactions || {}
+                  const reactionEntries = Object.entries(reactionsObj).filter(
+                    ([_, users]: any) => Array.isArray(users) && users.length > 0
+                  )
+                  const hasQuotedReply = Boolean(item.reply_to_content)
 
                   return (
                     <View
@@ -1009,19 +1299,58 @@ export function ChatModal({
                       ]}
                     >
                       <TouchableOpacity
-                        activeOpacity={isMe && !isTemp ? 0.85 : 1}
-                        onLongPress={isMe && !isTemp ? () => handleDeleteMessage(item.id) : undefined}
-                        delayLongPress={400}
+                        activeOpacity={0.9}
+                        onLongPress={() => {
+                          if (!isTemp) {
+                            setReactionModalMsgId(item.id)
+                          }
+                        }}
+                        delayLongPress={250}
                       >
                         <View
                           style={[
                             styles.bubble,
-                            isMe ? styles.bubbleMe : [styles.bubbleThem, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }],
+                            isMe
+                              ? item.is_disappearing
+                                ? styles.bubbleMeDisappearing
+                                : styles.bubbleMe
+                              : item.is_disappearing
+                              ? styles.bubbleThemDisappearing
+                              : [styles.bubbleThem, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }],
                             isTemp && styles.bubblePending,
                             hasImage && styles.bubbleWithImage,
                             hasAudio && styles.bubbleWithAudio,
                           ]}
                         >
+                          {/* Quoted Reply Preview */}
+                          {hasQuotedReply && (
+                            <View
+                              style={[
+                                styles.mobileQuotePreview,
+                                isMe ? styles.mobileQuotePreviewMe : styles.mobileQuotePreviewThem,
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.mobileQuoteSender,
+                                  { color: isMe ? '#ffffff' : colors.brand },
+                                ]}
+                                numberOfLines={1}
+                              >
+                                {item.reply_to_sender || 'Replied to'}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.mobileQuoteText,
+                                  { color: isMe ? '#f4f4f5' : themeColors.textSecondary },
+                                ]}
+                                numberOfLines={2}
+                              >
+                                {item.reply_to_content}
+                              </Text>
+                            </View>
+                          )}
+
                           {/* Media image */}
                           {hasImage && (
                             <TouchableOpacity
@@ -1126,12 +1455,44 @@ export function ChatModal({
                         </View>
                       </TouchableOpacity>
 
+                      {/* Reaction Badges */}
+                      {reactionEntries.length > 0 && (
+                        <View
+                          style={[
+                            styles.mobileReactionBadgesRow,
+                            isMe ? { justifyContent: 'flex-end' } : { justifyContent: 'flex-start' },
+                          ]}
+                        >
+                          {reactionEntries.map(([emoji, users]: any) => {
+                            const hasReacted = users.includes(currentUserId)
+                            return (
+                              <TouchableOpacity
+                                key={emoji}
+                                onPress={() => handleToggleReaction(item.id, emoji)}
+                                style={[
+                                  styles.mobileReactionBadge,
+                                  { backgroundColor: hasReacted ? '#ede9fe' : isDark ? '#27272a' : '#f4f4f5' },
+                                ]}
+                              >
+                                <Text style={styles.mobileReactionEmoji}>{emoji}</Text>
+                                <Text style={[styles.mobileReactionCount, { color: hasReacted ? '#7c3aed' : themeColors.text }]}>
+                                  {users.length}
+                                </Text>
+                              </TouchableOpacity>
+                            )
+                          })}
+                        </View>
+                      )}
+
                       <View
                         style={[
                           styles.metaRow,
                           isMe ? styles.metaRowMe : styles.metaRowThem,
                         ]}
                       >
+                        {item.is_disappearing ? (
+                          <Flame size={12} color="#f97316" style={{ marginRight: 3 }} />
+                        ) : null}
                         <Text style={styles.timeText}>{formatTime(item.created_at)}</Text>
                         {isMe && !isTemp && (
                           <View style={styles.receiptContainer}>
@@ -1161,6 +1522,23 @@ export function ChatModal({
               />
             )}
           </View>
+
+          {/* Replying-To Box */}
+          {replyingTo && (
+            <View style={[styles.mobileReplyingBar, { backgroundColor: isDark ? '#27272a' : '#f3e8ff' }]}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={styles.mobileReplyingSender}>
+                  Replying to {replyingTo.senderName}
+                </Text>
+                <Text style={[styles.mobileReplyingContent, { color: themeColors.textSecondary }]} numberOfLines={1}>
+                  {replyingTo.content}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setReplyingTo(null)}>
+                <X size={16} color={themeColors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Image Selected Preview Bar */}
           {selectedImage && (
@@ -1261,6 +1639,73 @@ export function ChatModal({
           )}
         </KeyboardAvoidingView>
 
+        {/* Long-Press Emoji Reaction & Actions Modal */}
+        {reactionModalMsgId && (
+          <Modal
+            visible={!!reactionModalMsgId}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setReactionModalMsgId(null)}
+          >
+            <TouchableOpacity
+              style={styles.mobileReactionOverlay}
+              activeOpacity={1}
+              onPress={() => setReactionModalMsgId(null)}
+            >
+              <View style={[styles.mobileReactionCard, { backgroundColor: isDark ? '#27272a' : '#ffffff' }]}>
+                {/* Emoji Reaction Bar */}
+                <View style={styles.mobileEmojiBar}>
+                  {['❤️', '😂', '🔥', '😮', '😢', '👏'].map((emoji) => (
+                    <TouchableOpacity
+                      key={emoji}
+                      style={styles.mobileEmojiBtn}
+                      onPress={() => handleToggleReaction(reactionModalMsgId, emoji)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.mobileEmojiText}>{emoji}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Action Options: Reply & Delete */}
+                <View style={styles.mobileActionOptions}>
+                  <TouchableOpacity
+                    style={styles.mobileActionRow}
+                    onPress={() => {
+                      const target = messages.find((m) => m.id === reactionModalMsgId)
+                      if (target) {
+                        setReplyingTo({
+                          id: target.id,
+                          content: target.content || (target.image_url ? 'Photo' : 'Voice note'),
+                          senderName: target.sender_id === currentUserId ? 'You' : partnerName,
+                        })
+                      }
+                      setReactionModalMsgId(null)
+                    }}
+                  >
+                    <Reply size={18} color={themeColors.text} />
+                    <Text style={[styles.mobileActionText, { color: themeColors.text }]}>Reply</Text>
+                  </TouchableOpacity>
+
+                  {messages.find((m) => m.id === reactionModalMsgId)?.sender_id === currentUserId && (
+                    <TouchableOpacity
+                      style={styles.mobileActionRow}
+                      onPress={() => {
+                        const targetId = reactionModalMsgId
+                        setReactionModalMsgId(null)
+                        handleDeleteMessage(targetId)
+                      }}
+                    >
+                      <Trash2 size={18} color="#ef4444" />
+                      <Text style={[styles.mobileActionText, { color: '#ef4444' }]}>Delete</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            </TouchableOpacity>
+          </Modal>
+        )}
+
         {/* Fullscreen Photo Lightbox Modal */}
         {fullscreenImageUrl && (
           <Modal visible={!!fullscreenImageUrl} transparent animationType="fade">
@@ -1278,6 +1723,7 @@ export function ChatModal({
               />
             </View>
           </Modal>
+        )}
         {/* Voice & Video Calling Screen Overlay */}
         {isCallOpen && (
           <Modal
@@ -2227,5 +2673,210 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 4,
+  },
+  // Mobile Superpowers styles
+  mobileSearchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginHorizontal: 12,
+    marginVertical: 6,
+    borderRadius: 10,
+    gap: 8,
+  },
+  mobileSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    padding: 0,
+  },
+  mobileVanishBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#fff7ed',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#fed7aa',
+  },
+  mobileVanishText: {
+    fontSize: 11,
+    color: '#c2410c',
+    fontWeight: '600',
+  },
+  mobileCallHistoryPanel: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e9d5ff',
+  },
+  callHistoryHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  callHistoryTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#7c3aed',
+  },
+  callHistoryEmptyText: {
+    fontSize: 12,
+    color: '#a855f7',
+    textAlign: 'center',
+    paddingVertical: 8,
+  },
+  mobileCallLogItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e9d5ff',
+  },
+  callLogIconBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  callLogTitleText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  callLogDurationText: {
+    fontSize: 10,
+    color: '#6b7280',
+  },
+  callBackBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#9333ea',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bubbleMeDisappearing: {
+    backgroundColor: '#ea580c',
+    borderWidth: 1,
+    borderColor: '#fb923c',
+  },
+  bubbleThemDisappearing: {
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+  },
+  mobileQuotePreview: {
+    padding: 6,
+    borderRadius: 6,
+    marginBottom: 4,
+  },
+  mobileQuotePreviewMe: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#ffffff',
+  },
+  mobileQuotePreviewThem: {
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderLeftWidth: 3,
+    borderLeftColor: colors.brand,
+  },
+  mobileQuoteSender: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  mobileQuoteText: {
+    fontSize: 10,
+    marginTop: 1,
+  },
+  mobileReactionBadgesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 4,
+    paddingHorizontal: 4,
+  },
+  mobileReactionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    gap: 3,
+  },
+  mobileReactionEmoji: {
+    fontSize: 11,
+  },
+  mobileReactionCount: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  mobileReplyingBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e9d5ff',
+  },
+  mobileReplyingSender: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#7c3aed',
+  },
+  mobileReplyingContent: {
+    fontSize: 11,
+  },
+  mobileReactionOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  mobileReactionCard: {
+    width: '100%',
+    maxWidth: 320,
+    borderRadius: 20,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  mobileEmojiBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingBottom: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#e5e7eb',
+  },
+  mobileEmojiBtn: {
+    padding: 6,
+  },
+  mobileEmojiText: {
+    fontSize: 28,
+  },
+  mobileActionOptions: {
+    paddingTop: 12,
+    gap: 12,
+  },
+  mobileActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+  },
+  mobileActionText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 })
