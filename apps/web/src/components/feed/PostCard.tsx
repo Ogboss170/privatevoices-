@@ -98,6 +98,7 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
   const [repostCount, setRepostCount] = useState(post.repostCount || 0)
   const [repostBusy, setRepostBusy] = useState(false)
   const [viewCount, setViewCount] = useState(post.viewCount || 0)
+  const [commentCount, setCommentCount] = useState(post.commentCount || 0)
   const [isSaved, setIsSaved] = useState(post.isSavedByMe)
   const [showComments, setShowComments] = useState(false)
   const [comments, setComments] = useState<any[]>([])
@@ -190,6 +191,7 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
               },
             ]
           })
+          setCommentCount((c) => (c || 0) + 1)
           post.commentCount = (post.commentCount || 0) + 1
         }
       )
@@ -203,6 +205,7 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
         },
         (payload) => {
           setComments((prev) => prev.filter((c) => c.id !== payload.old.id && c.parent_id !== payload.old.id))
+          setCommentCount((c) => Math.max(0, (c || 0) - 1))
           post.commentCount = Math.max(0, (post.commentCount || 0) - 1)
         }
       )
@@ -613,6 +616,7 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
       }
 
       setReplyToComment(null)
+      setCommentCount((c) => (c || 0) + 1)
       post.commentCount = (post.commentCount || 0) + 1
     }
     setSubmittingComment(false)
@@ -955,11 +959,11 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
             e.stopPropagation()
             handleLoadComments()
           }}
-          aria-label={`Comment. ${post.commentCount || 0} comments`}
+          aria-label={`Comment. ${commentCount} comments`}
           className="flex items-center gap-1.5 p-2 -m-2 rounded-full hover:text-brand-600 hover:bg-brand-50/50 transition-colors cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 min-w-[44px] min-h-[44px] justify-center"
         >
           <MessageCircle size={18} className="transition-transform group-active:scale-90" />
-          <span className="text-xs font-medium">{post.commentCount || 0}</span>
+          <span className="text-xs font-medium">{commentCount}</span>
         </button>
 
         {/* 2. Repost */}

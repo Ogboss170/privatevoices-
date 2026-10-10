@@ -179,9 +179,32 @@ export default function InboxScreen() {
     fetchInboxData()
   }, [fetchInboxData])
 
-  // Real-time listener for incoming messages and whispers
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set())
+
+  // Real-time listener for incoming messages, whispers, and global presence
   useEffect(() => {
     if (!currentUserId) return
+
+    const presenceChannel = supabase.channel('online_presence', {
+      config: { presence: { key: currentUserId } },
+    })
+
+    presenceChannel
+      .on('presence', { event: 'sync' }, () => {
+        const state = presenceChannel.presenceState()
+        const onlineSet = new Set<string>()
+        Object.values(state).forEach((presences: any) => {
+          presences.forEach((p: any) => {
+            if (p.user_id) onlineSet.add(p.user_id)
+          })
+        })
+        setOnlineUsers(onlineSet)
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await presenceChannel.track({ user_id: currentUserId, online: true })
+        }
+      })
 
     const channel = supabase
       .channel('mobile:inbox_updates')
@@ -204,6 +227,7 @@ export default function InboxScreen() {
       .subscribe()
 
     return () => {
+      supabase.removeChannel(presenceChannel)
       supabase.removeChannel(channel)
     }
   }, [currentUserId, fetchInboxData])
@@ -533,6 +557,7 @@ export default function InboxScreen() {
                 const partnerName = partner?.display_name || partner?.username || 'User'
                 const avatar = partner?.avatar_url
                 const isVoiceNote = item.last_message?.includes('Voice note')
+                const isOnline = partner?.id ? onlineUsers.has(partner.id) : false
 
                 return (
                   <TouchableOpacity
@@ -547,11 +572,21 @@ export default function InboxScreen() {
                     onPress={() => openChat(item)}
                     activeOpacity={0.7}
                   >
-                    <View style={[styles.avatarCircle, { backgroundColor: colors.brandLight }]}>
-                      {avatar ? (
-                        <Image source={{ uri: avatar }} style={styles.avatarImg} />
-                      ) : (
-                        <Text style={styles.avatarText}>{partnerName.charAt(0).toUpperCase()}</Text>
+                    <View style={styles.avatarWrapper}>
+                      <View style={[styles.avatarCircle, { backgroundColor: colors.brandLight }]}>
+                        {avatar ? (
+                          <Image source={{ uri: avatar }} style={styles.avatarImg} />
+                        ) : (
+                          <Text style={styles.avatarText}>{partnerName.charAt(0).toUpperCase()}</Text>
+                        )}
+                      </View>
+                      {isOnline && (
+                        <View
+                          style={[
+                            styles.onlineBadge,
+                            { borderColor: themeColors.surface },
+                          ]}
+                        />
                       )}
                     </View>
 
@@ -572,6 +607,11 @@ export default function InboxScreen() {
                             <Text style={[styles.convUsername, { color: themeColors.textSecondary }]} numberOfLines={1}>
                               @{partner.username}
                             </Text>
+                          )}
+                          {isOnline && (
+                            <View style={styles.onlinePill}>
+                              <Text style={styles.onlinePillText}>Online</Text>
+                            </View>
                           )}
                         </View>
                         <Text style={[styles.convTime, { color: themeColors.textSecondary }]}>
@@ -758,6 +798,11 @@ const styles = StyleSheet.create({
     borderColor: colors.brandLight,
     backgroundColor: '#fdfcfe',
   },
+  avatarWrapper: {
+    position: 'relative',
+    width: 46,
+    height: 46,
+  },
   avatarCircle: {
     width: 46,
     height: 46,
@@ -772,6 +817,28 @@ const styles = StyleSheet.create({
     height: 46,
   },
   avatarText: { fontSize: 18, fontWeight: '700', color: colors.brand },
+  onlineBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 13,
+    height: 13,
+    borderRadius: 6.5,
+    backgroundColor: '#10b981',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+  },
+  onlinePill: {
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 8,
+  },
+  onlinePillText: {
+    color: '#059669',
+    fontSize: 10,
+    fontWeight: '700',
+  },
   convInfo: { flex: 1 },
   convTopRow: {
     flexDirection: 'row',

@@ -229,8 +229,34 @@ function InboxContent(): React.JSX.Element {
     }
   }, [supabase, currentUserId, activeTab, queryConversationId, activeConversation])
 
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set())
+
   useEffect(() => {
     fetchInboxData()
+
+    if (!currentUserId) return
+
+    // Presence channel for online badges across conversation list
+    const presenceChannel = supabase.channel('online_presence', {
+      config: { presence: { key: currentUserId } },
+    })
+
+    presenceChannel
+      .on('presence', { event: 'sync' }, () => {
+        const state = presenceChannel.presenceState()
+        const onlineSet = new Set<string>()
+        Object.values(state).forEach((presences: any) => {
+          presences.forEach((p: any) => {
+            if (p.user_id) onlineSet.add(p.user_id)
+          })
+        })
+        setOnlineUsers(onlineSet)
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await presenceChannel.track({ user_id: currentUserId, online: true })
+        }
+      })
 
     // Realtime listener for incoming messages to update conversation previews & unread badges
     const channel = supabase
@@ -238,7 +264,7 @@ function InboxContent(): React.JSX.Element {
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages' },
-        (payload) => {
+        () => {
           // If a new message arrived in any of our conversations, update conversation list
           fetchInboxData()
         }
@@ -255,6 +281,7 @@ function InboxContent(): React.JSX.Element {
       .subscribe()
 
     return () => {
+      supabase.removeChannel(presenceChannel)
       supabase.removeChannel(channel)
     }
   }, [fetchInboxData, supabase, currentUserId])
@@ -604,6 +631,7 @@ function InboxContent(): React.JSX.Element {
                 if (!partner) return null
 
                 const unread = unreadCounts[conv.id] || 0
+                const isOnline = onlineUsers.has(partner.id)
 
                 return (
                   <div
@@ -624,17 +652,25 @@ function InboxContent(): React.JSX.Element {
                     className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors cursor-pointer group"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-12 h-12 rounded-full bg-brand-100 flex items-center justify-center font-bold text-brand-600 flex-shrink-0 overflow-hidden border border-gray-100">
-                        {partner.avatar_url ? (
-                          <Image
-                            src={partner.avatar_url}
-                            alt={partner.display_name || partner.username || 'User'}
-                            width={48}
-                            height={48}
-                            className="w-full h-full object-cover"
+                      <div className="relative">
+                        <div className="w-12 h-12 rounded-full bg-brand-100 flex items-center justify-center font-bold text-brand-600 flex-shrink-0 overflow-hidden border border-gray-100">
+                          {partner.avatar_url ? (
+                            <Image
+                              src={partner.avatar_url}
+                              alt={partner.display_name || partner.username || 'User'}
+                              width={48}
+                              height={48}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            partner.display_name?.charAt(0)?.toUpperCase() || '?'
+                          )}
+                        </div>
+                        {isOnline && (
+                          <span
+                            className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-white shadow-xs"
+                            title="Active now"
                           />
-                        ) : (
-                          partner.display_name?.charAt(0)?.toUpperCase() || '?'
                         )}
                       </div>
                       <div className="min-w-0">
@@ -643,6 +679,11 @@ function InboxContent(): React.JSX.Element {
                             {partner.display_name}
                           </h4>
                           <span className="text-xs text-gray-400">@{partner.username}</span>
+                          {isOnline && (
+                            <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-1.5 py-0.2 rounded-full">
+                              Online
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs text-gray-500 truncate max-w-sm mt-0.5">
                           {conv.last_message || 'Tap to start chatting'}
