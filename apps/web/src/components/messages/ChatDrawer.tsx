@@ -7,6 +7,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/media/imageCompression'
 import { DMCallModal } from '@/components/messages/DMCallModal'
 import { playDMSound, startRingtone, stopRingtone } from '@/lib/sound/soundEffects'
+import { requestNotificationPermission, isDocumentHidden, showDesktopNotification } from '@/lib/notifications/desktopNotifications'
 import type { DMCallType, DMCallStatus } from '@private-voices/shared'
 
 interface ChatDrawerProps {
@@ -128,6 +129,7 @@ export default function ChatDrawer({
     }
 
     loadMessages()
+    requestNotificationPermission().catch(() => {})
 
     // Setup Realtime Channel with Broadcast & Presence
     const channel = supabase.channel(`chat:${conversationId}`, {
@@ -159,6 +161,17 @@ export default function ChatDrawer({
           // Mark newly received message as read if drawer is open
           if (payload.new.sender_id !== currentUserId) {
             playDMSound('message_receive')
+
+            // Trigger desktop notification if tab is in the background or minimized
+            if (isDocumentHidden()) {
+              showDesktopNotification({
+                title: `${partner.displayName} (@${partner.username})`,
+                body: payload.new.content || 'Sent you a private media note.',
+                icon: partner.avatarUrl || '/icon-192x192.png',
+                tag: `msg-${payload.new.id}`,
+              })
+            }
+
             supabase
               .from('messages')
               .update({ is_read: true })
@@ -205,11 +218,20 @@ export default function ChatDrawer({
         if (!payload) return
         if (payload.receiver?.id === currentUserId && payload.action === 'call_init') {
           setActiveCallId(payload.callId)
-          setCallType(payload.type || 'audio')
+          const callTypeVal = payload.type || 'audio'
+          setCallType(callTypeVal)
           setCallStatus('incoming_ringing')
           setIsIncomingCall(true)
           setIsCallOpen(true)
           startRingtone('incoming')
+
+          // Desktop call notification
+          showDesktopNotification({
+            title: `Incoming ${callTypeVal === 'video' ? 'Video' : 'Voice'} Call`,
+            body: `${partner.displayName} is calling you on Private Voices...`,
+            icon: partner.avatarUrl || '/icon-192x192.png',
+            tag: `call-${payload.callId}`,
+          })
         } else if (payload.action === 'call_accept') {
           stopRingtone()
           playDMSound('call_connected')
