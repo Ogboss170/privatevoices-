@@ -47,6 +47,8 @@ import {
   Search,
   X,
   Laptop,
+  Sparkles,
+  Star,
 } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import { supabase } from '../lib/supabase'
@@ -1316,6 +1318,36 @@ export default function SettingsScreen() {
       {/* ── 9. ABOUT ── */}
       <View style={styles.sectionCard}>
         <Text style={styles.sectionCategoryTitle}>ABOUT</Text>
+
+        <TouchableOpacity
+          style={styles.rowItem}
+          onPress={() => router.push('/preview')}
+          activeOpacity={0.7}
+        >
+          <View style={styles.rowLeft}>
+            <Sparkles size={18} color="#6366f1" />
+            <View>
+              <Text style={styles.rowLabel}>App Preview</Text>
+              <Text style={styles.rowSub}>Roadmap, early access & tester tasks</Text>
+            </View>
+          </View>
+          <ChevronRight size={18} color={colors.gray400} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.rowItem}
+          onPress={() => router.push('/rate')}
+          activeOpacity={0.7}
+        >
+          <View style={styles.rowLeft}>
+            <Star size={18} color="#eab308" />
+            <View>
+              <Text style={styles.rowLabel}>Rate Private Voices</Text>
+              <Text style={styles.rowSub}>Share your experience & feedback</Text>
+            </View>
+          </View>
+          <ChevronRight size={18} color={colors.gray400} />
+        </TouchableOpacity>
 
         <TouchableOpacity style={styles.rowItem} activeOpacity={0.7}>
           <View style={styles.rowLeft}>

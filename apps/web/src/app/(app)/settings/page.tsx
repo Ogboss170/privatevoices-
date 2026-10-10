@@ -41,8 +41,9 @@ import {
   Search,
   Laptop,
   Monitor,
-  Radio,
   Compass,
+  Star,
+  Sparkles,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { useWebTheme, LANGUAGE_OPTIONS } from '@/context/WebThemeContext'
@@ -1391,6 +1392,38 @@ export default function SettingsPage(): React.JSX.Element {
             </div>
             <ChevronRight size={16} className="text-gray-400" />
           </div>
+
+          <Link
+            href="/preview"
+            className="flex items-center justify-between p-2 hover:bg-purple-50/60 dark:hover:bg-purple-950/30 rounded-lg cursor-pointer transition-colors text-purple-700 dark:text-purple-300 font-semibold"
+          >
+            <div className="flex items-center space-x-3">
+              <Sparkles size={18} className="text-purple-600 dark:text-purple-400" />
+              <div>
+                <span className="block text-gray-900 dark:text-gray-100">App Preview</span>
+                <span className="text-xs text-purple-600/80 dark:text-purple-400/80 font-normal">
+                  Explore upcoming features and join testing program
+                </span>
+              </div>
+            </div>
+            <ChevronRight size={16} className="text-gray-400" />
+          </Link>
+
+          <Link
+            href="/rate"
+            className="flex items-center justify-between p-2 hover:bg-amber-50/60 dark:hover:bg-amber-950/30 rounded-lg cursor-pointer transition-colors text-amber-700 dark:text-amber-300 font-semibold"
+          >
+            <div className="flex items-center space-x-3">
+              <Star size={18} className="fill-amber-400 text-amber-500" />
+              <div>
+                <span className="block text-gray-900 dark:text-gray-100">Rate Private Voices</span>
+                <span className="text-xs text-gray-400 font-normal">
+                  Share your experience with 5-star rating and review
+                </span>
+              </div>
+            </div>
+            <ChevronRight size={16} className="text-gray-400" />
+          </Link>
 
           <div
             onClick={() => setShowReportBugModal(true)}

@@ -475,3 +475,83 @@ export const DEFAULT_APPEARANCE: AppearancePreferences = {
   compactMode: false,
 };
 
+// ─── App Preview & Ratings Types ──────────────────────────────────────────────
+
+export type PreviewFeatureStatus = 'coming_soon' | 'available_for_preview' | 'testing' | 'released';
+export type PreviewFeatureCategory = 'core' | 'audio' | 'whispers' | 'community' | 'security';
+
+export interface PreviewFeature {
+  id: string;
+  title: string;
+  slug: string;
+  description: string;
+  status: PreviewFeatureStatus;
+  category: PreviewFeatureCategory;
+  demoUrl?: string | null;
+  badgeHighlight?: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  releasedAt?: string | null;
+  createdAt: string;
+}
+
+export interface PreviewProgramTask {
+  id: string;
+  programId: string;
+  title: string;
+  description: string | null;
+  taskType: 'feature_testing' | 'bug_hunt' | 'ux_feedback' | 'stress_test' | 'custom';
+  sortOrder: number;
+  isActive: boolean;
+  isCompleted?: boolean;
+  completedAt?: string | null;
+}
+
+export interface PreviewParticipantState {
+  id: string;
+  programId: string;
+  userId: string;
+  status: 'registered' | 'active' | 'eligible' | 'completed' | 'disqualified';
+  tasksCompleted: number;
+  validFeedbackCount: number;
+  earlySupporterAwarded: boolean;
+  betaTesterAwarded: boolean;
+  registeredAt: string;
+}
+
+export interface AppRatingRecord {
+  id: string;
+  userId?: string | null;
+  user_id?: string | null;
+  rating: number; // 1 to 5
+  review?: string | null;
+  isAnonymous?: boolean;
+  is_anonymous?: boolean;
+  platform: 'web' | 'ios' | 'android';
+  appVersion?: string;
+  app_version?: string;
+  status: 'published' | 'reviewed' | 'flagged' | 'hidden';
+  createdAt?: string;
+  created_at?: string;
+  updatedAt?: string;
+  updated_at?: string;
+  adminNotes?: string | null;
+  admin_notes?: string | null;
+}
+
+export interface AppRatingSummary {
+  totalReviews: number;
+  total_count?: number;
+  averageRating: number;
+  average_rating?: number;
+  distribution: {
+    '1': number;
+    '2': number;
+    '3': number;
+    '4': number;
+    '5': number;
+    [key: number]: number;
+  };
+}
+
+

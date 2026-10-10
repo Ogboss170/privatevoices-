@@ -36,10 +36,12 @@ import {
   Settings,
   Scale,
   Sliders,
-  FolderLock
+  FolderLock,
+  Star,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { PreviewProgramSection } from '@/components/PreviewProgramSection'
+import { RatingsAndReviewsSection } from '@/components/RatingsAndReviewsSection'
 import { BadgeManagementSection } from '@/components/BadgeManagementSection'
 import { AppealsSection } from '@/components/AppealsSection'
 import { AuditLogsSection } from '@/components/AuditLogsSection'
@@ -60,6 +62,7 @@ type AdminSection =
   | 'reports'
   | 'moderation'
   | 'preview'
+  | 'ratings'
   | 'badges'
   | 'appeals'
   | 'suspended'
@@ -101,6 +104,8 @@ export default function AdminDashboardPage(): React.JSX.Element {
   const [auditLogs, setAuditLogs] = useState<any[]>([])
   const [staffList, setStaffList] = useState<any[]>([])
   const [adminBugReports, setAdminBugReports] = useState<any[]>([])
+  const [appRatings, setAppRatings] = useState<any[]>([])
+  const [appRatingSummary, setAppRatingSummary] = useState<any | null>(null)
   const [isBugModalOpen, setIsBugModalOpen] = useState(false)
 
   const [reportFilter, setReportFilter] = useState<'all' | 'bug_report' | 'post' | 'comment' | 'profile'>('all')
@@ -228,6 +233,7 @@ export default function AdminDashboardPage(): React.JSX.Element {
         { data: uBadges },
         { data: appealData },
         { data: auditData },
+        { data: ratingsData },
       ] = await Promise.all([
         supabase.from('profiles').select('*', { count: 'exact' }).order('created_at', { ascending: false }).limit(100),
         supabase.from('posts').select('*, author:profiles!posts_author_id_fkey(username, display_name)').order('created_at', { ascending: false }).limit(50),
@@ -241,7 +247,17 @@ export default function AdminDashboardPage(): React.JSX.Element {
         supabase.from('user_badges').select('*, profile:profiles(username, display_name)').is('revoked_at', null).order('awarded_at', { ascending: false }),
         supabase.from('moderation_appeals').select('*').order('created_at', { ascending: false }),
         supabase.from('admin_audit_logs').select('*').order('created_at', { ascending: false }).limit(100),
+        supabase.from('app_ratings').select('*, user:profiles(username, display_name)').order('created_at', { ascending: false }).limit(200),
       ])
+
+      try {
+        const { data: summaryRes } = await supabase.rpc('get_app_rating_summary')
+        if (summaryRes) setAppRatingSummary(summaryRes)
+      } catch (e) {
+        console.warn('Rating summary RPC error:', e)
+      }
+
+      setAppRatings(ratingsData ?? [])
 
       let staffRows: any[] = []
       try {
@@ -441,7 +457,35 @@ export default function AdminDashboardPage(): React.JSX.Element {
     }
   }
 
-  // 13 Required Sidebar Navigation Sections
+  async function handleUpdateRatingStatus(
+    ratingId: string,
+    status: 'published' | 'reviewed' | 'flagged' | 'hidden',
+    adminNotes?: string
+  ): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('app_ratings')
+        .update({
+          status,
+          admin_notes: adminNotes || `Status updated to ${status} by admin.`,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', ratingId)
+
+      if (error) {
+        alert(`Error updating rating status: ${error.message}`)
+        return false
+      }
+
+      await loadAdminData()
+      return true
+    } catch (e: any) {
+      alert(`Update failed: ${e.message}`)
+      return false
+    }
+  }
+
+  // Sidebar Navigation Sections
   const SECTIONS: { id: AdminSection; label: string; icon: React.ElementType }[] = [
     { id: 'overview', label: 'Overview', icon: Activity },
     { id: 'staff', label: 'Staff & Roles', icon: ShieldAlert },
@@ -453,6 +497,7 @@ export default function AdminDashboardPage(): React.JSX.Element {
     { id: 'reports', label: 'Reports', icon: AlertTriangle },
     { id: 'moderation', label: 'Moderation', icon: Scale },
     { id: 'preview', label: 'Preview Program', icon: Sparkles },
+    { id: 'ratings', label: 'Ratings & Reviews', icon: Star },
     { id: 'badges', label: 'Badges', icon: Award },
     { id: 'appeals', label: 'Appeals', icon: ShieldAlert },
     { id: 'suspended', label: 'Suspended Users', icon: UserX },
@@ -984,6 +1029,17 @@ export default function AdminDashboardPage(): React.JSX.Element {
             onRefresh={loadAdminData}
             onAwardBadge={handleAwardBadge}
             onReviewFeedback={handleReviewFeedback}
+          />
+        )}
+
+        {/* 8B. APP RATINGS & REVIEWS MANAGEMENT */}
+        {activeSection === 'ratings' && (
+          <RatingsAndReviewsSection
+            ratings={appRatings}
+            summary={appRatingSummary}
+            loading={loading}
+            onRefresh={loadAdminData}
+            onUpdateStatus={handleUpdateRatingStatus}
           />
         )}
 
