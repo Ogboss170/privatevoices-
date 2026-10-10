@@ -11,6 +11,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  AppState,
+  type AppStateStatus,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { X, Send, Check, CheckCheck, Image as ImageIcon, Trash2, Mic, Square, Play, Pause, Volume2 } from 'lucide-react-native'
@@ -208,9 +210,24 @@ export function ChatModal({
       }
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current)
-      }
     }
   }, [visible, conversationId, currentUserId, partnerId])
+
+  // Handle AppState lifecycle: pause audio or cancel recording when app goes to background
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState.match(/inactive|background/)) {
+        if (soundObject) {
+          soundObject.pauseAsync().catch(() => {})
+          setPlayingAudioId(null)
+        }
+      }
+    })
+
+    return () => {
+      subscription.remove()
+    }
+  }, [soundObject])
 
   // --- Voice Note / Audio Whisper Functions ---
   async function startRecording() {
@@ -1386,14 +1403,15 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   waveformBar: {
-    width: 3,
+    width: 3.5,
     borderRadius: 2,
+    opacity: 0.35,
   },
   waveformBarPlaying: {
     opacity: 1,
   },
   waveformBarMe: {
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    backgroundColor: '#ffffff',
   },
   waveformBarThem: {
     backgroundColor: colors.brand,

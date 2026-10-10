@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { X, Send, Loader2, Image as ImageIcon, ExternalLink, Trash2, Mic, Play, Pause, Square, Volume2 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { compressImage } from '@/lib/media/imageCompression'
 
 interface ChatDrawerProps {
   conversationId: string
@@ -493,17 +494,24 @@ export default function ChatDrawer({
       let uploadedUrl: string | null = null
 
       if (currentImgFile) {
-        const fileExt = currentImgFile.name.split('.').pop() || 'jpg'
+        let fileToUpload = currentImgFile
+        try {
+          fileToUpload = await compressImage(currentImgFile, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 })
+        } catch (compErr) {
+          console.warn('Image compression fallback to original:', compErr)
+        }
+
+        const fileExt = fileToUpload.name.split('.').pop() || 'jpg'
         const fileName = `${currentUserId}/${Date.now()}.${fileExt}`
 
         let uploadRes = await supabase.storage
           .from('chat-media')
-          .upload(fileName, currentImgFile, { upsert: true })
+          .upload(fileName, fileToUpload, { upsert: true })
 
         if (uploadRes.error) {
           uploadRes = await supabase.storage
             .from('stories')
-            .upload(`chat/${fileName}`, currentImgFile, { upsert: true })
+            .upload(`chat/${fileName}`, fileToUpload, { upsert: true })
         }
 
         if (uploadRes.data) {
