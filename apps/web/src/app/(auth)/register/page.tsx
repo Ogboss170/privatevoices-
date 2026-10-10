@@ -207,30 +207,44 @@ export default function RegisterPage() {
       }
 
       // 2. Call verification code RPC
-      const { data, error: rpcError } = await supabase.rpc('request_verification_code', {
+      const res = await supabase.rpc('request_verification_code', {
         p_target_type: targetType,
         p_target_value: targetValue,
       })
 
+      const resData = res.data as any
+      const rpcError = res.error
+
       if (rpcError) {
         console.error('request_verification_code error:', rpcError)
         setError(rpcError.message || 'Could not generate verification code.')
-      } else if (data?.success) {
+      } else if (resData?.success) {
         if (targetType === 'phone') {
           setPhoneCodeSent(true)
-          if (data?.dev_code) setPhoneOtp(data.dev_code)
+          if (resData?.dev_code) setPhoneOtp(resData.dev_code)
+
+          // Trigger Twilio SMS fallback dispatch
+          fetch('/api/twilio/send-code', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              targetType: 'phone',
+              targetValue,
+              code: resData?.dev_code,
+            }),
+          }).catch((e) => console.warn('Twilio dispatch notice:', e))
         }
         if (targetType === 'email') {
           setEmailCodeSent(true)
-          if (data?.dev_code) setEmailOtp(data.dev_code)
+          if (resData?.dev_code) setEmailOtp(resData.dev_code)
         }
 
-        const msg = data?.dev_code
-          ? `Code generated for ${targetValue}: ${data.dev_code} (Auto-filled below for quick verification)`
+        const msg = resData?.dev_code
+          ? `Code generated for ${targetValue}: ${resData.dev_code} (Auto-filled below for quick verification)`
           : `Verification code sent to ${targetValue}. Please check your inbox and spam folder.`
         setCodeFeedback(msg)
       } else {
-        setError(data?.message || 'Could not send verification code.')
+        setError(resData?.message || 'Could not send verification code.')
       }
     } catch (err: any) {
       console.error('RPC call error:', err)
