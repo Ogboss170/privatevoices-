@@ -2,12 +2,18 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
-import { X, Send, Loader2, Image as ImageIcon, ExternalLink, Trash2, Mic, Play, Pause, Square, Volume2, Maximize2, Minimize2, Phone, Video, Search, Reply as ReplyIcon, Flame, Smile, Film, Sparkles, History, PhoneIncoming, PhoneOutgoing, PhoneMissed } from 'lucide-react'
+import { X, Send, Loader2, Image as ImageIcon, ExternalLink, Trash2, Mic, Play, Pause, Square, Volume2, Maximize2, Minimize2, Phone, Video, Search, Reply as ReplyIcon, Flame, Smile, Film, Sparkles, History, PhoneIncoming, PhoneOutgoing, PhoneMissed, Lock, ShieldCheck } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/media/imageCompression'
 import { DMCallModal } from '@/components/messages/DMCallModal'
 import { playDMSound, startRingtone, stopRingtone } from '@/lib/sound/soundEffects'
 import { requestNotificationPermission, isDocumentHidden, showDesktopNotification } from '@/lib/notifications/desktopNotifications'
+import {
+  getOrCreateUserIdentityKeyPair,
+  exportPublicKeySpki,
+  encryptTextMessage,
+  decryptTextMessage,
+} from '@/lib/crypto/e2eeEngine'
 import type { DMCallType, DMCallStatus } from '@private-voices/shared'
 
 interface ChatDrawerProps {
@@ -93,6 +99,64 @@ export default function ChatDrawer({
   const channelRef = useRef<any>(null)
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
+  // E2EE Key State
+  const [e2eeKeyPair, setE2eeKeyPair] = useState<CryptoKeyPair | null>(null)
+  const [partnerPublicKey, setPartnerPublicKey] = useState<string | null>(null)
+  const [isE2eeReady, setIsE2eeReady] = useState(false)
+
+  // Initialize E2EE Keys & Decrypt Helper
+  useEffect(() => {
+    async function initE2EE() {
+      try {
+        const keyPair = await getOrCreateUserIdentityKeyPair()
+        setE2eeKeyPair(keyPair)
+        const mySpki = await exportPublicKeySpki(keyPair.publicKey)
+
+        // Publish or update user's public key
+        await supabase
+          .from('user_e2ee_keys')
+          .upsert({ user_id: currentUserId, public_key_spki: mySpki, updated_at: new Date().toISOString() })
+
+        // Fetch partner's public key
+        const { data: partnerKeyData } = await supabase
+          .from('user_e2ee_keys')
+          .select('public_key_spki')
+          .eq('user_id', partner.id)
+          .single()
+
+        if (partnerKeyData?.public_key_spki) {
+          setPartnerPublicKey(partnerKeyData.public_key_spki)
+        }
+        setIsE2eeReady(true)
+      } catch (err) {
+        console.warn('E2EE initialization skipped or failed:', err)
+      }
+    }
+
+    initE2EE()
+  }, [currentUserId, partner.id, supabase])
+
+  // Helper to decrypt single message
+  async function decryptMessageIfNeeded(msg: any, keyPair: CryptoKeyPair | null) {
+    if (!msg.is_e2ee || !msg.encrypted_payload || !msg.encryption_iv || !msg.sender_ephemeral_key || !keyPair) {
+      return msg
+    }
+    try {
+      const plaintext = await decryptTextMessage(
+        {
+          ciphertext: msg.encrypted_payload,
+          iv: msg.encryption_iv,
+          senderEphemeralPublicKey: msg.sender_ephemeral_key,
+        },
+        keyPair.privateKey
+      )
+      return { ...msg, content: plaintext }
+    } catch (err) {
+      console.warn('Failed to decrypt message:', msg.id, err)
+      return { ...msg, content: '🔒 [Encrypted Message]' }
+    }
+  }
+
   useEffect(() => {
     async function loadMessages() {
       setLoading(true)
@@ -102,7 +166,12 @@ export default function ChatDrawer({
         .eq('conversation_id', conversationId)
         .order('created_at', { ascending: true })
 
-      setMessages(data ?? [])
+      let loaded = data ?? []
+      if (e2eeKeyPair) {
+        loaded = await Promise.all(loaded.map((m) => decryptMessageIfNeeded(m, e2eeKeyPair)))
+      }
+
+      setMessages(loaded)
       setLoading(false)
       scrollToBottom()
 
@@ -150,32 +219,37 @@ export default function ChatDrawer({
           table: 'messages',
           filter: `conversation_id=eq.${conversationId}`,
         },
-        (payload) => {
+        async (payload) => {
+          let incomingMsg = payload.new
+          if (incomingMsg.is_e2ee && e2eeKeyPair) {
+            incomingMsg = await decryptMessageIfNeeded(incomingMsg, e2eeKeyPair)
+          }
+
           setMessages((prev) => {
-            if (prev.some((m) => m.id === payload.new.id)) return prev
-            return [...prev, payload.new]
+            if (prev.some((m) => m.id === incomingMsg.id)) return prev
+            return [...prev, incomingMsg]
           })
           setIsPartnerTyping(false)
           scrollToBottom()
 
           // Mark newly received message as read if drawer is open
-          if (payload.new.sender_id !== currentUserId) {
+          if (incomingMsg.sender_id !== currentUserId) {
             playDMSound('message_receive')
 
             // Trigger desktop notification if tab is in the background or minimized
             if (isDocumentHidden()) {
               showDesktopNotification({
                 title: `${partner.displayName} (@${partner.username})`,
-                body: payload.new.content || 'Sent you a private media note.',
+                body: incomingMsg.content || 'Sent you a private media note.',
                 icon: partner.avatarUrl || '/icon-192x192.png',
-                tag: `msg-${payload.new.id}`,
+                tag: `msg-${incomingMsg.id}`,
               })
             }
 
             supabase
               .from('messages')
               .update({ is_read: true })
-              .eq('id', payload.new.id)
+              .eq('id', incomingMsg.id)
               .then(() => {})
           }
         }
@@ -911,12 +985,34 @@ export default function ChatDrawer({
         }
       }
 
+      // E2EE Encryption if partner's public key is registered
+      let isE2ee = false
+      let encryptedPayload: string | null = null
+      let encryptionIv: string | null = null
+      let senderEphemeralKey: string | null = null
+
+      if (partnerPublicKey && messageContent) {
+        try {
+          const enc = await encryptTextMessage(messageContent, partnerPublicKey)
+          isE2ee = true
+          encryptedPayload = enc.ciphertext
+          encryptionIv = enc.iv
+          senderEphemeralKey = enc.senderEphemeralPublicKey || null
+        } catch (encErr) {
+          console.warn('E2EE encryption failed, falling back to transport encryption:', encErr)
+        }
+      }
+
       const { data: newMsg, error } = await supabase
         .from('messages')
         .insert({
           conversation_id: conversationId,
           sender_id: currentUserId,
-          content: messageContent,
+          content: isE2ee ? '🔒 [End-to-End Encrypted Message]' : messageContent,
+          is_e2ee: isE2ee,
+          encrypted_payload: encryptedPayload,
+          encryption_iv: encryptionIv,
+          sender_ephemeral_key: senderEphemeralKey,
           image_url: uploadedImgUrl,
           video_url: uploadedVidUrl,
           media_type: uploadedVidUrl ? 'video' : uploadedImgUrl ? 'image' : 'text',
@@ -933,13 +1029,14 @@ export default function ChatDrawer({
         setMessages((prev) => prev.filter((m) => m.id !== tempId))
         alert(`Failed to send message: ${error.message}`)
       } else if (newMsg) {
-        setMessages((prev) => prev.map((m) => (m.id === tempId ? newMsg : m)))
+        const decryptedMsg = { ...newMsg, content: messageContent }
+        setMessages((prev) => prev.map((m) => (m.id === tempId ? decryptedMsg : m)))
 
         // Update conversation last_message
         await supabase
           .from('conversations')
           .update({
-            last_message: messageContent,
+            last_message: isE2ee ? '🔒 Encrypted message' : messageContent,
             last_message_at: new Date().toISOString(),
           })
           .eq('id', conversationId)
@@ -1013,6 +1110,15 @@ export default function ChatDrawer({
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <h3 className="font-bold text-sm text-gray-900 truncate">{partner.displayName}</h3>
+                {partnerPublicKey && (
+                  <span
+                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-medium rounded-full border border-emerald-200"
+                    title="End-to-End Encrypted: ECDH P-256 + AES-GCM 256 active"
+                  >
+                    <ShieldCheck size={11} className="text-emerald-600" />
+                    <span>E2EE</span>
+                  </span>
+                )}
               </div>
               <p className="text-xs truncate">
                 {isPartnerTyping ? (
@@ -1531,6 +1637,11 @@ export default function ChatDrawer({
                   )}
 
                   <span className="text-[10px] text-gray-400 mt-1 px-1 flex items-center gap-1">
+                    {msg.is_e2ee && (
+                      <span title="End-to-End Encrypted (AES-GCM 256)">
+                        <Lock size={10} className="text-emerald-600" />
+                      </span>
+                    )}
                     {msg.is_disappearing && (
                       <span title="Disappearing message">
                         <Flame size={11} className="text-amber-500" />
