@@ -1354,21 +1354,27 @@ export default function SettingsPage(): React.JSX.Element {
             <ChevronRight size={16} className="text-gray-400" />
           </div>
 
-          <div className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors">
+          <Link
+            href="/terms"
+            className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
+          >
             <div className="flex items-center space-x-3">
               <FileText size={18} className="text-gray-500" />
               <span className="font-semibold text-gray-800">Terms & Conditions</span>
             </div>
             <ChevronRight size={16} className="text-gray-400" />
-          </div>
+          </Link>
 
-          <div className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors">
+          <Link
+            href="/privacy"
+            className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
+          >
             <div className="flex items-center space-x-3">
               <Shield size={18} className="text-gray-500" />
               <span className="font-semibold text-gray-800">Privacy Policy</span>
             </div>
             <ChevronRight size={16} className="text-gray-400" />
-          </div>
+          </Link>
 
           <div className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors">
             <div className="flex items-center space-x-3">
