@@ -2,6 +2,7 @@
   "expo": {
     "name": "Private Voices",
     "slug": "privatevoices",
+    "owner": "fytro",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
