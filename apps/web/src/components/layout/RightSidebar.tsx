@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Search, Users, ArrowRight, ShieldCheck } from 'lucide-react'
+import { Search, Users, ArrowRight, ShieldCheck, Radio } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 export default function RightSidebar(): React.JSX.Element {
@@ -45,10 +45,10 @@ export default function RightSidebar(): React.JSX.Element {
       <div className="bg-gradient-to-b from-purple-50/70 to-indigo-50/40 rounded-2xl p-4 border border-purple-100/60 shadow-sm space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-purple-900 font-bold text-xs">
-            <Users size={16} className="text-purple-600" />
+            <Radio size={16} className="text-purple-600 animate-pulse" />
             <span>Trending Spaces</span>
           </div>
-          <Link href="/communities" className="text-[11px] font-semibold text-purple-600 hover:text-purple-800 flex items-center gap-0.5">
+          <Link href="/spaces" className="text-[11px] font-semibold text-purple-600 hover:text-purple-800 flex items-center gap-0.5">
             Explore <ArrowRight size={12} />
           </Link>
         </div>

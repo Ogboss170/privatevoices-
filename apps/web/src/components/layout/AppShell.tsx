@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Search, PlusSquare, Inbox, Users, User, Bell } from 'lucide-react'
+import { Home, Search, PlusSquare, Inbox, Users, User, Bell, Radio } from 'lucide-react'
 import RightSidebar from '@/components/layout/RightSidebar'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { useWebTheme } from '@/context/WebThemeContext'
@@ -17,6 +17,7 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
   const desktopNavItems = [
     { href: '/feed',          label: t.home,          Icon: Home },
     { href: '/explore',       label: t.explore,       Icon: Search },
+    { href: '/spaces',        label: 'Spaces',        Icon: Radio },
     { href: '/create',        label: t.create,        Icon: PlusSquare },
     { href: '/inbox',         label: t.inbox,         Icon: Inbox },
     { href: '/communities',   label: t.community,     Icon: Users },
@@ -26,8 +27,8 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
 
   const mobileBottomNavItems = [
     { href: '/feed',        label: t.home,      Icon: Home },
+    { href: '/spaces',      label: 'Spaces',    Icon: Radio },
     { href: '/explore',     label: t.explore,   Icon: Search },
-    { href: '/communities', label: t.community, Icon: Users },
     { href: '/inbox',       label: t.inbox,     Icon: Inbox },
     { href: '/profile',     label: t.profile,   Icon: User },
   ]

@@ -671,4 +671,43 @@ export interface GroupConversation {
   memberCount?: number;
 }
 
+// ─── Live Audio Spaces & Group Voice Lounges ──────────────────────────────────
+
+export type SpaceRole = 'host' | 'speaker' | 'listener';
+export type SpaceStatus = 'live' | 'ended';
+
+export interface SpaceParticipant {
+  id: string;
+  spaceId: string;
+  userId: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  role: SpaceRole;
+  handRaised: boolean;
+  isMuted: boolean;
+  joinedAt: string;
+}
+
+export interface LiveSpace {
+  id: string;
+  title: string;
+  topic?: string | null;
+  hostId: string;
+  host?: {
+    id: string;
+    username: string;
+    displayName: string;
+    avatarUrl: string | null;
+  };
+  communityId?: string | null;
+  status: SpaceStatus;
+  speakerCount: number;
+  listenerCount: number;
+  createdAt: string;
+  endedAt?: string | null;
+  participants?: SpaceParticipant[];
+}
+
+
 
