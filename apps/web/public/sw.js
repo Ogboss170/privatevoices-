@@ -2,6 +2,7 @@
 // Private Voices Service Worker: Audio Caching & Offline Sync
 // ==============================================================================
 
+const CACHE_NAME = 'pv-audio-cache-v1'
 const STATIC_CACHE_NAME = 'pv-static-assets-v1'
 
 const STATIC_ASSETS = [
@@ -32,7 +33,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
-          if (key !== STATIC_CACHE_NAME) {
+          if (key !== CACHE_NAME && key !== STATIC_CACHE_NAME) {
             return caches.delete(key)
           }
         })
@@ -42,8 +43,47 @@ self.addEventListener('activate', (event) => {
   self.clients.claim()
 })
 
-// Fetch event: Network-First with static cache fallback
+// Fetch event: Cache-First for audio notes, Network-First for other requests
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url)
+
+  // Cache audio notes & sounds (mp3, wav, ogg, webm, m4a, audio/*)
+  const isAudio =
+    url.pathname.endsWith('.mp3') ||
+    url.pathname.endsWith('.wav') ||
+    url.pathname.endsWith('.ogg') ||
+    url.pathname.endsWith('.webm') ||
+    url.pathname.endsWith('.m4a') ||
+    url.pathname.includes('/storage/v1/object/public/whispers') ||
+    url.pathname.includes('/storage/v1/object/public/chat_audio') ||
+    url.pathname.includes('/storage/v1/object/public/post_audio') ||
+    url.pathname.includes('/storage/v1/object/public/') ||
+    event.request.headers.get('accept')?.includes('audio/')
+
+  if (isAudio) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cachedResponse = await cache.match(event.request)
+        if (cachedResponse) {
+          return cachedResponse
+        }
+
+        try {
+          const networkResponse = await fetch(event.request)
+          if (networkResponse && networkResponse.status === 200) {
+            cache.put(event.request, networkResponse.clone())
+          }
+          return networkResponse
+        } catch (fetchErr) {
+          // If offline and not in cache, fallback
+          return cachedResponse || new Response('Audio unavailable offline', { status: 503 })
+        }
+      })
+    )
+    return
+  }
+
+  // Regular requests
   event.respondWith(
     fetch(event.request).catch(async () => {
       const cached = await caches.match(event.request)
