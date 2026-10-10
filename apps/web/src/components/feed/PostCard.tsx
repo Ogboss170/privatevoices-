@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Heart, MessageCircle, Repeat, Bookmark, Share2, Trash2, MoreVertical, Flag, ShieldOff, ChevronLeft, ChevronRight, X, TrendingUp, BarChart2, Pin } from 'lucide-react'
+import { Heart, MessageCircle, Repeat, Bookmark, Share2, Trash2, MoreVertical, Flag, ShieldOff, ChevronLeft, ChevronRight, X, TrendingUp, BarChart2, Pin, Mic, Film } from 'lucide-react'
 import type { Post } from '@private-voices/shared'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import FormattedText from '../common/FormattedText'
@@ -11,6 +11,7 @@ import MentionAutocomplete from '../common/MentionAutocomplete'
 import InteractivePoll from './InteractivePoll'
 import PostInsightsModal from './PostInsightsModal'
 import { UserBadgesRow, CommunityRoleBadge } from '../common/PlatformBadge'
+import VoiceWaveformPlayer from '../common/VoiceWaveformPlayer'
 
 interface PostCardProps {
   post: Post
@@ -790,6 +791,34 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
         currentUserId={currentUserId}
         initialPoll={post.poll}
       />
+
+      {/* Voice Whisper Audio Attachment */}
+      {post.audioUrl && (
+        <div className="mt-2.5">
+          <VoiceWaveformPlayer
+            audioUrl={post.audioUrl}
+            duration={post.audioDuration}
+            theme="brand"
+            barCount={22}
+          />
+        </div>
+      )}
+
+      {/* Video Attachment Preview */}
+      {post.videoUrl && (
+        <div className="mt-2.5 relative rounded-2xl overflow-hidden bg-black max-h-[440px] border border-gray-200">
+          <video
+            src={post.videoUrl}
+            controls
+            playsInline
+            className="w-full max-h-[440px] object-contain"
+          />
+          <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-xs text-[10px] text-white flex items-center gap-1 font-semibold pointer-events-none">
+            <Film size={12} className="text-purple-400" />
+            <span>Video</span>
+          </div>
+        </div>
+      )}
 
       {/* Images Grid & Lightbox */}
       {post.imageUrls && post.imageUrls.length > 0 && (

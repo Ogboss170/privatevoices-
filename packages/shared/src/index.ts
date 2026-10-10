@@ -93,6 +93,9 @@ export interface Post {
   communityId?: string | null;
   community?: PostCommunity | null;
   imageUrls: string[];
+  audioUrl?: string | null;
+  audioDuration?: number | null;
+  videoUrl?: string | null;
   hashtags: string[];
   likeCount: number;
   commentCount: number;
@@ -112,6 +115,9 @@ export interface Post {
 export interface CreatePostDto {
   content: string;
   imageUrls?: string[];
+  audioUrl?: string | null;
+  audioDuration?: number | null;
+  videoUrl?: string | null;
 }
 
 export interface Comment {
@@ -251,24 +257,56 @@ export interface AppNotification {
 
 export function extractPostMediaAndCleanContent(
   rawContent: string,
-  existingImageUrls: string[] = []
-): { content: string; imageUrls: string[] } {
+  existingImageUrls: string[] = [],
+  existingAudioUrl?: string | null,
+  existingVideoUrl?: string | null
+): { content: string; imageUrls: string[]; audioUrl?: string | null; videoUrl?: string | null } {
   if (!rawContent && (!existingImageUrls || existingImageUrls.length === 0)) {
-    return { content: '', imageUrls: [] };
+    return { content: '', imageUrls: [], audioUrl: existingAudioUrl || null, videoUrl: existingVideoUrl || null };
   }
 
   const extractedUrls: string[] = [...(existingImageUrls || [])];
+  let audioUrl: string | null = existingAudioUrl || null;
+  let videoUrl: string | null = existingVideoUrl || null;
 
-  // 1. Extract markdown image tags: ![alt](url)
+  // 1. Extract markdown image/media tags: ![alt](url)
   const markdownImgRegex = /!\[.*?\]\((https?:\/\/[^\s\)]+)\)/gi;
   let cleanedContent = (rawContent || '').replace(markdownImgRegex, (_, url) => {
     if (url && !extractedUrls.includes(url)) {
-      extractedUrls.push(url);
+      if (url.match(/\.(mp3|wav|ogg|m4a|aac|webm)(\?.*)?$/i)) {
+        if (!audioUrl) audioUrl = url;
+      } else if (url.match(/\.(mp4|mov|webm|quicktime)(\?.*)?$/i)) {
+        if (!videoUrl) videoUrl = url;
+      } else {
+        extractedUrls.push(url);
+      }
     }
     return '';
   });
 
-  // 2. Extract standalone image & GIF URLs (e.g. .gif, .png, .jpg, .jpeg, .webp, giphy, tenor, unsplash, supabase storage)
+  // 2. Extract standalone audio URLs
+  const audioUrlRegex = /(https?:\/\/[^\s]+(?:\.(?:mp3|wav|ogg|m4a|aac|webm)|supabase\.co\/storage\/v1\/object\/public\/(?:chat-media|stories|post-media)\/[^\s]+\.(?:webm|mp3|wav|m4a))[^\s]*)/gi;
+  cleanedContent = cleanedContent.replace(audioUrlRegex, (url) => {
+    const cleanUrl = url.replace(/[.,;!?]+$/, '');
+    if (!audioUrl) {
+      audioUrl = cleanUrl;
+      return '';
+    }
+    return url;
+  });
+
+  // 3. Extract standalone video URLs
+  const videoUrlRegex = /(https?:\/\/[^\s]+(?:\.(?:mp4|mov|quicktime)|supabase\.co\/storage\/v1\/object\/public\/(?:chat-media|stories|post-media)\/[^\s]+\.(?:mp4|mov))[^\s]*)/gi;
+  cleanedContent = cleanedContent.replace(videoUrlRegex, (url) => {
+    const cleanUrl = url.replace(/[.,;!?]+$/, '');
+    if (!videoUrl) {
+      videoUrl = cleanUrl;
+      return '';
+    }
+    return url;
+  });
+
+  // 4. Extract standalone image & GIF URLs (e.g. .gif, .png, .jpg, .jpeg, .webp, giphy, tenor, unsplash, supabase storage)
   const standaloneMediaUrlRegex = /(https?:\/\/[^\s]+(?:\.(?:png|jpg|jpeg|gif|webp)|giphy\.com|tenor\.com|unsplash\.com|supabase\.co\/storage\/v1\/object\/public\/post-media)[^\s]*)/gi;
 
   cleanedContent = cleanedContent.replace(standaloneMediaUrlRegex, (url) => {
@@ -285,6 +323,8 @@ export function extractPostMediaAndCleanContent(
   return {
     content: cleanedContent,
     imageUrls: extractedUrls,
+    audioUrl,
+    videoUrl,
   };
 }
 

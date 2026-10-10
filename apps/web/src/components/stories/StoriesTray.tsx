@@ -120,24 +120,59 @@ export default function StoriesTray(): React.JSX.Element {
       </button>
 
       {/* Stories Tray */}
-      {storyGroups.map((group) => (
-        <button
-          key={group.author.id}
-          onClick={() => setActiveStoryGroup(group)}
-          className="flex flex-col items-center gap-1 flex-shrink-0 group"
-        >
-          <div className="w-14 h-14 rounded-full p-0.5 bg-gradient-to-tr from-brand-500 to-purple-600 group-hover:scale-105 transition-transform">
-            <div className="w-full h-full rounded-full bg-white p-0.5">
-              <div className="w-full h-full rounded-full bg-brand-100 flex items-center justify-center font-bold text-sm text-brand-600">
-                {group.author.displayName.charAt(0).toUpperCase()}
+      {storyGroups.map((group) => {
+        const hasVoice = group.stories.some(
+          (s) => s.media_type === 'audio' || s.media_url?.match(/\.(mp3|wav|ogg|m4a|aac|webm)(\?.*)?$/i)
+        )
+        const hasVideo = group.stories.some(
+          (s) => s.media_type === 'video' || s.media_url?.match(/\.(mp4|mov|webm|quicktime)(\?.*)?$/i)
+        )
+
+        return (
+          <button
+            key={group.author.id}
+            onClick={() => setActiveStoryGroup(group)}
+            className="flex flex-col items-center gap-1 flex-shrink-0 group"
+          >
+            <div className="relative">
+              <div className="w-14 h-14 rounded-full p-0.5 bg-gradient-to-tr from-brand-500 via-purple-500 to-pink-500 group-hover:scale-105 transition-transform shadow-2xs">
+                <div className="w-full h-full rounded-full bg-white p-0.5">
+                  <div className="w-full h-full rounded-full bg-brand-100 flex items-center justify-center font-bold text-sm text-brand-600 overflow-hidden">
+                    {group.author.avatarUrl ? (
+                      <img
+                        src={group.author.avatarUrl}
+                        alt={group.author.displayName}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      group.author.displayName.charAt(0).toUpperCase()
+                    )}
+                  </div>
+                </div>
               </div>
+              {hasVoice && (
+                <span
+                  className="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-brand-600 text-white flex items-center justify-center text-[9px] shadow-sm border border-white"
+                  title="Contains Voice Whisper Story"
+                >
+                  🎙️
+                </span>
+              )}
+              {!hasVoice && hasVideo && (
+                <span
+                  className="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-purple-600 text-white flex items-center justify-center text-[9px] shadow-sm border border-white"
+                  title="Contains Video Story"
+                >
+                  🎥
+                </span>
+              )}
             </div>
-          </div>
-          <span className="text-[11px] font-medium text-gray-700 truncate max-w-[64px]">
-            {group.author.displayName}
-          </span>
-        </button>
-      ))}
+            <span className="text-[11px] font-medium text-gray-700 truncate max-w-[64px]">
+              {group.author.displayName}
+            </span>
+          </button>
+        )
+      })}
 
       {/* Create Modal */}
       {showCreateModal && (

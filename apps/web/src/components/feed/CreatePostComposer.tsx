@@ -2,10 +2,11 @@
 
 import React, { useState, useRef } from 'react'
 import Image from 'next/image'
-import { Image as ImageIcon, Send, X, BarChart2, Plus, Trash2 } from 'lucide-react'
+import { Image as ImageIcon, Send, X, BarChart2, Plus, Trash2, Mic, Film, Square } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import MentionAutocomplete from '../common/MentionAutocomplete'
 import { compressImage } from '@/lib/media/imageCompression'
+import VoiceWaveformPlayer from '../common/VoiceWaveformPlayer'
 
 interface CreatePostComposerProps {
   onPostCreated?: () => void
@@ -16,9 +17,20 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
   const [content, setContent] = useState('')
   const [imageFiles, setImageFiles] = useState<File[]>([])
   const [previewUrls, setPreviewUrls] = useState<string[]>([])
+  const [videoFile, setVideoFile] = useState<File | null>(null)
+  const [videoPreview, setVideoPreview] = useState<string | null>(null)
+  const [audioFile, setAudioFile] = useState<File | null>(null)
+  const [audioPreview, setAudioPreview] = useState<string | null>(null)
+  const [audioDuration, setAudioDuration] = useState<number>(0)
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordingSeconds, setRecordingSeconds] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const videoInputRef = useRef<HTMLInputElement>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const [showPollCreator, setShowPollCreator] = useState(false)
   const [pollQuestion, setPollQuestion] = useState('')
@@ -62,9 +74,85 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
     setPreviewUrls((prev) => prev.filter((_, i) => i !== index))
   }
 
+  function handleVideoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('video/')) {
+      alert('Please select a video file.')
+      return
+    }
+    setVideoFile(file)
+    setVideoPreview(URL.createObjectURL(file))
+  }
+
+  function handleRemoveVideo() {
+    if (videoPreview) URL.revokeObjectURL(videoPreview)
+    setVideoFile(null)
+    setVideoPreview(null)
+  }
+
+  // Audio recording helpers
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' })
+      mediaRecorderRef.current = recorder
+      audioChunksRef.current = []
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          audioChunksRef.current.push(e.data)
+        }
+      }
+
+      recorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+        const file = new File([audioBlob], `voice-whisper-${Date.now()}.webm`, { type: 'audio/webm' })
+        setAudioFile(file)
+        setAudioPreview(URL.createObjectURL(audioBlob))
+        setAudioDuration(recordingSeconds)
+        stream.getTracks().forEach((track) => track.stop())
+      }
+
+      recorder.start(100)
+      setIsRecording(true)
+      setRecordingSeconds(0)
+
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds((prev) => {
+          if (prev >= 120) {
+            stopRecording()
+            return prev
+          }
+          return prev + 1
+        })
+      }, 1000)
+    } catch (err: any) {
+      alert(`Could not start microphone: ${err.message || err}`)
+    }
+  }
+
+  function stopRecording() {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current)
+      recordingTimerRef.current = null
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop()
+    }
+    setIsRecording(false)
+  }
+
+  function handleRemoveAudio() {
+    if (audioPreview) URL.revokeObjectURL(audioPreview)
+    setAudioFile(null)
+    setAudioPreview(null)
+    setAudioDuration(0)
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!content.trim() && imageFiles.length === 0 && !showPollCreator) return
+    if (!content.trim() && imageFiles.length === 0 && !videoFile && !audioFile && !showPollCreator) return
 
     setLoading(true)
     setError(null)
@@ -77,6 +165,10 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
     }
 
     let uploadedUrls: string[] = []
+    let uploadedAudioUrl: string | null = null
+    let uploadedVideoUrl: string | null = null
+
+    // 1. Upload Images
     if (imageFiles.length > 0) {
       for (let i = 0; i < imageFiles.length; i++) {
         let file = imageFiles[i]
@@ -107,11 +199,72 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
       }
     }
 
+    // 2. Upload Video
+    if (videoFile) {
+      const fileExt = videoFile.name.split('.').pop() || 'mp4'
+      const fileName = `${user.user.id}/video_${Date.now()}.${fileExt}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('post-media')
+        .upload(fileName, videoFile, {
+          contentType: videoFile.type || 'video/mp4',
+          upsert: true,
+        })
+
+      if (!uploadError) {
+        const { data: publicUrlData } = supabase.storage
+          .from('post-media')
+          .getPublicUrl(fileName)
+        uploadedVideoUrl = publicUrlData.publicUrl
+      } else {
+        console.error('Failed to upload video:', uploadError)
+      }
+    }
+
+    // 3. Upload Audio
+    if (audioFile) {
+      const fileName = `${user.user.id}/audio_${Date.now()}.webm`
+
+      const { error: uploadError } = await supabase.storage
+        .from('post-media')
+        .upload(fileName, audioFile, {
+          contentType: 'audio/webm',
+          upsert: true,
+        })
+
+      if (!uploadError) {
+        const { data: publicUrlData } = supabase.storage
+          .from('post-media')
+          .getPublicUrl(fileName)
+        uploadedAudioUrl = publicUrlData.publicUrl
+      } else {
+        console.error('Failed to upload audio:', uploadError)
+      }
+    }
+
+    // Prepare content text
+    let finalContent = content.trim()
+    if (!finalContent) {
+      if (uploadedAudioUrl) finalContent = '🎙️ Voice Whisper note'
+      else if (uploadedVideoUrl) finalContent = '🎥 Video post'
+      else if (uploadedUrls.length > 0) finalContent = '📷 Photo attachment'
+      else if (showPollCreator) finalContent = '📊 Community Poll'
+      else finalContent = 'Shared a Voice'
+    }
+
+    // If audio or video uploaded, append URL into content as fallback so it works seamlessly even if columns are not present
+    if (uploadedAudioUrl) {
+      finalContent = `${finalContent}\n\n${uploadedAudioUrl}`
+    }
+    if (uploadedVideoUrl) {
+      finalContent = `${finalContent}\n\n${uploadedVideoUrl}`
+    }
+
     const { data: newPost, error: postError } = await supabase
       .from('posts')
       .insert({
         author_id: user.user.id,
-        content: content.trim() || (uploadedUrls.length > 0 ? 'Voice attachment' : 'Community Poll'),
+        content: finalContent,
         image_urls: uploadedUrls,
       })
       .select('id')
@@ -283,20 +436,110 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
           </div>
         )}
 
+        {/* Video Preview */}
+        {videoPreview && (
+          <div className="relative rounded-2xl overflow-hidden bg-black max-h-56 border border-gray-200">
+            <video
+              src={videoPreview}
+              controls
+              playsInline
+              className="w-full max-h-56 object-contain"
+            />
+            <button
+              type="button"
+              onClick={handleRemoveVideo}
+              className="absolute top-2 right-2 w-6 h-6 bg-black/70 hover:bg-black/90 text-white rounded-full flex items-center justify-center transition-colors shadow z-10"
+              title="Remove video"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
+        {/* Audio Waveform Preview */}
+        {audioPreview && (
+          <div className="relative rounded-2xl p-1 bg-brand-50/50 border border-brand-200">
+            <VoiceWaveformPlayer
+              audioUrl={audioPreview}
+              duration={audioDuration}
+              theme="brand"
+              barCount={22}
+            />
+            <button
+              type="button"
+              onClick={handleRemoveAudio}
+              className="absolute top-2 right-2 w-5 h-5 bg-gray-600 hover:bg-gray-800 text-white rounded-full flex items-center justify-center transition-colors shadow z-10"
+              title="Remove audio"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        )}
+
+        {/* Live Audio Recording Bar */}
+        {isRecording && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between animate-pulse">
+            <div className="flex items-center gap-2 text-red-600 text-xs font-bold">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-600 animate-ping" />
+              <span>Recording Voice Whisper ({recordingSeconds}s / 120s)</span>
+            </div>
+            <button
+              type="button"
+              onClick={stopRecording}
+              className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-xs"
+            >
+              <Square size={12} />
+              <span>Done</span>
+            </button>
+          </div>
+        )}
+
         {error && <p className="text-xs text-red-600">{error}</p>}
 
         <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Image attachment */}
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={imageFiles.length >= 4}
               className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors disabled:opacity-40"
-              title={imageFiles.length >= 4 ? 'Maximum 4 images reached' : 'Add Image'}
+              title={imageFiles.length >= 4 ? 'Maximum 4 images reached' : 'Add Photo'}
             >
               <ImageIcon size={18} />
             </button>
 
+            {/* Video attachment */}
+            <button
+              type="button"
+              onClick={() => videoInputRef.current?.click()}
+              className={`p-2 rounded-lg transition-colors ${
+                videoFile
+                  ? 'text-purple-600 bg-purple-50'
+                  : 'text-gray-500 hover:text-purple-600 hover:bg-purple-50'
+              }`}
+              title="Add Video"
+            >
+              <Film size={18} />
+            </button>
+
+            {/* Voice Whisper Record */}
+            <button
+              type="button"
+              onClick={isRecording ? stopRecording : startRecording}
+              className={`p-2 rounded-lg transition-colors ${
+                isRecording
+                  ? 'text-red-600 bg-red-100 animate-pulse'
+                  : audioFile
+                  ? 'text-brand-600 bg-brand-50'
+                  : 'text-gray-500 hover:text-brand-600 hover:bg-brand-50'
+              }`}
+              title={isRecording ? 'Stop Recording' : 'Record Voice Whisper'}
+            >
+              <Mic size={18} />
+            </button>
+
+            {/* Poll creator */}
             <button
               type="button"
               onClick={() => setShowPollCreator(!showPollCreator)}
@@ -317,12 +560,22 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
             )}
           </div>
 
+          <input
+            ref={videoInputRef}
+            type="file"
+            accept="video/*"
+            onChange={handleVideoSelect}
+            className="hidden"
+          />
+
           <button
             type="submit"
             disabled={
               loading ||
               (!content.trim() &&
                 imageFiles.length === 0 &&
+                !videoFile &&
+                !audioFile &&
                 (!showPollCreator || pollOptions.filter((o) => o.trim()).length < 2))
             }
             className="btn-primary text-xs py-2 px-4 flex items-center gap-1.5"

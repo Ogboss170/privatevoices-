@@ -158,7 +158,12 @@ export default function FeedPage() {
             }
 
             const authorData = p.author || profileMap.get(p.author_id)
-            const { content: cleanContent, imageUrls } = extractPostMediaAndCleanContent(p.content, p.image_urls)
+            const { content: cleanContent, imageUrls, audioUrl, videoUrl } = extractPostMediaAndCleanContent(
+              p.content,
+              p.image_urls,
+              p.audio_url,
+              p.video_url
+            )
 
             return {
               id: p.id,
@@ -181,6 +186,9 @@ export default function FeedPage() {
                 : null,
               content: cleanContent,
               imageUrls,
+              audioUrl: audioUrl || p.audio_url || null,
+              audioDuration: p.audio_duration || null,
+              videoUrl: videoUrl || p.video_url || null,
               hashtags: [],
               likeCount,
               commentCount,

@@ -1,8 +1,9 @@
 'use client'
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
-import { X, ChevronLeft, ChevronRight, Eye, Clock, Sparkles } from 'lucide-react'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { X, ChevronLeft, ChevronRight, Eye, Clock, Sparkles, Volume2, Mic, Film } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import VoiceWaveformPlayer from '@/components/common/VoiceWaveformPlayer'
 
 interface FloatingEmoji {
   id: string
@@ -180,7 +181,36 @@ export default function StoryViewerModal({
 
         {/* Story Content */}
         <div className="my-auto text-center px-2 space-y-4 flex flex-col items-center justify-center overflow-hidden w-full">
-          {currentStory.media_url && (
+          {/* Video Story */}
+          {(currentStory.media_type === 'video' || (currentStory.media_url && currentStory.media_url.match(/\.(mp4|mov|webm|quicktime)(\?.*)?$/i))) && currentStory.media_url ? (
+            <div className="relative w-full h-72 rounded-2xl overflow-hidden my-2 border border-white/10 shadow-lg flex items-center justify-center bg-black">
+              <video
+                src={currentStory.media_url}
+                controls
+                playsInline
+                autoPlay
+                className="w-full h-full object-contain"
+              />
+              <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-xs text-[10px] text-white flex items-center gap-1 font-medium pointer-events-none">
+                <Film size={11} className="text-purple-400" />
+                <span>Video Story</span>
+              </div>
+            </div>
+          ) : (currentStory.media_type === 'audio' || (currentStory.media_url && currentStory.media_url.match(/\.(mp3|wav|ogg|m4a|aac|webm)(\?.*)?$/i))) && currentStory.media_url ? (
+            /* Voice Whisper Story */
+            <div className="w-full my-3 p-4 rounded-2xl bg-black/50 backdrop-blur-md border border-white/10 shadow-xl space-y-3">
+              <div className="flex items-center gap-2 text-brand-300 text-xs font-semibold">
+                <Mic size={15} className="animate-pulse text-brand-400" />
+                <span>Voice Whisper Story</span>
+              </div>
+              <VoiceWaveformPlayer
+                audioUrl={currentStory.media_url}
+                theme="dark"
+                barCount={24}
+              />
+            </div>
+          ) : currentStory.media_url ? (
+            /* Image Story */
             <div className="relative w-full h-64 rounded-2xl overflow-hidden my-2 border border-white/10 shadow-lg flex items-center justify-center bg-black/40">
               <img
                 src={currentStory.media_url}
@@ -188,7 +218,8 @@ export default function StoryViewerModal({
                 className="w-full h-full object-cover"
               />
             </div>
-          )}
+          ) : null}
+
           {currentStory.content && (
             <p className="text-base font-semibold leading-relaxed tracking-wide bg-black/50 backdrop-blur-md px-4 py-2.5 rounded-xl border border-white/10 max-w-full break-words">
               "{currentStory.content}"
