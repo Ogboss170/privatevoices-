@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import { Check, X, Phone, Mail, ShieldCheck } from 'lucide-react'
+import { Check, X, Phone, Mail, ShieldCheck, Loader2 } from 'lucide-react'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -17,6 +17,22 @@ export default function RegisterPage() {
     username: '',
     displayName: '',
   })
+
+  // Real-time immediate availability check states
+  const [usernameStatus, setUsernameStatus] = useState<{
+    checking: boolean
+    available?: boolean
+    message?: string
+  }>({ checking: false })
+
+  const [emailStatus, setEmailStatus] = useState<{
+    checking: boolean
+    available?: boolean
+    message?: string
+  }>({ checking: false })
+
+  const usernameTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const emailTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Verification code states
   const [phoneOtp, setPhoneOtp] = useState('')
@@ -38,6 +54,131 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  // Live Check: Username Availability
+  useEffect(() => {
+    const rawUsername = form.username.trim().toLowerCase()
+    if (usernameTimerRef.current) clearTimeout(usernameTimerRef.current)
+
+    if (!rawUsername) {
+      setUsernameStatus({ checking: false })
+      return
+    }
+
+    if (rawUsername.length < 3) {
+      setUsernameStatus({
+        checking: false,
+        available: false,
+        message: 'Username must be at least 3 characters',
+      })
+      return
+    }
+
+    setUsernameStatus({ checking: true })
+
+    usernameTimerRef.current = setTimeout(async () => {
+      try {
+        // Direct RPC check
+        const { data, error: rpcErr } = await supabase.rpc('check_username_available', {
+          p_username: rawUsername,
+        })
+
+        if (!rpcErr && data) {
+          setUsernameStatus({
+            checking: false,
+            available: data.available,
+            message: data.message,
+          })
+          return
+        }
+
+        // Fallback: check profiles table directly
+        const { data: existingProfile } = await supabase
+          .from('profiles')
+          .select('id')
+          .ilike('username', rawUsername)
+          .maybeSingle()
+
+        if (existingProfile) {
+          setUsernameStatus({
+            checking: false,
+            available: false,
+            message: `This username @${rawUsername} has already been taken.`,
+          })
+        } else {
+          setUsernameStatus({
+            checking: false,
+            available: true,
+            message: 'Username is available!',
+          })
+        }
+      } catch {
+        setUsernameStatus({ checking: false })
+      }
+    }, 350)
+
+    return () => {
+      if (usernameTimerRef.current) clearTimeout(usernameTimerRef.current)
+    }
+  }, [form.username, supabase])
+
+  // Live Check: Email Availability
+  useEffect(() => {
+    const rawEmail = form.email.trim().toLowerCase()
+    if (emailTimerRef.current) clearTimeout(emailTimerRef.current)
+
+    if (!rawEmail || !rawEmail.includes('@') || !rawEmail.includes('.')) {
+      setEmailStatus({ checking: false })
+      return
+    }
+
+    setEmailStatus({ checking: true })
+
+    emailTimerRef.current = setTimeout(async () => {
+      try {
+        // Direct RPC check
+        const { data, error: rpcErr } = await supabase.rpc('check_email_available', {
+          p_email: rawEmail,
+        })
+
+        if (!rpcErr && data) {
+          setEmailStatus({
+            checking: false,
+            available: data.available,
+            message: data.message,
+          })
+          return
+        }
+
+        // Fallback: check email_registry table if accessible
+        const { data: existingReg } = await supabase
+          .from('email_registry')
+          .select('id')
+          .eq('normalized_email', rawEmail)
+          .maybeSingle()
+
+        if (existingReg) {
+          setEmailStatus({
+            checking: false,
+            available: false,
+            message: 'This email has already been used.',
+          })
+        } else {
+          setEmailStatus({
+            checking: false,
+            available: true,
+            message: 'Email is available!',
+          })
+        }
+      } catch {
+        setEmailStatus({ checking: false })
+      }
+    }, 400)
+
+    return () => {
+      if (emailTimerRef.current) clearTimeout(emailTimerRef.current)
+    }
+  }, [form.email, supabase])
 
   async function handleSendVerificationCode(targetType: 'phone' | 'email') {
     const targetValue = targetType === 'phone' ? form.phone.trim() : form.email.trim()
@@ -292,10 +433,28 @@ export default function RegisterPage() {
                 title="3–30 characters: letters, numbers, underscores"
                 value={form.username}
                 onChange={handleChange}
-                className="input-field pl-7"
+                className={`input-field pl-7 ${
+                  usernameStatus.available === false
+                    ? 'border-red-400 focus:ring-red-500 bg-red-50/30'
+                    : usernameStatus.available === true
+                    ? 'border-emerald-400 focus:ring-emerald-500 bg-emerald-50/20'
+                    : ''
+                }`}
                 placeholder="oghosa"
               />
+              {usernameStatus.checking && (
+                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 animate-spin" />
+              )}
             </div>
+            {usernameStatus.message && (
+              <p
+                className={`text-[11px] mt-1 font-medium ${
+                  usernameStatus.available ? 'text-emerald-600' : 'text-red-600'
+                }`}
+              >
+                {usernameStatus.message}
+              </p>
+            )}
           </div>
         </div>
 
@@ -312,24 +471,44 @@ export default function RegisterPage() {
               <button
                 type="button"
                 onClick={() => handleSendVerificationCode('email')}
-                disabled={sendingCode === 'email' || !form.email}
+                disabled={sendingCode === 'email' || !form.email || emailStatus.available === false}
                 className="text-xs font-medium text-brand-600 hover:text-brand-700 cursor-pointer disabled:text-gray-400"
               >
                 {sendingCode === 'email' ? 'Sending code...' : 'Send verification code'}
               </button>
             )}
           </label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            required
-            value={form.email}
-            onChange={handleChange}
-            className="input-field"
-            placeholder="you@example.com"
-          />
+          <div className="relative">
+            <input
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              required
+              value={form.email}
+              onChange={handleChange}
+              className={`input-field ${
+                emailStatus.available === false
+                  ? 'border-red-400 focus:ring-red-500 bg-red-50/30'
+                  : emailStatus.available === true
+                  ? 'border-emerald-400 focus:ring-emerald-500 bg-emerald-50/20'
+                  : ''
+              }`}
+              placeholder="you@example.com"
+            />
+            {emailStatus.checking && (
+              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 animate-spin" />
+            )}
+          </div>
+          {emailStatus.message && (
+            <p
+              className={`text-[11px] mt-1 font-medium ${
+                emailStatus.available ? 'text-emerald-600' : 'text-red-600'
+              }`}
+            >
+              {emailStatus.message}
+            </p>
+          )}
 
           {emailCodeSent && !isEmailVerified && (
             <div className="mt-2 p-3 bg-brand-50/60 border border-brand-200 rounded-xl flex items-center gap-2">

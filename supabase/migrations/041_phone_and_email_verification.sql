@@ -209,3 +209,89 @@ BEGIN
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- 6. RPC: Realtime check for username availability
+CREATE OR REPLACE FUNCTION public.check_username_available(
+  p_username TEXT
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_norm_uname TEXT;
+  v_taken BOOLEAN;
+BEGIN
+  v_norm_uname := LOWER(TRIM(p_username));
+
+  IF v_norm_uname IS NULL OR LENGTH(v_norm_uname) < 3 THEN
+    RETURN jsonb_build_object('available', FALSE, 'message', 'Username must be at least 3 characters.');
+  END IF;
+
+  IF NOT (v_norm_uname ~ '^[a-z0-9_]{3,30}$') THEN
+    RETURN jsonb_build_object(
+      'available', FALSE,
+      'message', 'Username can only contain letters, numbers, and underscores.'
+    );
+  END IF;
+
+  -- Check profiles
+  SELECT EXISTS(
+    SELECT 1 FROM public.profiles WHERE LOWER(username) = v_norm_uname
+  ) INTO v_taken;
+
+  IF v_taken THEN
+    RETURN jsonb_build_object('available', FALSE, 'message', 'Username @' || v_norm_uname || ' has already been taken.');
+  END IF;
+
+  -- Check username history reservation
+  SELECT EXISTS(
+    SELECT 1 FROM public.username_history WHERE normalized_username = v_norm_uname AND released_at IS NULL
+  ) INTO v_taken;
+
+  IF v_taken THEN
+    RETURN jsonb_build_object('available', FALSE, 'message', 'Username @' || v_norm_uname || ' is reserved and unavailable.');
+  END IF;
+
+  RETURN jsonb_build_object('available', TRUE, 'message', 'Username is available.');
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 7. RPC: Realtime check for email availability
+CREATE OR REPLACE FUNCTION public.check_email_available(
+  p_email TEXT
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_norm_email TEXT;
+  v_taken BOOLEAN;
+BEGIN
+  v_norm_email := LOWER(TRIM(p_email));
+
+  IF v_norm_email IS NULL OR v_norm_email NOT LIKE '%@%.%' THEN
+    RETURN jsonb_build_object('available', FALSE, 'message', 'Invalid email format.');
+  END IF;
+
+  -- Check permanent email registry
+  SELECT EXISTS(
+    SELECT 1 FROM public.email_registry WHERE normalized_email = v_norm_email
+  ) INTO v_taken;
+
+  IF v_taken THEN
+    RETURN jsonb_build_object('available', FALSE, 'message', 'This email has already been used.');
+  END IF;
+
+  -- Check auth.users directly
+  IF EXISTS (
+    SELECT 1 FROM auth.users WHERE LOWER(TRIM(email)) = v_norm_email
+  ) THEN
+    RETURN jsonb_build_object('available', FALSE, 'message', 'This email has already been used.');
+  END IF;
+
+  RETURN jsonb_build_object('available', TRUE, 'message', 'Email is available.');
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION public.check_username_available(TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.check_email_available(TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.check_registration_availability(TEXT, TEXT) TO anon, authenticated, service_role;
+
+NOTIFY pgrst, 'reload schema';

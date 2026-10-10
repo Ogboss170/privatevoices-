@@ -35,7 +35,84 @@ export default function RegisterScreen() {
   const [sendingCode, setSendingCode] = useState<'email' | 'phone' | null>(null)
   const [verifyingCode, setVerifyingCode] = useState<'email' | 'phone' | null>(null)
 
+  // Live availability states
+  const [usernameStatus, setUsernameStatus] = useState<{
+    checking: boolean
+    available?: boolean
+    message?: string
+  }>({ checking: false })
+
+  const [emailStatus, setEmailStatus] = useState<{
+    checking: boolean
+    available?: boolean
+    message?: string
+  }>({ checking: false })
+
   const [loading, setLoading] = useState(false)
+
+  // Realtime username check
+  React.useEffect(() => {
+    const rawUsername = username.trim().toLowerCase()
+    if (!rawUsername) {
+      setUsernameStatus({ checking: false })
+      return
+    }
+    if (rawUsername.length < 3) {
+      setUsernameStatus({ checking: false, available: false, message: 'Must be at least 3 characters' })
+      return
+    }
+
+    setUsernameStatus({ checking: true })
+    const timer = setTimeout(async () => {
+      try {
+        const { data } = await supabase.rpc('check_username_available', { p_username: rawUsername })
+        if (data) {
+          setUsernameStatus({ checking: false, available: data.available, message: data.message })
+          return
+        }
+        const { data: profile } = await supabase.from('profiles').select('id').ilike('username', rawUsername).maybeSingle()
+        setUsernameStatus({
+          checking: false,
+          available: !profile,
+          message: profile ? `Username @${rawUsername} is already taken.` : 'Username is available!',
+        })
+      } catch {
+        setUsernameStatus({ checking: false })
+      }
+    }, 350)
+
+    return () => clearTimeout(timer)
+  }, [username])
+
+  // Realtime email check
+  React.useEffect(() => {
+    const rawEmail = email.trim().toLowerCase()
+    if (!rawEmail || !rawEmail.includes('@') || !rawEmail.includes('.')) {
+      setEmailStatus({ checking: false })
+      return
+    }
+
+    setEmailStatus({ checking: true })
+    const timer = setTimeout(async () => {
+      try {
+        const { data } = await supabase.rpc('check_email_available', { p_email: rawEmail })
+        if (data) {
+          setEmailStatus({ checking: false, available: data.available, message: data.message })
+          return
+        }
+        const { data: reg } = await supabase.from('email_registry').select('id').eq('normalized_email', rawEmail).maybeSingle()
+        setEmailStatus({
+          checking: false,
+          available: !reg,
+          message: reg ? 'This email has already been used.' : 'Email is available!',
+        })
+      } catch {
+        setEmailStatus({ checking: false })
+      }
+    }, 400)
+
+    return () => clearTimeout(timer)
+  }, [email])
 
   async function handleSendVerificationCode(targetType: 'email' | 'phone') {
     const targetValue = targetType === 'email' ? email.trim() : phone.trim()
@@ -206,13 +283,27 @@ export default function RegisterScreen() {
 
           <Text style={styles.label}>Username</Text>
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              usernameStatus.available === false && styles.inputError,
+              usernameStatus.available === true && styles.inputSuccess,
+            ]}
             value={username}
             onChangeText={(t) => setUsername(t.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
             placeholder="oghosa"
             placeholderTextColor="#9ca3af"
             autoCapitalize="none"
           />
+          {usernameStatus.message && (
+            <Text
+              style={[
+                styles.helperText,
+                usernameStatus.available ? styles.helperSuccess : styles.helperError,
+              ]}
+            >
+              {usernameStatus.message}
+            </Text>
+          )}
 
           {/* Email with OTP */}
           <View style={styles.labelRow}>
@@ -225,7 +316,7 @@ export default function RegisterScreen() {
             ) : (
               <TouchableOpacity
                 onPress={() => handleSendVerificationCode('email')}
-                disabled={sendingCode === 'email' || !email}
+                disabled={sendingCode === 'email' || !email || emailStatus.available === false}
               >
                 <Text style={[styles.actionLink, (!email || sendingCode === 'email') && styles.disabledText]}>
                   {sendingCode === 'email' ? 'Sending code...' : 'Send email code'}
@@ -234,7 +325,11 @@ export default function RegisterScreen() {
             )}
           </View>
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              emailStatus.available === false && styles.inputError,
+              emailStatus.available === true && styles.inputSuccess,
+            ]}
             value={email}
             onChangeText={setEmail}
             placeholder="you@example.com"
@@ -242,6 +337,16 @@ export default function RegisterScreen() {
             keyboardType="email-address"
             autoCapitalize="none"
           />
+          {emailStatus.message && (
+            <Text
+              style={[
+                styles.helperText,
+                emailStatus.available ? styles.helperSuccess : styles.helperError,
+              ]}
+            >
+              {emailStatus.message}
+            </Text>
+          )}
 
           {emailCodeSent && !isEmailVerified && (
             <View style={styles.otpRow}>
@@ -389,7 +494,28 @@ const styles = StyleSheet.create({
     fontSize: 15,
     backgroundColor: '#fff',
     color: '#111827',
+    marginBottom: 4,
+  },
+  inputError: {
+    borderColor: '#ef4444',
+    backgroundColor: '#fef2f2',
+  },
+  inputSuccess: {
+    borderColor: '#10b981',
+    backgroundColor: '#f0fdf4',
+  },
+  helperText: {
+    fontSize: 11,
+    fontWeight: '600',
     marginBottom: 8,
+    marginTop: -2,
+    paddingHorizontal: 2,
+  },
+  helperError: {
+    color: '#dc2626',
+  },
+  helperSuccess: {
+    color: '#059669',
   },
   otpRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
   otpInput: { flex: 1, letterSpacing: 4, textAlign: 'center', fontWeight: '700' },
