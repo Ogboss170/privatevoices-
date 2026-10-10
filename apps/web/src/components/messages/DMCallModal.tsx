@@ -80,6 +80,26 @@ export function DMCallModal({
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const localStreamRef = useRef<MediaStream | null>(null)
+  const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([])
+
+  // Ensure local video element stays connected when localStream changes or modal switches view
+  useEffect(() => {
+    if (localVideoRef.current && localStream) {
+      localVideoRef.current.srcObject = localStream
+    }
+  }, [localStream, isCameraOff, isMinimized])
+
+  // Ensure remote video and audio elements stay connected when remoteStream changes or view minimizes/expands
+  useEffect(() => {
+    if (remoteStream) {
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = remoteStream
+      }
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = remoteStream
+      }
+    }
+  }, [remoteStream, isMinimized])
 
   // Manage duration timer when connected
   useEffect(() => {
@@ -276,6 +296,11 @@ export function DMCallModal({
       try {
         if (payload.action === 'sdp_offer' && payload.sdp && isIncoming) {
           await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp))
+          // Drain any candidates that arrived prior to offer
+          while (pendingIceCandidatesRef.current.length > 0) {
+            const cand = pendingIceCandidatesRef.current.shift()
+            if (cand) await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {})
+          }
           const answer = await pc.createAnswer()
           await pc.setLocalDescription(answer)
           channel.send({
@@ -295,12 +320,21 @@ export function DMCallModal({
         } else if (payload.action === 'sdp_answer' && payload.sdp && !isIncoming) {
           if (pc.signalingState !== 'stable') {
             await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp))
+            // Drain any candidates that arrived prior to answer
+            while (pendingIceCandidatesRef.current.length > 0) {
+              const cand = pendingIceCandidatesRef.current.shift()
+              if (cand) await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {})
+            }
           }
         } else if (payload.action === 'ice_candidate' && payload.candidate) {
-          try {
-            await pc.addIceCandidate(new RTCIceCandidate(payload.candidate))
-          } catch (iceErr) {
-            console.warn('Could not add ICE candidate:', iceErr)
+          if (pc.remoteDescription && pc.remoteDescription.type) {
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(payload.candidate))
+            } catch (iceErr) {
+              console.warn('Could not add ICE candidate:', iceErr)
+            }
+          } else {
+            pendingIceCandidatesRef.current.push(payload.candidate)
           }
         }
       } catch (sigErr) {
