@@ -333,17 +333,26 @@ function InboxContent(): React.JSX.Element {
         // If URL has ?c=conversation_id, open it immediately
         if (queryConversationId && !activeConversation) {
           const matched = convs.find((c: any) => c.id === queryConversationId)
-          if (matched) {
-            const partner = matched.user_a.id === currentUserId ? matched.user_b : matched.user_a
+          if (matched && matched.is_group) {
             setActiveConversation({
               id: matched.id,
-              partner: {
-                id: partner.id,
-                username: partner.username,
-                displayName: partner.display_name,
-                avatarUrl: partner.avatar_url,
-              },
+              isGroup: true,
+              title: matched.title || 'Group Chat',
+              partner: { id: 'group', username: 'group', displayName: matched.title || 'Group Chat', avatarUrl: matched.avatar_url || null },
             })
+          } else if (matched) {
+            const partner = matched.user_a?.id === currentUserId ? matched.user_b : matched.user_a
+            if (partner) {
+              setActiveConversation({
+                id: matched.id,
+                partner: {
+                  id: partner.id,
+                  username: partner.username,
+                  displayName: partner.display_name,
+                  avatarUrl: partner.avatar_url,
+                },
+              })
+            }
           }
         }
       }

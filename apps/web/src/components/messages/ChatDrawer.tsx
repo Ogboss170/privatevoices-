@@ -220,12 +220,13 @@ export default function ChatDrawer({
   useEffect(() => {
     async function loadMessages() {
       setLoading(true)
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('messages')
-        .select('*, sender:profiles(id, username, display_name, avatar_url)')
+        .select('*, sender:profiles!messages_sender_id_fkey(id, username, display_name, avatar_url)')
         .eq('conversation_id', conversationId)
         .order('created_at', { ascending: true })
 
+      if (error) console.error('Failed to load messages:', error)
       let loaded = data ?? []
       if (e2eeKeyPair) {
         loaded = await Promise.all(loaded.map((m) => decryptMessageIfNeeded(m, e2eeKeyPair)))
