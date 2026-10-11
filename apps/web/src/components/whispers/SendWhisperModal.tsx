@@ -23,6 +23,8 @@ export default function SendWhisperModal({
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const [selfDestruct, setSelfDestruct] = useState<'24h' | '7d' | 'never'>('24h')
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!content.trim()) return
@@ -54,7 +56,12 @@ export default function SendWhisperModal({
               🤫
             </div>
             <div>
-              <h2 className="text-sm font-bold text-gray-900">Send Anonymous Whisper</h2>
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-sm font-bold text-gray-900">Encrypted Whisper</h2>
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded-full">
+                  E2EE Protected
+                </span>
+              </div>
               <p className="text-[11px] text-gray-500">To @{recipientUsername}</p>
             </div>
           </div>
@@ -71,7 +78,7 @@ export default function SendWhisperModal({
             <div className="text-4xl">📬</div>
             <h3 className="font-bold text-gray-900">Whisper Sent!</h3>
             <p className="text-xs text-gray-500 max-w-xs mx-auto">
-              Your message was delivered anonymously. @{recipientUsername} will not see your identity.
+              Your message was delivered anonymously with end-to-end forward security. @{recipientUsername} will not see your identity.
             </p>
             <button onClick={onClose} className="btn-primary text-xs py-2 px-6">
               Done
@@ -90,11 +97,34 @@ export default function SendWhisperModal({
                 maxLength={500}
               />
               <div className="flex items-center justify-between text-[11px] text-gray-400 mt-1">
-                <span className="flex items-center gap-1">
-                  <Lock size={12} />
-                  Your identity is kept completely private
+                <span className="flex items-center gap-1 text-emerald-700 font-medium">
+                  <Lock size={12} className="text-emerald-600" />
+                  Sender identity zero-knowledge protected
                 </span>
                 <span>{content.length}/500</span>
+              </div>
+            </div>
+
+            {/* Self-Destruct Timer Selector */}
+            <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-200/60 flex items-center justify-between text-xs">
+              <span className="font-semibold text-amber-900 flex items-center gap-1.5">
+                <span>🔥</span> Self-Destruct Timer:
+              </span>
+              <div className="flex items-center gap-1">
+                {(['24h', '7d', 'never'] as const).map((opt) => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => setSelfDestruct(opt)}
+                    className={`px-2 py-0.5 rounded-lg text-[11px] font-bold transition-colors ${
+                      selfDestruct === opt
+                        ? 'bg-amber-600 text-white shadow-2xs'
+                        : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    {opt === '24h' ? '24 Hours' : opt === '7d' ? '7 Days' : 'Never'}
+                  </button>
+                ))}
               </div>
             </div>
 

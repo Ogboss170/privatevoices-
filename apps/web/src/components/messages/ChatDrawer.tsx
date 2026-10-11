@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
-import { X, Send, Loader2, Image as ImageIcon, ExternalLink, Trash2, Mic, Play, Pause, Square, Volume2, Maximize2, Minimize2, Phone, Video, Search, Reply as ReplyIcon, Flame, Smile, Film, Sparkles, History, PhoneIncoming, PhoneOutgoing, PhoneMissed, Lock, ShieldCheck, Users, UserPlus, Settings, Crown, Pin } from 'lucide-react'
+import { X, Send, Loader2, Image as ImageIcon, ExternalLink, Trash2, Mic, Play, Pause, Square, Volume2, Maximize2, Minimize2, Phone, Video, Search, Reply as ReplyIcon, Flame, Smile, Film, Sparkles, History, PhoneIncoming, PhoneOutgoing, PhoneMissed, Lock, ShieldCheck, Users, UserPlus, Settings, Crown, Pin, Timer, Clock, Info, CheckCircle2 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/media/imageCompression'
 import { DMCallModal } from '@/components/messages/DMCallModal'
@@ -82,8 +82,19 @@ export default function ChatDrawer({
     senderName: string
   } | null>(null)
 
-  // Vanishing mode
+  // Vanishing mode & Self-destruct timers
+  const VANISH_PRESETS = [
+    { label: 'Off', seconds: 0 },
+    { label: '30 seconds', seconds: 30 },
+    { label: '5 minutes', seconds: 300 },
+    { label: '1 hour', seconds: 3600 },
+    { label: '24 hours', seconds: 86400 },
+  ]
   const [isVanishMode, setIsVanishMode] = useState(false)
+  const [vanishDuration, setVanishDuration] = useState<number>(86400) // Default 24h
+  const [showVanishMenu, setShowVanishMenu] = useState(false)
+  const [showE2eeModal, setShowE2eeModal] = useState(false)
+  const [nowTimestamp, setNowTimestamp] = useState<number>(Date.now())
 
   // Video attachment
   const [videoFile, setVideoFile] = useState<File | null>(null)
@@ -224,15 +235,18 @@ export default function ChatDrawer({
       setLoading(false)
       scrollToBottom()
 
-      // Fetch conversation settings (e.g. vanish mode)
+      // Fetch conversation settings (e.g. vanish mode & duration)
       try {
         const { data: convData } = await supabase
           .from('conversations')
-          .select('vanish_mode_enabled')
+          .select('vanish_mode_enabled, vanish_duration_seconds')
           .eq('id', conversationId)
           .single()
         if (convData?.vanish_mode_enabled !== undefined) {
           setIsVanishMode(Boolean(convData.vanish_mode_enabled))
+        }
+        if (convData?.vanish_duration_seconds) {
+          setVanishDuration(Number(convData.vanish_duration_seconds))
         }
       } catch (e) {
         // Ignore if column not yet added
@@ -412,6 +426,24 @@ export default function ChatDrawer({
       }
     }
   }, [supabase, conversationId, currentUserId, partner.id])
+
+  // Live countdown ticker for disappearing messages
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = Date.now()
+      setNowTimestamp(now)
+      // Auto-filter out expired disappearing messages locally
+      setMessages((prev) =>
+        prev.filter((m) => {
+          if (!m.is_disappearing || !m.disappearing_expires_at) return true
+          const expTime = new Date(m.disappearing_expires_at).getTime()
+          return expTime > now
+        })
+      )
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [])
 
   // Call start timestamp ref for duration logging
   const callStartTimeRef = useRef<number | null>(null)
@@ -649,13 +681,23 @@ export default function ChatDrawer({
     const tempId = 'temp-audio-' + Date.now()
     const tempAudioUrl = URL.createObjectURL(blob)
 
+    const expiresAt = isVanishMode && vanishDuration > 0
+      ? new Date(Date.now() + vanishDuration * 1000).toISOString()
+      : null
+
     const optimisticMsg = {
       id: tempId,
       conversation_id: conversationId,
       sender_id: currentUserId,
-      content: '🎙️ Voice note',
+      content: selectedVoiceFilter !== 'none'
+        ? `🎙️ Voice whisper (${VOICE_FILTERS.find((f) => f.id === selectedVoiceFilter)?.name || 'Modified'})`
+        : '🎙️ Voice whisper',
       audio_url: tempAudioUrl,
       audio_duration: durationSec,
+      media_type: 'audio',
+      is_disappearing: isVanishMode,
+      disappearing_expires_at: expiresAt,
+      is_e2ee: Boolean(partnerPublicKey),
       is_read: false,
       created_at: new Date().toISOString(),
     }
@@ -684,14 +726,22 @@ export default function ChatDrawer({
         uploadedUrl = publicUrlData.publicUrl
       }
 
+      const noteContent = selectedVoiceFilter !== 'none'
+        ? `🎙️ Voice whisper (${VOICE_FILTERS.find((f) => f.id === selectedVoiceFilter)?.name || 'Modified'})`
+        : '🎙️ Voice whisper'
+
       const { data: newMsg, error } = await supabase
         .from('messages')
         .insert({
           conversation_id: conversationId,
           sender_id: currentUserId,
-          content: '🎙️ Voice note',
+          content: noteContent,
           audio_url: uploadedUrl,
           audio_duration: durationSec,
+          media_type: 'audio',
+          is_disappearing: isVanishMode,
+          disappearing_expires_at: expiresAt,
+          is_e2ee: Boolean(partnerPublicKey),
         })
         .select('*')
         .single()
@@ -944,22 +994,46 @@ export default function ChatDrawer({
     }
   }
 
+  async function handleSelectVanishDuration(seconds: number) {
+    setShowVanishMenu(false)
+    const enabled = seconds > 0
+    setIsVanishMode(enabled)
+    setVanishDuration(seconds)
+
+    try {
+      await supabase.rpc('toggle_conversation_vanish_mode', {
+        p_conversation_id: conversationId,
+        p_enabled: enabled,
+        p_duration_seconds: seconds,
+      })
+    } catch (e) {
+      console.warn('Vanish mode RPC fallback:', e)
+      await supabase
+        .from('conversations')
+        .update({ vanish_mode_enabled: enabled, vanish_duration_seconds: seconds })
+        .eq('id', conversationId)
+    }
+  }
+
   async function handleToggleVanishMode() {
     const nextVal = !isVanishMode
+    const nextDuration = nextVal ? (vanishDuration > 0 ? vanishDuration : 86400) : 0
     setIsVanishMode(nextVal)
+    if (nextVal && vanishDuration === 0) {
+      setVanishDuration(86400)
+    }
 
     try {
       await supabase.rpc('toggle_conversation_vanish_mode', {
         p_conversation_id: conversationId,
         p_enabled: nextVal,
-        p_duration_seconds: 86400,
+        p_duration_seconds: nextDuration,
       })
     } catch (e) {
       console.warn('Vanish mode RPC fallback:', e)
-      // Fallback direct table update
       await supabase
         .from('conversations')
-        .update({ vanish_mode_enabled: nextVal })
+        .update({ vanish_mode_enabled: nextVal, vanish_duration_seconds: nextDuration })
         .eq('id', conversationId)
     }
   }
@@ -992,6 +1066,11 @@ export default function ChatDrawer({
     setReplyingTo(null)
     setSending(true)
 
+    // Calculate vanishing expiration if active
+    const expiresAt = isVanishMode && vanishDuration > 0
+      ? new Date(Date.now() + vanishDuration * 1000).toISOString()
+      : null
+
     // Optimistic message
     const tempId = 'temp-' + Date.now()
     const optimisticMsg = {
@@ -1003,6 +1082,8 @@ export default function ChatDrawer({
       video_url: currentVidPreview,
       media_type: currentVidFile ? 'video' : currentImgFile ? 'image' : 'text',
       is_disappearing: isVanishMode,
+      disappearing_expires_at: expiresAt,
+      is_e2ee: Boolean(partnerPublicKey),
       reply_to_message_id: quotedReply?.id || null,
       reply_to_content: quotedReply?.content || null,
       reply_to_sender: quotedReply?.senderName || null,
@@ -1106,6 +1187,7 @@ export default function ChatDrawer({
           video_url: uploadedVidUrl,
           media_type: uploadedVidUrl ? 'video' : uploadedImgUrl ? 'image' : 'text',
           is_disappearing: isVanishMode,
+          disappearing_expires_at: expiresAt,
           reply_to_message_id: quotedReply?.id || null,
           reply_to_content: quotedReply?.content || null,
           reply_to_sender: quotedReply?.senderName || null,
@@ -1208,13 +1290,15 @@ export default function ChatDrawer({
                   {isGroup ? (groupTitle || 'Group Chat') : partner.displayName}
                 </h3>
                 {partnerPublicKey && !isGroup && (
-                  <span
-                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-medium rounded-full border border-emerald-200"
-                    title="End-to-End Encrypted: ECDH P-256 + AES-GCM 256 active"
+                  <button
+                    type="button"
+                    onClick={() => setShowE2eeModal(true)}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-medium rounded-full border border-emerald-200 transition-colors shadow-2xs"
+                    title="End-to-End Encrypted (AES-GCM 256 / ECDH P-256). Click for details."
                   >
                     <ShieldCheck size={11} className="text-emerald-600" />
-                    <span>E2EE</span>
-                  </span>
+                    <span>E2EE Active</span>
+                  </button>
                 )}
                 {isGroup && (
                   <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-purple-50 text-purple-700 text-[10px] font-medium rounded-full border border-purple-200">
@@ -1285,19 +1369,74 @@ export default function ChatDrawer({
               <Search size={18} />
             </button>
 
-            {/* Vanish / Disappearing mode toggle */}
-            <button
-              onClick={handleToggleVanishMode}
-              className={`p-2 rounded-xl transition-all ${
-                isVanishMode
-                  ? 'text-amber-500 bg-amber-50 shadow-xs'
-                  : 'text-gray-500 hover:text-amber-500 hover:bg-gray-100'
-              }`}
-              aria-label="Toggle Vanish Mode"
-              title={isVanishMode ? 'Vanish Mode: ON (Messages auto-fade)' : 'Turn On Vanish Mode'}
-            >
-              <Flame size={18} className={isVanishMode ? 'animate-pulse' : ''} />
-            </button>
+            {/* Vanish / Self-Destruct Timer Dropdown & Toggle */}
+            <div className="relative">
+              <button
+                onClick={() => setShowVanishMenu((prev) => !prev)}
+                className={`p-2 rounded-xl transition-all flex items-center gap-1 ${
+                  isVanishMode
+                    ? 'text-amber-600 bg-amber-50 shadow-xs ring-1 ring-amber-300'
+                    : 'text-gray-500 hover:text-amber-500 hover:bg-gray-100'
+                }`}
+                aria-label="Self-Destruct Timers & Vanish Mode"
+                title={
+                  isVanishMode
+                    ? `Self-Destruct Active: ${
+                        VANISH_PRESETS.find((p) => p.seconds === vanishDuration)?.label || 'Custom'
+                      }`
+                    : 'Self-Destruct / Vanishing Timer'
+                }
+              >
+                <Flame size={18} className={isVanishMode ? 'text-amber-500 animate-pulse' : ''} />
+                {isVanishMode && (
+                  <span className="text-[10px] font-bold text-amber-700 hidden sm:inline">
+                    {vanishDuration === 30
+                      ? '30s'
+                      : vanishDuration === 300
+                      ? '5m'
+                      : vanishDuration === 3600
+                      ? '1h'
+                      : '24h'}
+                  </span>
+                )}
+              </button>
+
+              {showVanishMenu && (
+                <div className="absolute right-0 top-11 z-30 bg-white rounded-2xl shadow-xl border border-gray-100 p-2 w-48 space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="flex items-center justify-between px-2 py-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                      Self-Destruct Timer
+                    </span>
+                    <Flame size={12} className="text-amber-500" />
+                  </div>
+                  {VANISH_PRESETS.map((preset) => (
+                    <button
+                      key={preset.seconds}
+                      type="button"
+                      onClick={() => handleSelectVanishDuration(preset.seconds)}
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                        (preset.seconds === 0 && !isVanishMode) ||
+                        (isVanishMode && vanishDuration === preset.seconds)
+                          ? 'bg-amber-50 text-amber-800 font-bold'
+                          : 'text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Timer size={13} className="text-gray-400" />
+                        <span>{preset.label}</span>
+                      </div>
+                      {((preset.seconds === 0 && !isVanishMode) ||
+                        (isVanishMode && vanishDuration === preset.seconds)) && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                      )}
+                    </button>
+                  ))}
+                  <p className="text-[10px] text-gray-400 px-2 pt-1 border-t border-gray-100">
+                    Messages auto-destruct after countdown finishes.
+                  </p>
+                </div>
+              )}
+            </div>
 
             {/* Call History Button */}
             <button
@@ -1377,19 +1516,29 @@ export default function ChatDrawer({
           </div>
         )}
 
-        {/* Vanish Mode Banner */}
+        {/* Vanish & Self-Destruct Mode Banner */}
         {isVanishMode && (
-          <div className="px-4 py-1.5 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border-b border-amber-200/50 flex items-center justify-between text-xs text-amber-700 animate-in fade-in duration-200">
+          <div className="px-4 py-1.5 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border-b border-amber-200/50 flex items-center justify-between text-xs text-amber-800 animate-in fade-in duration-200">
             <div className="flex items-center gap-1.5 font-medium text-[11px]">
-              <Flame size={13} className="text-amber-500 animate-pulse" />
-              <span>Vanish Mode is active — messages disappear after viewing</span>
+              <Flame size={13} className="text-amber-500 animate-pulse flex-shrink-0" />
+              <span>
+                Self-Destruct Active ({VANISH_PRESETS.find((p) => p.seconds === vanishDuration)?.label || `${vanishDuration}s`}) — messages auto-purge
+              </span>
             </div>
-            <button
-              onClick={handleToggleVanishMode}
-              className="text-[10px] underline font-semibold text-amber-800 hover:text-amber-900"
-            >
-              Turn off
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowVanishMenu((prev) => !prev)}
+                className="text-[10px] font-semibold text-amber-700 hover:text-amber-900 underline"
+              >
+                Change
+              </button>
+              <button
+                onClick={handleToggleVanishMode}
+                className="text-[10px] font-semibold text-gray-500 hover:text-gray-700"
+              >
+                Turn off
+              </button>
+            </div>
           </div>
         )}
 
@@ -1695,86 +1844,94 @@ export default function ChatDrawer({
                         </div>
                       )}
 
-                      {/* Voice Note / Audio Whisper Player */}
+                      {/* Voice Note / Audio Whisper Player with Rich Waveform */}
                       {hasAudio && (
-                        <div className={`p-3 flex items-center gap-3 min-w-[210px] ${isMe ? 'text-white' : 'text-gray-900'}`}>
-                          <button
-                            type="button"
-                            onClick={() => handleToggleAudio(msg.id, msg.audio_url)}
-                            className={`w-9 h-9 rounded-full flex items-center justify-center transition-transform hover:scale-105 active:scale-95 shadow-sm flex-shrink-0 ${
-                              isMe ? 'bg-white text-brand-600' : 'bg-brand-600 text-white'
-                            }`}
-                            title={isPlayingThis ? 'Pause' : 'Play voice note'}
-                          >
-                            {isPlayingThis ? (
-                              <Pause size={16} />
-                            ) : (
-                              <Play size={16} className="ml-0.5" />
-                            )}
-                          </button>
+                        <div className={`p-3 min-w-[240px] max-w-xs ${isMe ? 'text-white' : 'text-gray-900'}`}>
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleAudio(msg.id, msg.audio_url)}
+                              className={`w-10 h-10 rounded-full flex items-center justify-center transition-transform hover:scale-105 active:scale-95 shadow-md flex-shrink-0 ${
+                                isMe ? 'bg-white text-brand-600' : 'bg-brand-600 text-white'
+                              }`}
+                              title={isPlayingThis ? 'Pause' : 'Play voice whisper'}
+                            >
+                              {isPlayingThis ? (
+                                <Pause size={17} />
+                              ) : (
+                                <Play size={17} className="ml-0.5" />
+                              )}
+                            </button>
 
-                          <div className="flex-1 space-y-1">
-                            <div className="flex items-center gap-1 h-5">
-                              {[35, 60, 45, 90, 65, 100, 75, 45, 80, 50, 70, 95, 40].map((h, idx) => {
-                                const barFraction = idx / 13
-                                const currentFraction = isPlayingThis && audioDuration > 0
-                                  ? audioCurrentTime / audioDuration
-                                  : 0
-                                const isPlayed = barFraction <= currentFraction
+                            <div className="flex-1 space-y-1.5 min-w-0">
+                              {/* 24-bar scrubbable waveform */}
+                              <div className="flex items-center gap-0.5 sm:gap-1 h-7">
+                                {[28, 45, 65, 85, 50, 95, 75, 40, 80, 100, 60, 35, 70, 90, 80, 55, 65, 85, 45, 70, 95, 60, 40, 25].map((h, idx) => {
+                                  const totalBars = 24
+                                  const barFraction = idx / totalBars
+                                  const currentFraction = isPlayingThis && audioDuration > 0
+                                    ? audioCurrentTime / audioDuration
+                                    : 0
+                                  const isPlayed = barFraction <= currentFraction
 
-                                return (
-                                  <button
-                                    key={idx}
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      if (isPlayingThis) {
-                                        handleScrubWebAudio((idx + 1) / 13)
-                                      }
-                                    }}
-                                    className="h-full flex items-center justify-center p-0.5 hover:scale-110 transition-transform cursor-pointer"
-                                    title="Scrub audio"
-                                  >
-                                    <span
-                                      className={`w-1 rounded-full transition-all duration-150 block ${
-                                        isMe
-                                          ? isPlayed
-                                            ? 'bg-white'
-                                            : 'bg-white/40'
-                                          : isPlayed
-                                          ? 'bg-brand-600'
-                                          : 'bg-brand-300'
+                                  return (
+                                    <button
+                                      key={idx}
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        if (isPlayingThis) {
+                                          handleScrubWebAudio((idx + 1) / totalBars)
+                                        }
+                                      }}
+                                      className="flex-1 h-full flex items-center justify-center py-0.5 hover:scale-125 transition-transform cursor-pointer"
+                                      title="Scrub audio whisper"
+                                    >
+                                      <span
+                                        className={`w-full max-w-[3px] rounded-full transition-all duration-150 block ${
+                                          isMe
+                                            ? isPlayed
+                                              ? 'bg-white'
+                                              : 'bg-white/35'
+                                            : isPlayed
+                                            ? 'bg-brand-600'
+                                            : 'bg-brand-200'
+                                        }`}
+                                        style={{ height: `${h}%` }}
+                                      />
+                                    </button>
+                                  )
+                                })}
+                              </div>
+
+                              <div className="flex items-center justify-between text-[10px] opacity-85">
+                                <span className="font-mono">
+                                  {isPlayingThis && audioCurrentTime > 0
+                                    ? `${formatAudioDuration(Math.floor(audioCurrentTime))} / `
+                                    : ''}
+                                  {formatAudioDuration(msg.audio_duration || 0)}
+                                </span>
+
+                                <div className="flex items-center gap-1.5">
+                                  {isPlayingThis && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleToggleWebAudioSpeed()
+                                      }}
+                                      className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-transform hover:scale-105 active:scale-95 ${
+                                        isMe ? 'bg-white/20 text-white' : 'bg-brand-100 text-brand-700'
                                       }`}
-                                      style={{ height: `${h}%` }}
-                                    />
-                                  </button>
-                                )
-                              })}
-                            </div>
-                            <div className="flex items-center justify-between text-[10px] opacity-80">
-                              <span>
-                                {isPlayingThis && audioCurrentTime > 0
-                                  ? `${formatAudioDuration(Math.floor(audioCurrentTime))} / `
-                                  : ''}
-                                {formatAudioDuration(msg.audio_duration || 0)}
-                              </span>
-                              <div className="flex items-center gap-1.5">
-                                {isPlayingThis && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      handleToggleWebAudioSpeed()
-                                    }}
-                                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-transform hover:scale-105 active:scale-95 ${
-                                      isMe ? 'bg-white/20 text-white' : 'bg-brand-100 text-brand-700'
-                                    }`}
-                                    title="Toggle playback speed"
-                                  >
-                                    {audioSpeed}x
-                                  </button>
-                                )}
-                                <span className="font-semibold uppercase tracking-wider text-[9px]">Audio Whisper</span>
+                                      title="Toggle playback speed"
+                                    >
+                                      {audioSpeed}x
+                                    </button>
+                                  )}
+                                  <span className="font-semibold uppercase tracking-wider text-[9px] opacity-90">
+                                    Audio Whisper
+                                  </span>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -1818,24 +1975,60 @@ export default function ChatDrawer({
                     </div>
                   )}
 
-                  <span className="text-[10px] text-gray-400 mt-1 px-1 flex items-center gap-1">
+                  <div className="mt-1 px-1 flex items-center gap-1.5 flex-wrap">
                     {msg.is_e2ee && (
-                      <span title="End-to-End Encrypted (AES-GCM 256)">
-                        <Lock size={10} className="text-emerald-600" />
+                      <span
+                        className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded-full border border-emerald-200"
+                        title="End-to-End Encrypted (AES-GCM 256)"
+                      >
+                        <Lock size={9} className="text-emerald-600" />
+                        <span>E2EE</span>
                       </span>
                     )}
-                    {msg.is_disappearing && (
-                      <span title="Disappearing message">
-                        <Flame size={11} className="text-amber-500" />
-                      </span>
-                    )}
-                    {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+
+                    {msg.is_disappearing && (() => {
+                      let countdownText = 'vanishing'
+                      let isUrgent = false
+                      if (msg.disappearing_expires_at) {
+                        const remainingSec = Math.max(0, Math.floor((new Date(msg.disappearing_expires_at).getTime() - nowTimestamp) / 1000))
+                        isUrgent = remainingSec < 60
+                        if (remainingSec < 60) {
+                          countdownText = `${remainingSec}s`
+                        } else if (remainingSec < 3600) {
+                          const mins = Math.floor(remainingSec / 60)
+                          const secs = remainingSec % 60
+                          countdownText = `${mins}m ${secs}s`
+                        } else {
+                          const hrs = Math.floor(remainingSec / 3600)
+                          const mins = Math.floor((remainingSec % 3600) / 60)
+                          countdownText = `${hrs}h ${mins}m`
+                        }
+                      }
+                      return (
+                        <span
+                          className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.2 rounded-full border transition-all ${
+                            isUrgent
+                              ? 'bg-red-50 text-red-600 border-red-200 animate-pulse'
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                          }`}
+                          title={`Self-destruct timer: ${countdownText} remaining`}
+                        >
+                          <Flame size={9} className={isUrgent ? 'text-red-500' : 'text-amber-500'} />
+                          <span>{countdownText}</span>
+                        </span>
+                      )
+                    })()}
+
+                    <span className="text-[10px] text-gray-400">
+                      {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+
                     {isMe && !isTemp && (
-                      <span className="text-brand-500 font-semibold">
+                      <span className="text-brand-500 font-semibold text-[10px]">
                         {msg.is_read ? '✓✓' : '✓'}
                       </span>
                     )}
-                  </span>
+                  </div>
                 </div>
               )
             })
@@ -2263,6 +2456,87 @@ export default function ChatDrawer({
         onTogglePinMessage={handleTogglePinMessage}
         onSelectImagePreview={(url) => setPreviewModalUrl(url)}
       />
+      {/* End-to-End Encryption Security Details Modal */}
+      {showE2eeModal && (
+        <div
+          className="fixed inset-0 z-70 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => setShowE2eeModal(false)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shadow-xs">
+                  <ShieldCheck size={22} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-gray-900">End-to-End Encrypted</h3>
+                  <p className="text-[11px] text-gray-500">Zero-Knowledge Architecture</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowE2eeModal(false)}
+                className="p-1 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs text-gray-600">
+              <div className="p-3 bg-emerald-50/80 rounded-2xl border border-emerald-100 space-y-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-emerald-900">
+                  <Lock size={13} className="text-emerald-600" />
+                  <span>Forward-Secret Encryption</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-emerald-800">
+                  Messages and audio whispers sent with @{partner.username} are encrypted using client-side Web Cryptography.
+                </p>
+              </div>
+
+              <div className="space-y-2 border-t border-gray-100 pt-3">
+                <div className="flex justify-between items-center text-[11px]">
+                  <span className="text-gray-500">Cipher Protocol</span>
+                  <span className="font-mono font-bold text-gray-800">AES-GCM (256-bit)</span>
+                </div>
+                <div className="flex justify-between items-center text-[11px]">
+                  <span className="text-gray-500">Key Agreement</span>
+                  <span className="font-mono font-bold text-gray-800">ECDH (P-256)</span>
+                </div>
+                <div className="flex justify-between items-center text-[11px]">
+                  <span className="text-gray-500">Forward Secrecy</span>
+                  <span className="font-mono font-bold text-emerald-600">Ephemeral One-Time Keys</span>
+                </div>
+                <div className="flex justify-between items-center text-[11px]">
+                  <span className="text-gray-500">Server Decryption</span>
+                  <span className="font-bold text-emerald-600">Impossible (Zero-Knowledge)</span>
+                </div>
+              </div>
+
+              {partnerPublicKey && (
+                <div className="pt-2">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                    Partner Public Key Fingerprint
+                  </span>
+                  <div className="p-2 bg-gray-50 rounded-xl font-mono text-[10px] text-gray-600 break-all border border-gray-100 select-all">
+                    {partnerPublicKey.slice(0, 32)}...{partnerPublicKey.slice(-16)}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowE2eeModal(false)}
+              className="w-full btn-primary text-xs py-2.5 rounded-xl font-bold"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
     </>
   )
 }
