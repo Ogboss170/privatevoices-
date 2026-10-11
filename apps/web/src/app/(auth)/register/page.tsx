@@ -282,11 +282,30 @@ export default function RegisterPage() {
         }
         if (targetType === 'email') {
           setEmailCodeSent(true)
-          if (resData?.dev_code) setEmailOtp(resData.dev_code)
+          if (resData?.dev_code) {
+            setEmailOtp(resData.dev_code)
+
+            // Trigger Resend email delivery
+            fetch('/api/email/send-code', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                email: targetValue,
+                code: resData.dev_code,
+              }),
+            })
+              .then((r) => r.json())
+              .then((json) => {
+                if (json.success) {
+                  setCodeFeedback(`Verification code sent to ${targetValue}! Please check your email inbox (and spam folder).`)
+                }
+              })
+              .catch((e) => console.warn('Resend email dispatch error:', e))
+          }
         }
 
         const msg = resData?.dev_code
-          ? `Code generated for ${targetValue}: ${resData.dev_code} (Auto-filled below for quick verification)`
+          ? `Verification code sent to ${targetValue}! (Code: ${resData.dev_code} auto-filled for testing, also sent to your inbox)`
           : `Verification code sent to ${targetValue}. Please check your inbox and spam folder.`
         setCodeFeedback(msg)
       } else {
