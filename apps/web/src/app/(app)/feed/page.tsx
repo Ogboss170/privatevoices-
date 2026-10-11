@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { Bell, Sparkles, SlidersHorizontal, Plus, Radio } from 'lucide-react'
 import PostCard from '@/components/feed/PostCard'
 import StoriesTray from '@/components/stories/StoriesTray'
+import PeopleYouMayKnow from '@/components/social/PeopleYouMayKnow'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import type { Post, FeedMode } from '@private-voices/shared'
 import { extractPostMediaAndCleanContent } from '@private-voices/shared'
@@ -350,22 +351,37 @@ export default function FeedPage() {
           <p className="text-sm">Loading feed...</p>
         </div>
       ) : posts.length === 0 ? (
-        <div className="card p-12 text-center">
-          <div className="text-5xl mb-4">✨</div>
-          <h2 className="font-semibold text-gray-900 mb-1">No posts yet</h2>
-          <p className="text-sm text-gray-500 max-w-xs mx-auto">
-            Be the first to share your thoughts, or follow more people to fill your feed.
-          </p>
+        <div className="space-y-4">
+          <div className="card p-12 text-center">
+            <div className="text-5xl mb-4">✨</div>
+            <h2 className="font-semibold text-gray-900 mb-1">No posts yet</h2>
+            <p className="text-sm text-gray-500 max-w-xs mx-auto">
+              Follow more people to fill your feed or discover interesting voices below.
+            </p>
+          </div>
+          <PeopleYouMayKnow currentUserId={currentUserId} variant="carousel" />
         </div>
       ) : (
         <div className="space-y-3.5">
-          {posts.slice(0, visibleCount).map((post) => (
-            <PostCard
-              key={post.id}
-              post={post}
-              currentUserId={currentUserId}
-              onDelete={handleDeletePost}
-            />
+          {posts.slice(0, visibleCount).map((post, idx) => (
+            <React.Fragment key={post.id}>
+              <PostCard
+                post={post}
+                currentUserId={currentUserId}
+                onDelete={handleDeletePost}
+              />
+              {idx === 2 && (
+                <PeopleYouMayKnow
+                  currentUserId={currentUserId}
+                  variant="carousel"
+                  onFollowChange={() => {
+                    if (activeTab === 'following') {
+                      fetchPosts(false)
+                    }
+                  }}
+                />
+              )}
+            </React.Fragment>
           ))}
 
           {/* ── 'See More' Progressive Batch Loading ── */}

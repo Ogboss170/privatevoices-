@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Search, Users, ArrowRight, ShieldCheck, Radio } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import PeopleYouMayKnow from '@/components/social/PeopleYouMayKnow'
 
 export default function RightSidebar(): React.JSX.Element {
   const supabase = createSupabaseBrowserClient()
@@ -40,6 +41,9 @@ export default function RightSidebar(): React.JSX.Element {
           className="w-full bg-gray-100/80 hover:bg-gray-100 focus:bg-white text-xs font-medium text-gray-900 rounded-full pl-9 pr-4 py-2.5 transition-all outline-none ring-1 ring-transparent focus:ring-brand-500 border border-gray-200/50"
         />
       </div>
+
+      {/* People You May Know Widget */}
+      <PeopleYouMayKnow variant="sidebar" />
 
       {/* Recommended Communities Widget */}
       <div className="bg-gradient-to-b from-purple-50/70 to-indigo-50/40 rounded-2xl p-4 border border-purple-100/60 shadow-sm space-y-3">
