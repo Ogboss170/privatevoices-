@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
-import { X, Send, Loader2, Image as ImageIcon, ExternalLink, Trash2, Mic, Play, Pause, Square, Volume2, Maximize2, Minimize2, Phone, Video, Search, Reply as ReplyIcon, Flame, Smile, Film, Sparkles, History, PhoneIncoming, PhoneOutgoing, PhoneMissed, Lock, ShieldCheck, Users, UserPlus, Settings, Crown, Pin, Timer, Clock, Info, CheckCircle2 } from 'lucide-react'
+import { X, ArrowLeft, MoreVertical, Send, Loader2, Image as ImageIcon, ExternalLink, Trash2, Mic, Play, Pause, Square, Volume2, Maximize2, Minimize2, Phone, Video, Search, Reply as ReplyIcon, Flame, Smile, Film, Sparkles, History, PhoneIncoming, PhoneOutgoing, PhoneMissed, Lock, ShieldCheck, Users, UserPlus, Settings, Crown, Pin, Timer, Clock, Info, CheckCircle2 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/media/imageCompression'
 import { DMCallModal } from '@/components/messages/DMCallModal'
@@ -93,6 +93,7 @@ export default function ChatDrawer({
   const [isVanishMode, setIsVanishMode] = useState(false)
   const [vanishDuration, setVanishDuration] = useState<number>(86400) // Default 24h
   const [showVanishMenu, setShowVanishMenu] = useState(false)
+  const [showMoreMenu, setShowMoreMenu] = useState(false)
   const [showE2eeModal, setShowE2eeModal] = useState(false)
   const [nowTimestamp, setNowTimestamp] = useState<number>(Date.now())
 
@@ -1056,9 +1057,10 @@ export default function ChatDrawer({
     }
   }
 
-  async function handleSend(e: React.FormEvent) {
+  async function handleSend(e: React.FormEvent, overrideText?: string) {
     e.preventDefault()
-    if ((!text.trim() && !imageFile && !videoFile) || sending) return
+    const outgoingText = overrideText ?? text
+    if ((!outgoingText.trim() && !imageFile && !videoFile) || sending) return
 
     // Immediately stop typing indicator
     if (typingTimeoutRef.current) {
@@ -1071,7 +1073,7 @@ export default function ChatDrawer({
     })
 
     const messageContent =
-      text.trim() || (imageFile ? '📷 Photo' : videoFile ? '🎥 Video' : '')
+      outgoingText.trim() || (imageFile ? '📷 Photo' : videoFile ? '🎥 Video' : '')
     const currentImgFile = imageFile
     const currentImgPreview = imagePreview
     const currentVidFile = videoFile
@@ -1290,8 +1292,16 @@ export default function ChatDrawer({
         }`}
       >
         {/* Header */}
-        <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-white/95 backdrop-blur-sm sticky top-0 z-10">
-          <div className="flex items-center gap-3">
+        <div className="px-2.5 py-2.5 flex items-center justify-between gap-2 bg-gradient-to-b from-white to-white/70 backdrop-blur-sm sticky top-0 z-10">
+          <button
+            onClick={onClose}
+            className="w-10 h-10 flex-shrink-0 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-700 hover:bg-gray-50 transition-colors"
+            aria-label="Back"
+            title="Back"
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <div className="flex-1 min-w-0 flex items-center gap-3 rounded-full bg-white border border-gray-200 shadow-sm pl-1.5 pr-4 py-1">
             <div className="relative">
               {isGroup ? (
                 <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-600 to-brand-600 flex items-center justify-center font-bold text-white shadow-xs">
@@ -1360,7 +1370,7 @@ export default function ChatDrawer({
             </div>
           </div>
 
-          <div className="flex items-center gap-1 sm:gap-2">
+          <div className="flex-shrink-0 flex items-center gap-0.5 rounded-full bg-white border border-gray-200 shadow-sm px-1.5 py-1">
             {/* Group Members / Settings Modal Button */}
             {isGroup && (
               <button
@@ -1377,33 +1387,6 @@ export default function ChatDrawer({
               </button>
             )}
 
-            {/* Media & Pinned Gallery Button */}
-            <button
-              onClick={() => setShowMediaGallery(true)}
-              className={`p-2 rounded-xl transition-colors ${
-                showMediaGallery
-                  ? 'text-purple-600 bg-purple-50'
-                  : 'text-gray-600 hover:text-purple-600 hover:bg-gray-100'
-              }`}
-              aria-label="Media & Pinned Assets"
-              title="Media, Voice Notes & Pinned Assets"
-            >
-              <Pin size={18} />
-            </button>
-
-            {/* Search messages toggle */}
-            <button
-              onClick={() => setIsSearching((prev) => !prev)}
-              className={`p-2 rounded-xl transition-colors ${
-                isSearching
-                  ? 'text-brand-600 bg-brand-50'
-                  : 'text-gray-600 hover:text-brand-600 hover:bg-gray-100'
-              }`}
-              aria-label="Search chat"
-              title="Search messages"
-            >
-              <Search size={18} />
-            </button>
 
             {/* Vanish / Self-Destruct Timer Dropdown & Toggle */}
             <div className="relative">
@@ -1474,19 +1457,6 @@ export default function ChatDrawer({
               )}
             </div>
 
-            {/* Call History Button */}
-            <button
-              onClick={handleToggleCallHistory}
-              className={`p-2 rounded-xl transition-colors ${
-                showCallHistory
-                  ? 'text-purple-600 bg-purple-50'
-                  : 'text-gray-600 hover:text-purple-600 hover:bg-gray-100'
-              }`}
-              aria-label="View Call History"
-              title="Call History"
-            >
-              <History size={18} />
-            </button>
 
             {/* Voice Call Button */}
             <button
@@ -1508,24 +1478,45 @@ export default function ChatDrawer({
               <Video size={19} />
             </button>
 
-            <div className="w-[1px] h-5 bg-gray-200 mx-0.5" />
-
-            <button
-              onClick={() => setIsFullScreen((prev) => !prev)}
-              className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-              aria-label={isFullScreen ? 'Exit full screen' : 'Full screen'}
-              title={isFullScreen ? 'Standard drawer' : 'Full screen'}
-            >
-              {isFullScreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
-            </button>
-            <button
-              onClick={onClose}
-              className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-              aria-label="Close chat"
-              title="Close chat"
-            >
-              <X size={20} />
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowMoreMenu((prev) => !prev)}
+                className={`p-2 rounded-full transition-colors ${
+                  showMoreMenu ? 'text-brand-600 bg-brand-50' : 'text-gray-600 hover:bg-gray-100'
+                }`}
+                aria-label="More options"
+                title="More"
+              >
+                <MoreVertical size={18} />
+              </button>
+              {showMoreMenu && (
+                <div className="absolute right-0 top-11 z-30 bg-white rounded-2xl shadow-xl border border-gray-100 p-1.5 w-52 animate-in fade-in zoom-in-95 duration-150">
+                  {[
+                    { label: 'Search in chat', icon: <Search size={15} />, onClick: () => setIsSearching((p) => !p) },
+                    { label: 'Media & pinned', icon: <Pin size={15} />, onClick: () => setShowMediaGallery(true) },
+                    { label: 'Call history', icon: <History size={15} />, onClick: handleToggleCallHistory },
+                    {
+                      label: isFullScreen ? 'Exit full screen' : 'Full screen',
+                      icon: isFullScreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />,
+                      onClick: () => setIsFullScreen((p) => !p),
+                    },
+                  ].map((item) => (
+                    <button
+                      key={item.label}
+                      type="button"
+                      onClick={() => {
+                        setShowMoreMenu(false)
+                        item.onClick()
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <span className="text-gray-500">{item.icon}</span>
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1674,19 +1665,38 @@ export default function ChatDrawer({
         )}
 
         {/* Messages List */}
-        <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-gray-50/70">
+        <div
+          className="flex-1 p-4 overflow-y-auto space-y-3 bg-gradient-to-b from-brand-50/70 via-gray-50 to-purple-50/60"
+          style={{
+            backgroundImage:
+              "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120' fill='none' stroke='%236d28d9' stroke-opacity='0.07' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M14 22h26a6 6 0 0 1 6 6v10a6 6 0 0 1-6 6H28l-8 7v-7h-6a6 6 0 0 1-6-6V28a6 6 0 0 1 6-6z'/><rect x='74' y='16' width='24' height='18' rx='4'/><path d='M80 16v-4a6 6 0 0 1 12 0v4'/><path d='M22 84c4-6 14-6 18 0M18 92c8-10 20-10 28 0'/><circle cx='82' cy='88' r='9'/><path d='M82 83v5l3 2'/><path d='M100 58l3 6 6 1-4.500 4 1.200 6-5.700-3-5.700 3 1.200-6L91 65l6-1z'/></svg>\")",
+            backgroundSize: '120px 120px',
+          }}
+        >
           {loading ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-2">
               <Loader2 className="animate-spin text-brand-600" size={24} />
               <p className="text-xs">Loading messages…</p>
             </div>
           ) : messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center py-12 space-y-2">
-              <div className="text-4xl mb-1">👋</div>
-              <h4 className="font-bold text-sm text-gray-800">Say hello!</h4>
-              <p className="text-xs text-gray-500 max-w-xs">
-                Start your conversation with @{partner.username}. Messages and media are private and identity-verified.
-              </p>
+            <div className="flex flex-col items-center justify-center h-full">
+              <div className="w-60 rounded-3xl bg-white/80 backdrop-blur-md border border-white shadow-lg px-5 py-5 text-center space-y-3">
+                <h4 className="font-bold text-sm text-gray-900">No messages here yet…</h4>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  Send a message or tap the greeting below.
+                  <br />
+                  <span className="text-[10px] text-gray-400">Private &amp; identity-verified with @{partner.username}</span>
+                </p>
+                <button
+                  type="button"
+                  onClick={(e) => handleSend(e as any, '👋 Hey! Say hello 🤫')}
+                  className="mx-auto w-20 h-20 rounded-full bg-gradient-to-tr from-brand-600 to-purple-600 shadow-lg flex items-center justify-center text-4xl hover:scale-105 active:scale-95 transition-transform"
+                  title="Send a greeting"
+                  aria-label="Send a greeting"
+                >
+                  🤫
+                </button>
+              </div>
             </div>
           ) : (
             messages
@@ -2182,7 +2192,7 @@ export default function ChatDrawer({
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSend} className="p-3 border-t border-gray-100 bg-white flex gap-2 items-center">
+          <form onSubmit={handleSend} className="px-3 pt-2 pb-3 flex gap-2 items-end">
             <input
               type="file"
               ref={fileInputRef}
@@ -2198,33 +2208,17 @@ export default function ChatDrawer({
               className="hidden"
             />
 
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="p-2.5 rounded-xl text-gray-500 hover:text-brand-600 hover:bg-brand-50 transition-colors"
-              title="Attach Image"
-            >
-              <ImageIcon size={19} />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => videoInputRef.current?.click()}
-              className="p-2.5 rounded-xl text-gray-500 hover:text-brand-600 hover:bg-brand-50 transition-colors"
-              title="Attach Video"
-            >
-              <Film size={19} />
-            </button>
-
+            {/* Floating pill: voice modifier + text + attachments */}
+            <div className="flex-1 flex items-center gap-1 min-w-0 rounded-full bg-white/95 backdrop-blur-md border border-gray-200 shadow-md pl-1.5 pr-1.5 py-1">
             {/* Voice Modifier Filter Selector */}
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setShowVoiceFilterPicker((prev) => !prev)}
-                className={`p-2.5 rounded-xl transition-all flex items-center gap-1 ${
+                className={`w-9 h-9 rounded-full transition-all flex items-center justify-center ${
                   selectedVoiceFilter !== 'none'
                     ? 'bg-purple-100 text-purple-700 ring-2 ring-purple-400/50'
-                    : 'text-gray-500 hover:text-purple-600 hover:bg-purple-50'
+                    : 'bg-gray-100 text-gray-500 hover:text-purple-600 hover:bg-purple-50'
                 }`}
                 title={`Anonymous Voice Modifier: ${
                   VOICE_FILTERS.find((f) => f.id === selectedVoiceFilter)?.name || 'Original'
@@ -2269,30 +2263,49 @@ export default function ChatDrawer({
 
             <input
               type="text"
-              placeholder={imageFile ? "Add a caption..." : videoFile ? "Add video caption..." : "Type a message..."}
+              placeholder={imageFile ? "Add a caption..." : videoFile ? "Add video caption..." : "Message"}
               value={text}
               onChange={(e) => handleTextChange(e.target.value)}
               disabled={sending}
-              className="input-field text-xs py-2.5 px-3.5 flex-1 rounded-xl focus:border-brand-500"
+              className="flex-1 min-w-0 bg-transparent text-sm text-gray-900 placeholder-gray-400 px-2 py-2 focus:outline-hidden"
               autoFocus
             />
+
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+              title="Attach Image"
+            >
+              <ImageIcon size={19} />
+            </button>
+            <button
+              type="button"
+              onClick={() => videoInputRef.current?.click()}
+              className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+              title="Attach Video"
+            >
+              <Film size={19} />
+            </button>
+            </div>
 
             {text.trim() || imageFile || videoFile ? (
               <button
                 type="submit"
                 disabled={sending || (!text.trim() && !imageFile && !videoFile)}
-                className="btn-primary text-xs py-2.5 px-4 rounded-xl flex items-center justify-center transition-all disabled:opacity-50"
+                className="w-12 h-12 flex-shrink-0 rounded-full bg-brand-600 hover:bg-brand-700 text-white shadow-md flex items-center justify-center transition-all disabled:opacity-50"
+                title="Send"
               >
-                {sending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+                {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
               </button>
             ) : (
               <button
                 type="button"
                 onClick={startRecording}
-                className="p-2.5 rounded-xl bg-brand-600 text-white hover:bg-brand-700 transition-colors flex items-center justify-center shadow-xs"
+                className="w-12 h-12 flex-shrink-0 rounded-full bg-brand-600 text-white hover:bg-brand-700 transition-colors flex items-center justify-center shadow-md"
                 title="Record Voice Note / Whisper"
               >
-                <Mic size={18} />
+                <Mic size={20} />
               </button>
             )}
           </form>

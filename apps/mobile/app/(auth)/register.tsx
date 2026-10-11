@@ -53,6 +53,65 @@ export default function RegisterScreen() {
 
   const [loading, setLoading] = useState(false)
 
+  // Step 2: Verification step after sign up
+  const [verificationStep, setVerificationStep] = useState(false)
+  const [signupEmail, setSignupEmail] = useState('')
+  const [signupOtp, setSignupOtp] = useState('')
+  const [verifyingOtp, setVerifyingOtp] = useState(false)
+
+  async function handleVerifyMobileOtp() {
+    if (!signupOtp || signupOtp.trim().length < 6) {
+      Alert.alert('Required', 'Please enter the 6-digit verification code.')
+      return
+    }
+
+    setVerifyingOtp(true)
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: signupEmail,
+        token: signupOtp.trim(),
+        type: 'signup',
+      })
+
+      if (error) {
+        const { error: fallbackError } = await supabase.auth.verifyOtp({
+          email: signupEmail,
+          token: signupOtp.trim(),
+          type: 'email',
+        })
+        if (fallbackError) {
+          Alert.alert('Verification Failed', error.message || fallbackError.message)
+          setVerifyingOtp(false)
+          return
+        }
+      }
+
+      Alert.alert('Success', 'Your account has been verified!', [
+        { text: 'Continue', onPress: () => router.replace('/(tabs)' as any) }
+      ])
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to verify code.')
+    } finally {
+      setVerifyingOtp(false)
+    }
+  }
+
+  async function handleResendMobileOtp() {
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: signupEmail,
+      })
+      if (error) {
+        Alert.alert('Resend Failed', error.message)
+      } else {
+        Alert.alert('Sent', 'A new verification code was sent to your email.')
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Could not resend code.')
+    }
+  }
+
   // Realtime username check
   React.useEffect(() => {
     const rawUsername = username.trim().toLowerCase()
@@ -101,9 +160,6 @@ export default function RegisterScreen() {
         const { data } = await supabase.rpc('check_email_available', { p_email: rawEmail })
         if (data) {
           setEmailStatus({ checking: false, available: data.available, message: data.message })
-          if (data.available && !emailCodeSent && !isEmailVerified) {
-            handleSendVerificationCode('email')
-          }
           return
         }
         const { data: reg } = await supabase.from('email_registry').select('id').eq('normalized_email', rawEmail).maybeSingle()
@@ -112,16 +168,13 @@ export default function RegisterScreen() {
           available: !reg,
           message: reg ? 'This email has already been used.' : 'Email is available!',
         })
-        if (!reg && !emailCodeSent && !isEmailVerified) {
-          handleSendVerificationCode('email')
-        }
       } catch {
         setEmailStatus({ checking: false })
       }
     }, 450)
 
     return () => clearTimeout(timer)
-  }, [email, emailCodeSent, isEmailVerified])
+  }, [email])
 
   // Realtime phone automatic code generation
   React.useEffect(() => {
@@ -284,6 +337,17 @@ export default function RegisterScreen() {
         }
       }
 
+      // If email verification is required and session is null
+      if (!data.session) {
+        setSignupEmail(normEmail)
+        setVerificationStep(true)
+        Alert.alert(
+          'Check Your Email',
+          `We sent a 6-digit confirmation code to ${normEmail}. Please enter it to complete registration.`
+        )
+        return
+      }
+
       Alert.alert(
         'Account Created',
         'Your Private Voices account is ready!',
@@ -294,6 +358,66 @@ export default function RegisterScreen() {
     } finally {
       setLoading(false)
     }
+  }
+
+  if (verificationStep) {
+    return (
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          <View style={styles.header}>
+            <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#eef2ff', alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: 12 }}>
+              <Mail size={28} color="#4f46e5" />
+            </View>
+            <Text style={styles.title}>Check your inbox</Text>
+            <Text style={[styles.subtitle, { textAlign: 'center', marginTop: 4 }]}>
+              Enter the 6-digit verification code sent to{'\n'}
+              <Text style={{ fontWeight: '700', color: '#111827' }}>{signupEmail}</Text>
+            </Text>
+          </View>
+
+          <View style={styles.form}>
+            <Text style={[styles.label, { textAlign: 'center' }]}>6-Digit Verification Code</Text>
+            <TextInput
+              style={[
+                styles.input,
+                { textAlign: 'center', fontSize: 24, letterSpacing: 8, fontWeight: '700', color: '#4f46e5' }
+              ]}
+              value={signupOtp}
+              onChangeText={(t) => setSignupOtp(t.replace(/\D/g, ''))}
+              placeholder="123456"
+              placeholderTextColor="#9ca3af"
+              keyboardType="number-pad"
+              maxLength={6}
+              autoFocus
+            />
+
+            <TouchableOpacity
+              style={[styles.button, (verifyingOtp || signupOtp.length < 6) && styles.buttonDisabled]}
+              onPress={handleVerifyMobileOtp}
+              disabled={verifyingOtp || signupOtp.length < 6}
+            >
+              {verifyingOtp ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>Verify and Continue</Text>
+              )}
+            </TouchableOpacity>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
+              <TouchableOpacity onPress={() => setVerificationStep(false)}>
+                <Text style={{ fontSize: 13, color: '#6b7280' }}>← Back</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleResendMobileOtp}>
+                <Text style={{ fontSize: 13, color: '#4f46e5', fontWeight: '600' }}>Resend code</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    )
   }
 
   return (
@@ -349,25 +473,8 @@ export default function RegisterScreen() {
             </Text>
           )}
 
-          {/* Email with OTP */}
-          <View style={styles.labelRow}>
-            <Text style={styles.label}>Email</Text>
-            {isEmailVerified ? (
-              <View style={styles.verifiedBadge}>
-                <Check size={12} color="#059669" />
-                <Text style={styles.verifiedText}>Verified</Text>
-              </View>
-            ) : (
-              <TouchableOpacity
-                onPress={() => handleSendVerificationCode('email')}
-                disabled={sendingCode === 'email' || !email || emailStatus.available === false}
-              >
-                <Text style={[styles.actionLink, (!email || sendingCode === 'email') && styles.disabledText]}>
-                  {sendingCode === 'email' ? 'Sending code...' : 'Send email code'}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          {/* Email */}
+          <Text style={styles.label}>Email</Text>
           <TextInput
             style={[
               styles.input,
@@ -390,29 +497,6 @@ export default function RegisterScreen() {
             >
               {emailStatus.message}
             </Text>
-          )}
-
-          {emailCodeSent && !isEmailVerified && (
-            <View style={styles.otpRow}>
-              <TextInput
-                style={[styles.input, styles.otpInput]}
-                value={emailOtp}
-                onChangeText={(t) => setEmailOtp(t.replace(/\D/g, ''))}
-                placeholder="6-digit code"
-                placeholderTextColor="#9ca3af"
-                keyboardType="number-pad"
-                maxLength={6}
-              />
-              <TouchableOpacity
-                style={styles.verifyBtn}
-                onPress={() => handleConfirmVerificationCode('email')}
-                disabled={verifyingCode === 'email' || emailOtp.length < 6}
-              >
-                <Text style={styles.verifyBtnText}>
-                  {verifyingCode === 'email' ? 'Verifying...' : 'Verify'}
-                </Text>
-              </TouchableOpacity>
-            </View>
           )}
 
           {/* Phone with OTP */}

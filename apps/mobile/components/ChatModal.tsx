@@ -43,6 +43,12 @@ import {
   PhoneMissed,
   Search,
   Smile,
+  ArrowLeft,
+  MoreVertical,
+  MessageCircle,
+  Lock,
+  Clock,
+  Star,
 } from 'lucide-react-native'
 import { Image } from 'expo-image'
 import * as ImagePicker from 'expo-image-picker'
@@ -96,6 +102,7 @@ export function ChatModal({
 
   // Vanishing mode
   const [isVanishMode, setIsVanishMode] = useState(false)
+  const [showMoreMenu, setShowMoreMenu] = useState(false)
 
   // Call history modal/sheet
   const [showCallHistory, setShowCallHistory] = useState(false)
@@ -869,8 +876,9 @@ export function ChatModal({
     ])
   }
 
-  async function handleSend() {
-    if ((!text.trim() && !selectedImage) || sending || !conversationId) return
+  async function handleSend(overrideText?: unknown) {
+    const outgoingText = typeof overrideText === 'string' ? overrideText : text
+    if ((!outgoingText.trim() && !selectedImage) || sending || !conversationId) return
 
     // Immediately cancel typing status
     if (typingTimeoutRef.current) {
@@ -882,7 +890,7 @@ export function ChatModal({
       payload: { userId: currentUserId, isTyping: false },
     })
 
-    const messageContent = text.trim() || '📷 Photo'
+    const messageContent = outgoingText.trim() || '📷 Photo'
     const imageUriToSend = selectedImage
     const quotedReply = replyingTo
 
@@ -1050,16 +1058,22 @@ export function ChatModal({
           keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
         >
           {/* Header */}
-          <View style={[styles.header, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.surfaceBorder }]}>
-            <View style={styles.headerLeft}>
+          <View style={[ui.headerWrap, { backgroundColor: isDark ? '#120d1f' : '#f5f0ff' }]}>
+            <TouchableOpacity
+              onPress={onClose}
+              style={[ui.headerCircle, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }]}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <ArrowLeft size={22} color={themeColors.text} />
+            </TouchableOpacity>
+
+            <View style={[ui.headerPill, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }]}>
               <View style={styles.avatarWrapper}>
                 <View style={[styles.avatarCircle, { backgroundColor: isDark ? '#27272a' : colors.brandLight }]}>
                   {partnerAvatar ? (
                     <Image source={{ uri: partnerAvatar }} style={styles.avatarImg} />
                   ) : (
-                    <Text style={styles.avatarLetter}>
-                      {partnerName.charAt(0).toUpperCase()}
-                    </Text>
+                    <Text style={styles.avatarLetter}>{partnerName.charAt(0).toUpperCase()}</Text>
                   )}
                 </View>
                 {isPartnerOnline && <View style={styles.onlineBadge} />}
@@ -1071,7 +1085,7 @@ export function ChatModal({
                 </Text>
                 <Text style={[styles.headerUsername, { color: themeColors.textSecondary }]} numberOfLines={1}>
                   {isPartnerTyping ? (
-                    <Text style={styles.typingStatusText}>@{partnerUsername} is typing...</Text>
+                    <Text style={styles.typingStatusText}>typing...</Text>
                   ) : isPartnerOnline ? (
                     <Text style={styles.onlineStatusText}>Online</Text>
                   ) : (
@@ -1081,70 +1095,67 @@ export function ChatModal({
               </View>
             </View>
 
-            <View style={styles.headerRightActions}>
-              {/* Search toggle */}
-              <TouchableOpacity
-                onPress={() => setIsSearching((prev) => !prev)}
-                style={[
-                  styles.headerCallBtn,
-                  { backgroundColor: isSearching ? colors.brandLight : isDark ? '#27272a' : '#f4f4f5' },
-                ]}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Search size={18} color={isSearching ? colors.brand : themeColors.text} />
-              </TouchableOpacity>
-
-              {/* Vanish Mode Toggle */}
-              <TouchableOpacity
-                onPress={handleToggleVanishMode}
-                style={[
-                  styles.headerCallBtn,
-                  { backgroundColor: isVanishMode ? '#fff7ed' : isDark ? '#27272a' : '#f4f4f5' },
-                ]}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Flame size={19} color={isVanishMode ? '#f97316' : themeColors.textSecondary} />
-              </TouchableOpacity>
-
-              {/* Call History Button */}
-              <TouchableOpacity
-                onPress={handleToggleCallHistory}
-                style={[
-                  styles.headerCallBtn,
-                  { backgroundColor: showCallHistory ? '#f3e8ff' : isDark ? '#27272a' : '#f4f4f5' },
-                ]}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <History size={18} color={showCallHistory ? '#9333ea' : themeColors.text} />
-              </TouchableOpacity>
-
-              {/* Phone Voice Call Button */}
+            <View style={[ui.headerActionsPill, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }]}>
               <TouchableOpacity
                 onPress={() => handleStartCall('audio')}
-                style={[styles.headerCallBtn, { backgroundColor: isDark ? '#27272a' : '#f4f4f5' }]}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={ui.headerAction}
+                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
               >
                 <Phone size={19} color={themeColors.text} />
               </TouchableOpacity>
-
-              {/* Video Call Button */}
               <TouchableOpacity
                 onPress={() => handleStartCall('video')}
-                style={[styles.headerCallBtn, { backgroundColor: isDark ? '#27272a' : '#f4f4f5' }]}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={ui.headerAction}
+                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
               >
                 <Video size={20} color={themeColors.text} />
               </TouchableOpacity>
-
               <TouchableOpacity
-                onPress={onClose}
-                style={[styles.closeBtn, { backgroundColor: themeColors.surfaceBorder }]}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                onPress={() => setShowMoreMenu((prev) => !prev)}
+                style={[ui.headerAction, showMoreMenu && { backgroundColor: colors.brandLight }]}
+                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
               >
-                <X size={22} color={themeColors.text} />
+                <MoreVertical size={20} color={showMoreMenu ? colors.brand : themeColors.text} />
               </TouchableOpacity>
             </View>
           </View>
+
+          {showMoreMenu && (
+            <View style={[ui.moreMenu, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }]}>
+              <TouchableOpacity
+                style={ui.moreItem}
+                onPress={() => {
+                  setShowMoreMenu(false)
+                  setIsSearching((prev) => !prev)
+                }}
+              >
+                <Search size={18} color={themeColors.textSecondary} />
+                <Text style={[ui.moreItemText, { color: themeColors.text }]}>Search in chat</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={ui.moreItem}
+                onPress={() => {
+                  setShowMoreMenu(false)
+                  handleToggleVanishMode()
+                }}
+              >
+                <Flame size={18} color={isVanishMode ? '#f97316' : themeColors.textSecondary} />
+                <Text style={[ui.moreItemText, { color: themeColors.text }]}>
+                  {isVanishMode ? 'Turn off vanish mode' : 'Turn on vanish mode'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={ui.moreItem}
+                onPress={() => {
+                  setShowMoreMenu(false)
+                  handleToggleCallHistory()
+                }}
+              >
+                <History size={18} color={themeColors.textSecondary} />
+                <Text style={[ui.moreItemText, { color: themeColors.text }]}>Call history</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Search Bar */}
           {isSearching && (
@@ -1254,7 +1265,8 @@ export function ChatModal({
           )}
 
           {/* Messages */}
-          <View style={styles.messagesContainer}>
+          <View style={[styles.messagesContainer, { backgroundColor: isDark ? '#120d1f' : '#f5f0ff' }]}>
+            <ChatDoodles isDark={isDark} />
             {loading ? (
               <View style={styles.centerBox}>
                 <ActivityIndicator size="large" color={colors.brand} />
@@ -1262,11 +1274,19 @@ export function ChatModal({
               </View>
             ) : messages.length === 0 ? (
               <View style={styles.centerBox}>
-                <Text style={styles.emptyEmoji}>👋</Text>
-                <Text style={styles.emptyTitle}>Say hello to {partnerName}!</Text>
-                <Text style={styles.emptyDesc}>
-                  Start your conversation. Direct messages and photos are private and identity-verified.
-                </Text>
+                <View style={[ui.emptyCard, { backgroundColor: isDark ? 'rgba(39,39,42,0.85)' : 'rgba(255,255,255,0.88)' }]}>
+                  <Text style={[ui.emptyCardTitle, { color: themeColors.text }]}>No messages here yet…</Text>
+                  <Text style={[ui.emptyCardDesc, { color: themeColors.textSecondary }]}>
+                    Send a message or tap the greeting below.
+                  </Text>
+                  <TouchableOpacity
+                    style={ui.greetingBtn}
+                    activeOpacity={0.85}
+                    onPress={() => handleSend('👋 Hey! Say hello 🤫')}
+                  >
+                    <Text style={ui.greetingEmoji}>🤫</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             ) : (
               <FlatList
@@ -1587,54 +1607,37 @@ export function ChatModal({
               </View>
             </View>
           ) : (
-            <View style={[styles.inputBar, { backgroundColor: themeColors.surface, borderTopColor: themeColors.surfaceBorder }]}>
-              <TouchableOpacity
-                style={[styles.attachBtn, { backgroundColor: isDark ? '#27272a' : colors.brandLight }]}
-                onPress={handlePickImage}
-                activeOpacity={0.7}
-              >
-                <ImageIcon size={20} color={colors.brand} />
-              </TouchableOpacity>
-
-              <TextInput
-                style={[
-                  styles.textInput,
-                  {
-                    backgroundColor: themeColors.surfaceBorder,
-                    color: themeColors.text,
-                    borderColor: themeColors.surfaceBorder,
-                  },
-                ]}
-                placeholder={selectedImage ? "Add a caption..." : `Message @${partnerUsername}...`}
-                placeholderTextColor={themeColors.textSecondary}
-                value={text}
-                onChangeText={handleTextChange}
-                multiline
-                maxLength={1000}
-              />
+            <View style={ui.composerRow}>
+              <View style={[ui.pill, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }]}>
+                <TextInput
+                  style={[ui.pillInput, { color: themeColors.text }]}
+                  placeholder={selectedImage ? 'Add a caption...' : 'Message'}
+                  placeholderTextColor={themeColors.textSecondary}
+                  value={text}
+                  onChangeText={handleTextChange}
+                  multiline
+                  maxLength={1000}
+                />
+                <TouchableOpacity style={ui.pillIcon} onPress={handlePickImage} activeOpacity={0.7}>
+                  <ImageIcon size={21} color={themeColors.textSecondary} />
+                </TouchableOpacity>
+              </View>
 
               {text.trim() || selectedImage ? (
                 <TouchableOpacity
-                  style={[
-                    styles.sendBtn,
-                    (!text.trim() && !selectedImage || sending) && styles.sendBtnDisabled,
-                  ]}
+                  style={[ui.roundAction, ((!text.trim() && !selectedImage) || sending) && styles.sendBtnDisabled]}
                   onPress={handleSend}
                   disabled={(!text.trim() && !selectedImage) || sending}
                 >
                   {sending ? (
                     <ActivityIndicator size="small" color="#ffffff" />
                   ) : (
-                    <Send size={18} color="#ffffff" />
+                    <Send size={20} color="#ffffff" />
                   )}
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity
-                  style={styles.micBtn}
-                  onPress={startRecording}
-                  activeOpacity={0.8}
-                >
-                  <Mic size={20} color="#ffffff" />
+                <TouchableOpacity style={ui.roundAction} onPress={startRecording} activeOpacity={0.8}>
+                  <Mic size={22} color="#ffffff" />
                 </TouchableOpacity>
               )}
             </View>
@@ -2880,5 +2883,189 @@ const styles = StyleSheet.create({
   mobileActionText: {
     fontSize: 14,
     fontWeight: '600',
+  },
+})
+
+
+// ---------------------------------------------------------------------------
+// Redesigned chat chrome: floating pills, doodle wallpaper, pill composer
+// ---------------------------------------------------------------------------
+function ChatDoodles({ isDark }: { isDark: boolean }) {
+  const tint = isDark ? 'rgba(167,139,250,0.10)' : 'rgba(124,58,237,0.09)'
+  const items: { Icon: any; top: `${number}%`; left: `${number}%`; size: number; rotate: string }[] = [
+    { Icon: MessageCircle, top: '4%', left: '8%', size: 34, rotate: '-12deg' },
+    { Icon: Lock, top: '9%', left: '70%', size: 30, rotate: '10deg' },
+    { Icon: Star, top: '22%', left: '38%', size: 24, rotate: '0deg' },
+    { Icon: Clock, top: '30%', left: '84%', size: 32, rotate: '-8deg' },
+    { Icon: Mic, top: '36%', left: '6%', size: 30, rotate: '14deg' },
+    { Icon: MessageCircle, top: '52%', left: '62%', size: 36, rotate: '8deg' },
+    { Icon: Flame, top: '58%', left: '20%', size: 28, rotate: '-10deg' },
+    { Icon: Lock, top: '72%', left: '82%', size: 28, rotate: '-14deg' },
+    { Icon: Star, top: '80%', left: '44%', size: 26, rotate: '12deg' },
+    { Icon: Smile, top: '88%', left: '10%', size: 32, rotate: '6deg' },
+  ]
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {items.map((it, i) => (
+        <View
+          key={i}
+          style={{ position: 'absolute', top: it.top, left: it.left, transform: [{ rotate: it.rotate }] }}
+        >
+          <it.Icon size={it.size} color={tint} strokeWidth={1.6} />
+        </View>
+      ))}
+    </View>
+  )
+}
+
+const ui = StyleSheet.create({
+  headerWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  headerCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerPill: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    paddingLeft: 4,
+    paddingRight: 14,
+  },
+  headerActionsPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    paddingHorizontal: 4,
+  },
+  headerAction: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  moreMenu: {
+    position: 'absolute',
+    top: 64,
+    right: 10,
+    zIndex: 50,
+    width: 220,
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  moreItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  moreItemText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  emptyCard: {
+    width: 240,
+    borderRadius: 24,
+    paddingVertical: 20,
+    paddingHorizontal: 18,
+    alignItems: 'center',
+    gap: 8,
+  },
+  emptyCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  emptyCardDesc: {
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
+  },
+  greetingBtn: {
+    marginTop: 8,
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  greetingEmoji: {
+    fontSize: 42,
+  },
+  composerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingTop: 6,
+    paddingBottom: 8,
+  },
+  pill: {
+    flex: 1,
+    minHeight: 48,
+    maxHeight: 120,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 24,
+    borderWidth: 1,
+    paddingLeft: 16,
+    paddingRight: 6,
+  },
+  pillInput: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 10,
+    maxHeight: 110,
+  },
+  pillIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  roundAction: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 4,
   },
 })

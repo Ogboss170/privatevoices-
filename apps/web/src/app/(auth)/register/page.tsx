@@ -75,6 +75,72 @@ export default function RegisterPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
+  // Step 2: Supabase Email OTP Verification Screen
+  const [verificationStep, setVerificationStep] = useState(false)
+  const [signupEmail, setSignupEmail] = useState('')
+  const [signupOtp, setSignupOtp] = useState('')
+  const [verifyingOtp, setVerifyingOtp] = useState(false)
+  const [otpResent, setOtpResent] = useState(false)
+
+  async function handleVerifySignupOtp(e: React.FormEvent) {
+    e.preventDefault()
+    if (!signupOtp || signupOtp.trim().length < 6) {
+      setError('Please enter the 6-digit verification code.')
+      return
+    }
+
+    setError(null)
+    setVerifyingOtp(true)
+
+    try {
+      const { data, error: verifyError } = await supabase.auth.verifyOtp({
+        email: signupEmail,
+        token: signupOtp.trim(),
+        type: 'signup',
+      })
+
+      if (verifyError) {
+        // Fallback check with 'email' OTP type in case session was created via email change or otp
+        const { data: fallbackData, error: fallbackError } = await supabase.auth.verifyOtp({
+          email: signupEmail,
+          token: signupOtp.trim(),
+          type: 'email',
+        })
+
+        if (fallbackError) {
+          setError(verifyError.message || fallbackError.message || 'Invalid or expired verification code.')
+          setVerifyingOtp(false)
+          return
+        }
+      }
+
+      router.push('/feed')
+      router.refresh()
+    } catch (err: any) {
+      setError(err?.message || 'Failed to verify code. Please try again.')
+      setVerifyingOtp(false)
+    }
+  }
+
+  async function handleResendSignupOtp() {
+    setError(null)
+    setOtpResent(false)
+    try {
+      const { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email: signupEmail,
+      })
+      if (resendError) {
+        setError(resendError.message)
+      } else {
+        setOtpResent(true)
+        setTimeout(() => setOtpResent(false), 5000)
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Could not resend verification code.')
+    }
+  }
+
   // Live Check: Username Availability
   useEffect(() => {
     const rawUsername = form.username.trim().toLowerCase()
@@ -146,7 +212,7 @@ export default function RegisterPage() {
   const autoEmailTriggeredRef = useRef<string | null>(null)
   const autoPhoneTriggeredRef = useRef<string | null>(null)
 
-  // Live Check & Automatic Code Generator for Email
+  // Live Check: Email Availability
   useEffect(() => {
     const rawEmail = form.email.trim().toLowerCase()
     if (emailTimerRef.current) clearTimeout(emailTimerRef.current)
@@ -170,12 +236,6 @@ export default function RegisterPage() {
             available: data.available,
             message: data.message,
           })
-
-          // Automatic code generation if email is available and hasn't been triggered yet
-          if (data.available && autoEmailTriggeredRef.current !== rawEmail && !isEmailVerified) {
-            autoEmailTriggeredRef.current = rawEmail
-            handleSendVerificationCode('email')
-          }
           return
         }
 
@@ -197,12 +257,6 @@ export default function RegisterPage() {
             available: true,
             message: 'Email is available!',
           })
-
-          // Automatic code generation
-          if (autoEmailTriggeredRef.current !== rawEmail && !isEmailVerified) {
-            autoEmailTriggeredRef.current = rawEmail
-            handleSendVerificationCode('email')
-          }
         }
       } catch {
         setEmailStatus({ checking: false })
@@ -212,7 +266,7 @@ export default function RegisterPage() {
     return () => {
       if (emailTimerRef.current) clearTimeout(emailTimerRef.current)
     }
-  }, [form.email, isEmailVerified, supabase])
+  }, [form.email, supabase])
 
   // Automatic Code Generator for Phone (triggers automatically when 10+ digits are typed)
   useEffect(() => {
@@ -494,7 +548,8 @@ export default function RegisterPage() {
 
     // Check if session was granted or requires email verification
     if (!data.session) {
-      setSuccessMessage('Account created! Please check your email to confirm your account before logging in.')
+      setSignupEmail(normEmail)
+      setVerificationStep(true)
       setLoading(false)
       return
     }
@@ -523,6 +578,91 @@ export default function RegisterPage() {
       setError(err.message || 'Failed to initiate Google sign-in')
       setGoogleLoading(false)
     }
+  }
+
+  if (verificationStep) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center space-y-2">
+          <div className="w-12 h-12 bg-brand-50 text-brand-600 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-inner">
+            <Mail className="w-6 h-6" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900">Check your inbox</h2>
+          <p className="text-sm text-gray-600">
+            We sent a 6-digit confirmation code to{' '}
+            <span className="font-semibold text-gray-900">{signupEmail}</span>.
+          </p>
+          <p className="text-xs text-gray-400">
+            (Be sure to check your Spam or Promotions folder if it does not appear immediately)
+          </p>
+        </div>
+
+        <form onSubmit={handleVerifySignupOtp} className="space-y-4">
+          <div>
+            <label htmlFor="signupOtp" className="block text-sm font-medium text-gray-700 mb-2 text-center">
+              Enter 6-Digit Verification Code
+            </label>
+            <input
+              id="signupOtp"
+              type="text"
+              maxLength={6}
+              autoFocus
+              value={signupOtp}
+              onChange={(e) => setSignupOtp(e.target.value.replace(/\D/g, ''))}
+              placeholder="123456"
+              className="w-full text-center tracking-[0.4em] font-mono text-2xl py-3 px-4 rounded-xl border border-gray-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none transition"
+              required
+            />
+          </div>
+
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-center">
+              {error}
+            </p>
+          )}
+
+          {otpResent && (
+            <p className="text-sm text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 text-center">
+              A new 6-digit verification code has been dispatched to your email!
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={verifyingOtp || signupOtp.length < 6}
+            className="w-full py-2.5 px-4 rounded-xl font-semibold text-sm bg-brand-600 hover:bg-brand-700 text-white transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {verifyingOtp ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> Verifying…
+              </>
+            ) : (
+              'Confirm and Continue'
+            )}
+          </button>
+        </form>
+
+        <div className="flex items-center justify-between text-xs text-gray-500 pt-2 border-t border-gray-100">
+          <button
+            type="button"
+            onClick={() => {
+              setVerificationStep(false)
+              setError(null)
+            }}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            ← Change email address
+          </button>
+          <button
+            type="button"
+            onClick={handleResendSignupOtp}
+            className="font-medium text-brand-600 hover:text-brand-700"
+          >
+            Resend code
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -629,20 +769,6 @@ export default function RegisterPage() {
             <span className="flex items-center gap-1.5">
               <Mail className="w-4 h-4 text-gray-500" /> Email
             </span>
-            {isEmailVerified ? (
-              <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1">
-                <Check className="w-3.5 h-3.5" /> Verified
-              </span>
-            ) : (
-              <button
-                type="button"
-                onClick={() => handleSendVerificationCode('email')}
-                disabled={sendingCode === 'email' || !form.email || emailStatus.available === false}
-                className="text-xs font-medium text-brand-600 hover:text-brand-700 cursor-pointer disabled:text-gray-400"
-              >
-                {sendingCode === 'email' ? 'Sending code...' : 'Send verification code'}
-              </button>
-            )}
           </label>
           <div className="relative">
             <input
@@ -674,27 +800,6 @@ export default function RegisterPage() {
             >
               {emailStatus.message}
             </p>
-          )}
-
-          {emailCodeSent && !isEmailVerified && (
-            <div className="mt-2 p-3 bg-brand-50/60 border border-brand-200 rounded-xl flex items-center gap-2">
-              <input
-                type="text"
-                maxLength={6}
-                value={emailOtp}
-                onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, ''))}
-                placeholder="6-digit email code"
-                className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-mono tracking-widest flex-1 text-center"
-              />
-              <button
-                type="button"
-                onClick={() => handleConfirmVerificationCode('email')}
-                disabled={verifyingCode === 'email' || emailOtp.length < 6}
-                className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold disabled:bg-gray-300"
-              >
-                {verifyingCode === 'email' ? 'Verifying...' : 'Verify'}
-              </button>
-            </div>
           )}
         </div>
 
