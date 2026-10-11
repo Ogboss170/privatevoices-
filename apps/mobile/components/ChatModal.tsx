@@ -1071,7 +1071,7 @@ export function ChatModal({
                 </Text>
                 <Text style={[styles.headerUsername, { color: themeColors.textSecondary }]} numberOfLines={1}>
                   {isPartnerTyping ? (
-                    <Text style={styles.typingStatusText}>typing...</Text>
+                    <Text style={styles.typingStatusText}>@{partnerUsername} is typing...</Text>
                   ) : isPartnerOnline ? (
                     <Text style={styles.onlineStatusText}>Online</Text>
                   ) : (
@@ -1517,7 +1517,7 @@ export function ChatModal({
                         <View style={[styles.typingDot, { opacity: 0.7 }]} />
                         <View style={[styles.typingDot, { opacity: 0.4 }]} />
                       </View>
-                      <Text style={styles.typingLabel}>{partnerName} is typing...</Text>
+                      <Text style={styles.typingLabel}>@{partnerUsername} is typing...</Text>
                     </View>
                   ) : null
                 }
