@@ -143,13 +143,6 @@ export default function RegisterScreen() {
 
     setSendingCode(targetType)
     try {
-      if (targetType === 'email') {
-        await supabase.auth.signInWithOtp({
-          email: targetValue,
-          options: { shouldCreateUser: false },
-        }).catch(() => null)
-      }
-
       const { data, error } = await supabase.rpc('request_verification_code', {
         p_target_type: targetType,
         p_target_value: targetValue,

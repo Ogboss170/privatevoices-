@@ -238,21 +238,7 @@ export default function RegisterPage() {
     setSendingCode(targetType)
 
     try {
-      // 1. If verifying email, request Supabase to send real email confirmation code/magic link
-      if (targetType === 'email') {
-        const { error: otpError } = await supabase.auth.signInWithOtp({
-          email: targetValue,
-          options: {
-            shouldCreateUser: false,
-          },
-        }).catch(() => ({ error: null })) as any
-
-        if (otpError) {
-          console.warn('Supabase signInWithOtp notice (using RPC OTP):', otpError.message)
-        }
-      }
-
-      // 2. Call verification code RPC
+      // 1. Call verification code RPC to generate 6-digit code
       const res = await supabase.rpc('request_verification_code', {
         p_target_type: targetType,
         p_target_value: targetValue,
