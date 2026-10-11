@@ -11,6 +11,11 @@ export const metadata: Metadata = {
   },
   description: 'Express yourself. Connect with people. Speak freely — with privacy at the center.',
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? 'https://privatevoices.app'),
+  manifest: '/manifest.json',
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/icon-192.png',
+  },
   openGraph: {
     siteName: 'Private Voices',
     type: 'website',
