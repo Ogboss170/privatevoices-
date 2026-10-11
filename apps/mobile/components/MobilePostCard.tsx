@@ -36,6 +36,7 @@ import { useRouter } from 'expo-router'
 import { supabase } from '../lib/supabase'
 import { colors } from '../constants/colors'
 import type { Post } from '@private-voices/shared'
+import { getOptimizedImageUrl } from '@private-voices/shared'
 import { FormattedText } from './FormattedText'
 import { MentionSuggestions } from './MentionSuggestions'
 import { MobileInteractivePoll } from './MobileInteractivePoll'
@@ -766,7 +767,7 @@ export function MobilePostCard({ post, currentUserId, communityRole, onDelete, o
         >
           <View style={styles.avatarCircle}>
             {post.author.avatarUrl ? (
-              <Image source={{ uri: post.author.avatarUrl }} style={styles.avatarImg} />
+              <Image source={{ uri: getOptimizedImageUrl(post.author.avatarUrl, 'avatar-sm') }} style={styles.avatarImg} />
             ) : (
               <Text style={styles.avatarInitial}>
                 {post.author.displayName.charAt(0).toUpperCase()}
@@ -858,7 +859,7 @@ export function MobilePostCard({ post, currentUserId, communityRole, onDelete, o
               }}
             >
               <Image
-                source={{ uri: post.imageUrls[0] }}
+                source={{ uri: getOptimizedImageUrl(post.imageUrls[0], 'feed-thumb') }}
                 style={styles.singleImage}
                 contentFit="cover"
                 transition={200}
@@ -888,7 +889,7 @@ export function MobilePostCard({ post, currentUserId, communityRole, onDelete, o
                     }}
                   >
                     <Image
-                      source={{ uri: url }}
+                      source={{ uri: getOptimizedImageUrl(url, 'feed-thumb') }}
                       style={styles.carouselImage}
                       contentFit="cover"
                       transition={200}

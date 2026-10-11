@@ -736,6 +736,76 @@ export interface FloatingSpaceReaction {
   createdAt: number;
 }
 
+// ─── Production Media CDN & Thumbnail Optimizer ──────────────────────────────
 
+export type ImageSizePreset = 'avatar-sm' | 'avatar-md' | 'avatar-lg' | 'feed-thumb' | 'feed-full' | 'banner';
 
+export interface ImageTransformOptions {
+  width?: number;
+  height?: number;
+  quality?: number;
+  format?: 'origin' | 'webp' | 'avif';
+  resize?: 'cover' | 'contain' | 'fill';
+}
 
+const PRESET_CONFIGS: Record<ImageSizePreset, ImageTransformOptions> = {
+  'avatar-sm': { width: 48, height: 48, quality: 75, resize: 'cover', format: 'webp' },
+  'avatar-md': { width: 96, height: 96, quality: 80, resize: 'cover', format: 'webp' },
+  'avatar-lg': { width: 180, height: 180, quality: 85, resize: 'cover', format: 'webp' },
+  'feed-thumb': { width: 480, height: 480, quality: 75, resize: 'cover', format: 'webp' },
+  'feed-full': { width: 1080, quality: 85, format: 'webp' },
+  'banner': { width: 1200, height: 400, quality: 80, resize: 'cover', format: 'webp' },
+};
+
+/**
+ * Transforms Supabase Storage and generic CDN image URLs into compressed,
+ * responsive thumbnails using Supabase Image Transformations and edge CDN caching.
+ */
+export function getOptimizedImageUrl(
+  originalUrl: string | null | undefined,
+  presetOrOptions: ImageSizePreset | ImageTransformOptions = 'feed-full'
+): string {
+  if (!originalUrl) return '';
+
+  // Skip local blobs, data URIs, and vector SVG images
+  if (
+    originalUrl.startsWith('data:') ||
+    originalUrl.startsWith('blob:') ||
+    originalUrl.endsWith('.svg') ||
+    originalUrl.includes('placeholder')
+  ) {
+    return originalUrl;
+  }
+
+  const options: ImageTransformOptions =
+    typeof presetOrOptions === 'string' ? PRESET_CONFIGS[presetOrOptions] : presetOrOptions;
+
+  try {
+    const queryParts: string[] = [];
+    if (options.width) queryParts.push(`width=${options.width}`);
+    if (options.height) queryParts.push(`height=${options.height}`);
+    if (options.quality) queryParts.push(`quality=${options.quality}`);
+    if (options.resize) queryParts.push(`resize=${options.resize}`);
+    if (options.format) queryParts.push(`format=${options.format}`);
+
+    if (queryParts.length === 0) return originalUrl;
+
+    const queryString = queryParts.join('&');
+
+    // Supabase Storage URL Transformation
+    if (originalUrl.includes('/storage/v1/object/public/')) {
+      const renderBase = originalUrl.replace(
+        '/storage/v1/object/public/',
+        '/storage/v1/render/image/public/'
+      );
+      const separator = renderBase.includes('?') ? '&' : '?';
+      return `${renderBase}${separator}${queryString}`;
+    }
+
+    // Generic CDN or Cloudflare image resizing params
+    const separator = originalUrl.includes('?') ? '&' : '?';
+    return `${originalUrl}${separator}${queryString}`;
+  } catch {
+    return originalUrl;
+  }
+}
