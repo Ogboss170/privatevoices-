@@ -2,13 +2,33 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { Check, X, Phone, Mail, ShieldCheck, Loader2 } from 'lucide-react'
 
 export default function RegisterPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createSupabaseBrowserClient()
+
+  // Track referring inviter username (from URL /register?ref=username or sessionStorage)
+  const [refInviter, setRefInviter] = useState<string>('')
+
+  useEffect(() => {
+    const refFromUrl = searchParams.get('ref')
+    if (refFromUrl) {
+      const cleanRef = refFromUrl.trim().toLowerCase().replace(/^@/, '')
+      setRefInviter(cleanRef)
+      try {
+        sessionStorage.setItem('pv_referred_by', cleanRef)
+      } catch {}
+    } else {
+      try {
+        const stored = sessionStorage.getItem('pv_referred_by')
+        if (stored) setRefInviter(stored)
+      } catch {}
+    }
+  }, [searchParams])
 
   const [form, setForm] = useState({
     email: '',
@@ -450,6 +470,21 @@ export default function RegisterPage() {
           email_verified_at: isEmailVerified ? new Date().toISOString() : null,
         })
         .eq('id', data.user.id)
+    }
+
+    // 4. Process referral attribution if joined via invite link
+    if (refInviter) {
+      try {
+        await supabase.rpc('process_referral', {
+          p_new_user_id: data.user.id,
+          p_inviter_username: refInviter,
+        })
+        try {
+          sessionStorage.removeItem('pv_referred_by')
+        } catch {}
+      } catch (refErr) {
+        console.warn('Referral processing note:', refErr)
+      }
     }
 
     // Check if session was granted or requires email verification

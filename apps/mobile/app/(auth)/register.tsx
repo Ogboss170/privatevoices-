@@ -11,13 +11,16 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native'
-import { Link, useRouter } from 'expo-router'
+import { Link, useRouter, useLocalSearchParams } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { colors } from '../../constants/colors'
 import { Phone, Mail, Check, Shield } from 'lucide-react-native'
 
 export default function RegisterScreen() {
   const router = useRouter()
+  const params = useLocalSearchParams<{ ref?: string }>()
+  const refInviter = params.ref ? String(params.ref).trim().toLowerCase().replace(/^@/, '') : ''
+
   const [displayName, setDisplayName] = useState('')
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
@@ -274,6 +277,18 @@ export default function RegisterScreen() {
             email_verified_at: isEmailVerified ? new Date().toISOString() : null,
           })
           .eq('id', data.user.id)
+      }
+
+      // 4. Process referral if joined via invite link
+      if (refInviter) {
+        try {
+          await supabase.rpc('process_referral', {
+            p_new_user_id: data.user.id,
+            p_inviter_username: refInviter,
+          })
+        } catch (refErr) {
+          console.warn('Referral attribution notice:', refErr)
+        }
       }
 
       Alert.alert(
