@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { X, Lock, UserPlus, UserCheck, MessageSquare, Send, Award, Zap, ShieldAlert } from 'lucide-react-native'
+import { ArrowLeft, Lock, UserPlus, UserCheck, MessageSquare, Send, Award, Zap, ShieldAlert, LayoutGrid } from 'lucide-react-native'
 import { Image } from 'expo-image'
 import { supabase } from '../lib/supabase'
 import { colors } from '../constants/colors'
@@ -261,14 +261,19 @@ export function PublicProfileModal({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-        {/* Header Bar */}
+        {/* Modern Instagram-style Top Header Bar: Back Arrow on left, username in middle, options placeholder on right */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-            <X size={22} color={colors.gray700} />
+          <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
+            <ArrowLeft size={22} color={colors.gray800} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {profile?.username ? `@${profile.username}` : 'Profile'}
-          </Text>
+          <View style={styles.headerTitleBox}>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {profile?.username ? profile.username : 'profile'}
+            </Text>
+            {profile?.is_private && (
+              <Lock size={13} color={colors.gray500} style={{ marginLeft: 4 }} />
+            )}
+          </View>
           <View style={{ width: 36 }} />
         </View>
 
@@ -284,9 +289,10 @@ export function PublicProfileModal({
           </View>
         ) : (
           <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-            {/* Profile Info Header Card */}
-            <View style={styles.profileCard}>
-              <View style={styles.avatarRow}>
+            {/* Instagram Style Header: Avatar Left + Stats (posts, followers, following) Right */}
+            <View style={styles.igHeaderSection}>
+              <View style={styles.igTopRow}>
+                {/* Large Profile Picture */}
                 <View style={styles.avatarCircle}>
                   {profile.avatar_url ? (
                     <Image source={{ uri: profile.avatar_url }} style={styles.avatarImg} />
@@ -297,95 +303,72 @@ export function PublicProfileModal({
                   )}
                 </View>
 
-                <View style={styles.nameBlock}>
-                  <View style={styles.nameLevelRow}>
-                    <Text style={styles.displayName}>{profile.display_name || profile.username}</Text>
-                    {gamification && (
-                      <View style={styles.levelBadgePill}>
-                        <Award size={12} color="#ffffff" />
-                        <Text style={styles.levelBadgePillText}>Lv.{gamification.level}</Text>
-                      </View>
-                    )}
+                {/* 3 Stats Columns */}
+                <View style={styles.igStatsRow}>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statCount}>{stats.postCount}</Text>
+                    <Text style={styles.statLabel}>posts</Text>
                   </View>
-                  <Text style={styles.username}>@{profile.username}</Text>
 
+                  <TouchableOpacity
+                    style={styles.statItem}
+                    onPress={() => openFollowModal('followers')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.statCount}>{stats.followerCount}</Text>
+                    <Text style={styles.statLabel}>
+                      followers {!canViewFollows && <Lock size={9} color={colors.gray400} />}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.statItem}
+                    onPress={() => openFollowModal('following')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.statCount}>{stats.followingCount}</Text>
+                    <Text style={styles.statLabel}>
+                      following {!canViewFollows && <Lock size={9} color={colors.gray400} />}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Bio & Details Section (Below Avatar & Stats, exactly like Instagram) */}
+              <View style={styles.igBioSection}>
+                <View style={styles.nameLevelRow}>
+                  <Text style={styles.displayName}>{profile.display_name || profile.username}</Text>
                   {gamification && (
-                    <Text style={styles.levelTitleText}>{gamification.levelTitle}</Text>
-                  )}
-
-                  {profile.is_private && (
-                    <View style={styles.privateTag}>
-                      <Lock size={12} color={colors.brand} />
-                      <Text style={styles.privateTagText}>Private Account</Text>
+                    <View style={styles.levelBadgePill}>
+                      <Award size={11} color="#ffffff" />
+                      <Text style={styles.levelBadgePillText}>Lv.{gamification.level}</Text>
                     </View>
                   )}
                 </View>
+
+                {gamification && (
+                  <Text style={styles.levelTitleText}>{gamification.levelTitle}</Text>
+                )}
+
+                {!!profile.bio && <Text style={styles.bioText}>{profile.bio}</Text>}
               </View>
 
-              {/* Gamification XP Progress Bar */}
-              {gamification && (
-                <View style={styles.xpCard}>
-                  <View style={styles.xpHeader}>
-                    <View style={styles.xpTitleRow}>
-                      <Zap size={14} color={colors.brand} />
-                      <Text style={styles.xpLabel}>Level Progress</Text>
-                    </View>
-                    <Text style={styles.xpValText}>{gamification.xp} XP</Text>
-                  </View>
-
-                  <View style={styles.xpBarTrack}>
-                    <View style={[styles.xpBarFill, { width: `${gamification.progressPercent}%` }]} />
-                  </View>
-                </View>
-              )}
-
-              {!!profile.bio && <Text style={styles.bioText}>{profile.bio}</Text>}
-
-              {/* Stats Row */}
-              <View style={styles.statsRow}>
-                <View style={styles.statItem}>
-                  <Text style={styles.statCount}>{stats.postCount}</Text>
-                  <Text style={styles.statLabel}>Voices</Text>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.statItem}
-                  onPress={() => openFollowModal('followers')}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.statCount}>{stats.followerCount}</Text>
-                  <Text style={styles.statLabel}>
-                    Followers {!canViewFollows && <Lock size={10} color={colors.gray400} />}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.statItem}
-                  onPress={() => openFollowModal('following')}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.statCount}>{stats.followingCount}</Text>
-                  <Text style={styles.statLabel}>
-                    Following {!canViewFollows && <Lock size={10} color={colors.gray400} />}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Action Buttons (Follow / Whisper / Message) */}
+              {/* Action Buttons Row (Follow / Whisper / Message) */}
               {!isSelf && (
                 <View style={styles.actionsRow}>
                   <TouchableOpacity
                     style={[styles.followBtn, isFollowing && styles.followingBtn]}
                     onPress={handleToggleFollow}
+                    activeOpacity={0.8}
                   >
                     {isFollowing ? (
                       <>
-                        <UserCheck size={16} color={colors.gray700} />
+                        <UserCheck size={15} color={colors.gray800} />
                         <Text style={styles.followingBtnText}>Following</Text>
                       </>
                     ) : (
                       <>
-                        <UserPlus size={16} color="#ffffff" />
+                        <UserPlus size={15} color="#ffffff" />
                         <Text style={styles.followBtnText}>Follow</Text>
                       </>
                     )}
@@ -394,18 +377,32 @@ export function PublicProfileModal({
                   <TouchableOpacity
                     style={styles.whisperBtn}
                     onPress={() => setWhisperModalVisible(true)}
+                    activeOpacity={0.8}
                   >
-                    <MessageSquare size={16} color={colors.brand} />
+                    <MessageSquare size={15} color={colors.brand} />
                     <Text style={styles.whisperBtnText}>Whisper</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity style={styles.messageBtn} onPress={handleStartChat}>
-                    <Send size={16} color={colors.gray700} />
+                  <TouchableOpacity
+                    style={styles.messageBtn}
+                    onPress={handleStartChat}
+                    activeOpacity={0.8}
+                  >
+                    <Send size={15} color={colors.gray800} />
                     <Text style={styles.messageBtnText}>Message</Text>
                   </TouchableOpacity>
                 </View>
               )}
             </View>
+
+            {/* Grid/Posts Tab Indicator */}
+            {canViewFollows && (
+              <View style={styles.igTabsRow}>
+                <View style={styles.igTabItemActive}>
+                  <LayoutGrid size={20} color={colors.brand} strokeWidth={2.2} />
+                </View>
+              </View>
+            )}
 
             {/* Posts / Privacy lock section */}
             {!canViewFollows ? (
@@ -490,18 +487,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.gray200,
+    borderBottomColor: colors.gray100,
     backgroundColor: '#ffffff',
+  },
+  headerTitleBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: colors.gray900,
+    letterSpacing: -0.2,
   },
   closeBtn: {
     padding: 6,
     borderRadius: 8,
-    backgroundColor: colors.gray100,
   },
   centerBox: {
     flex: 1,
@@ -527,158 +529,120 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    backgroundColor: colors.gray50,
+    backgroundColor: '#ffffff',
   },
   scrollContent: {
-    padding: 16,
     paddingBottom: 40,
-    gap: 16,
   },
-  profileCard: {
+  igHeaderSection: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
     backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.gray200,
-    gap: 14,
   },
-  avatarRow: {
+  igTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    justifyContent: 'space-between',
+    marginBottom: 14,
   },
   avatarCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 82,
+    height: 82,
+    borderRadius: 41,
     backgroundColor: colors.brandLight,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: colors.gray200,
   },
   avatarImg: {
-    width: 64,
-    height: 64,
+    width: 82,
+    height: 82,
   },
   avatarLetter: {
-    fontSize: 26,
+    fontSize: 32,
     fontWeight: '700',
     color: colors.brand,
   },
-  nameBlock: {
+  igStatsRow: {
     flex: 1,
-    gap: 2,
-  },
-  nameLevelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  levelBadgePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.brand,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-  },
-  levelBadgePillText: {
-    color: '#ffffff',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  levelTitleText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.brand,
-    marginTop: 2,
-  },
-  xpCard: {
-    backgroundColor: colors.gray50,
-    borderRadius: 12,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: colors.gray200,
-    gap: 6,
-  },
-  xpHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  xpTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  xpLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.gray900,
-  },
-  xpValText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.brand,
-  },
-  xpBarTrack: {
-    height: 6,
-    backgroundColor: colors.gray200,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  xpBarFill: {
-    height: 6,
-    backgroundColor: colors.brand,
-    borderRadius: 3,
-  },
-  displayName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.gray900,
-  },
-  username: {
-    fontSize: 13,
-    color: colors.gray500,
-  },
-  privateTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-  },
-  privateTagText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.brand,
-  },
-  bioText: {
-    fontSize: 14,
-    color: colors.gray700,
-    lineHeight: 20,
-  },
-  statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.gray100,
-    paddingVertical: 12,
+    alignItems: 'center',
+    marginLeft: 20,
   },
   statItem: {
     alignItems: 'center',
-    flex: 1,
   },
   statCount: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
     color: colors.gray900,
   },
   statLabel: {
-    fontSize: 12,
-    color: colors.gray500,
+    fontSize: 13,
+    color: colors.gray600,
     marginTop: 2,
+    textTransform: 'lowercase',
+  },
+  igBioSection: {
+    marginTop: 2,
+    marginBottom: 16,
+    gap: 3,
+  },
+  displayName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.gray900,
+  },
+  nameLevelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  levelBadgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: colors.brand,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 8,
+  },
+  levelBadgePillText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  levelTitleText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.brand,
+  },
+  bioText: {
+    fontSize: 13.5,
+    color: colors.gray800,
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  igTabsRow: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: colors.gray200,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray100,
+    backgroundColor: '#ffffff',
+    marginBottom: 8,
+  },
+  igTabItemActive: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1.5,
+    borderBottomColor: colors.brand,
   },
   actionsRow: {
     flexDirection: 'row',

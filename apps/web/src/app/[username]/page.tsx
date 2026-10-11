@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import Image from 'next/image'
 import type { Metadata } from 'next'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { Lock } from 'lucide-react'
 import PostCard from '@/components/feed/PostCard'
 import PublicProfileHeader from '@/components/profile/PublicProfileHeader'
 import type { PublicProfile, Post } from '@private-voices/shared'
@@ -135,13 +136,11 @@ export default async function ProfilePage({ params }: Props) {
   return (
     <main className="min-h-screen bg-gray-50 pb-12">
       {/* Header Bar */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <div className="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
-          <span className="font-bold text-gray-900">@{profile.username}</span>
-          <div className="flex items-center gap-4 text-xs text-gray-500">
-            <span><strong className="text-gray-900">{profile.postCount}</strong> posts</span>
-            <span><strong className="text-gray-900">{profile.followerCount}</strong> followers</span>
-            <span><strong className="text-gray-900">{profile.followingCount}</strong> following</span>
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-gray-900 text-base">@{profile.username}</span>
+            {profile.isPrivate && <Lock size={14} className="text-gray-400" />}
           </div>
         </div>
       </div>
