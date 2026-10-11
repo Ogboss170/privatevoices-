@@ -7,7 +7,6 @@ import {
   Pause,
   X,
   Volume2,
-  WifiOff,
   FastForward,
   RotateCcw,
   Sparkles
@@ -21,15 +20,13 @@ export function GlobalStickyAudioPlayer(): React.JSX.Element | null {
     currentTime,
     duration,
     playbackRate,
-    isOffline,
     togglePlay,
     seekTo,
     setRate,
     closePlayer,
-    queuedWhispersCount,
   } = useAudioPlayer()
 
-  if (!currentTrack && !isOffline && queuedWhispersCount === 0) {
+  if (!currentTrack) {
     return null
   }
 
@@ -45,21 +42,6 @@ export function GlobalStickyAudioPlayer(): React.JSX.Element | null {
   return (
     <div className="fixed bottom-14 sm:bottom-4 left-1/2 -translate-x-1/2 z-40 w-full max-w-lg px-3 pointer-events-none">
       <div className="pointer-events-auto bg-gray-950/95 backdrop-blur-xl border border-white/10 text-white rounded-2xl shadow-2xl p-3 flex flex-col gap-2 animate-in slide-in-from-bottom duration-200">
-        {/* Offline sync badge if offline or queued items exist */}
-        {isOffline && (
-          <div className="flex items-center justify-between px-2 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 text-[11px] font-semibold border border-amber-500/30">
-            <span className="flex items-center gap-1.5">
-              <WifiOff size={12} />
-              <span>Offline Mode — Audio notes playing from local cache</span>
-            </span>
-            {queuedWhispersCount > 0 && (
-              <span className="bg-amber-500 text-gray-950 px-1.5 py-0.2 rounded-full font-bold text-[10px]">
-                {queuedWhispersCount} queued
-              </span>
-            )}
-          </div>
-        )}
-
         {currentTrack && (
           <>
             {/* Scrubber Progress Bar */}
