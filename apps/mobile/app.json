@@ -15,7 +15,14 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "app.privatevoices"
+      "bundleIdentifier": "app.privatevoices",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Private Voices needs camera access so you can capture and share photos and videos.",
+        "NSMicrophoneUsageDescription": "Private Voices needs microphone access for voice notes and voice calls.",
+        "NSPhotoLibraryUsageDescription": "Private Voices needs photo library access to upload avatars and post attachments.",
+        "UIBackgroundModes": ["fetch", "remote-notification", "audio"]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -23,6 +30,16 @@
         "backgroundColor": "#000000"
       },
       "package": "app.privatevoices",
+      "versionCode": 1,
+      "permissions": [
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
+        "CAMERA",
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ],
       "notification": {
         "icon": "./assets/images/notification-icon.png",
         "color": "#6366f1"
