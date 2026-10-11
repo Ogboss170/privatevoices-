@@ -41,17 +41,20 @@ export default function InviteFriendsPage(): React.JSX.Element {
           setDisplayName(prof.display_name || prof.username)
         }
 
-        // Count users who joined via referral if available
+        // Count users who joined via referral
         try {
-          const { count } = await supabase
+          const { count, error: countErr } = await supabase
             .from('profiles')
-            .select('*', { count: 'exact', head: true })
+            .select('id', { count: 'exact', head: true })
             .eq('referred_by', data.user.id)
-          if (count !== null) {
+
+          if (countErr) {
+            console.warn('Referral count query notice:', countErr.message)
+          } else if (count !== null && count !== undefined) {
             setInviteStats({ invitedCount: count })
           }
-        } catch {
-          // Fallback safe
+        } catch (e) {
+          console.warn('Invite stats exception:', e)
         }
       }
       setLoading(false)
