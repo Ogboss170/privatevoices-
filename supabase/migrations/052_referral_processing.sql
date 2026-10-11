@@ -47,6 +47,26 @@ BEGIN
     VALUES (p_new_user_id, v_inviter_id)
     ON CONFLICT DO NOTHING;
 
+    -- Send notification to inviter that a friend joined with their link
+    INSERT INTO public.notifications (
+      user_id,
+      actor_id,
+      type,
+      title,
+      body,
+      target_url,
+      is_read
+    )
+    VALUES (
+      v_inviter_id,
+      p_new_user_id,
+      'follow'::notification_type,
+      'Friend Joined! 🎉',
+      'A friend just joined Private Voices using your invite link!',
+      '/invite',
+      FALSE
+    );
+
     RETURN jsonb_build_object(
       'success', TRUE,
       'inviter_id', v_inviter_id,
