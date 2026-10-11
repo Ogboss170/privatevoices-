@@ -731,7 +731,7 @@ export default function ChatDrawer({
         ? `🎙️ Voice whisper (${VOICE_FILTERS.find((f) => f.id === selectedVoiceFilter)?.name || 'Modified'})`
         : '🎙️ Voice whisper'
 
-      const { data: newMsg, error } = await supabase
+      let { data: newMsg, error } = await supabase
         .from('messages')
         .insert({
           conversation_id: conversationId,
@@ -746,6 +746,23 @@ export default function ChatDrawer({
         })
         .select('*')
         .single()
+
+      // Graceful schema fallback for voice note insert
+      if (error && (error.code === 'PGRST204' || error.code === '42703' || /column/i.test(error.message))) {
+        console.warn('Retrying voice note insert with standard columns:', error.message)
+        const retry = await supabase
+          .from('messages')
+          .insert({
+            conversation_id: conversationId,
+            sender_id: currentUserId,
+            content: noteContent,
+            audio_url: uploadedUrl,
+          })
+          .select('*')
+          .single()
+        newMsg = retry.data
+        error = retry.error
+      }
 
       if (error) {
         console.error('Failed to send audio message:', error)
