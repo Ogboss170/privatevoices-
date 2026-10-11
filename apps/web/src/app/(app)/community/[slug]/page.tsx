@@ -33,8 +33,19 @@ import {
   BarChart3,
   Activity,
   Zap,
+  Camera,
+  Edit3,
+  Radio,
+  Sparkles,
+  Image as ImageIcon,
+  CheckCircle2,
+  ExternalLink,
+  Crown,
+  Copy,
+  Info,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { compressImage } from '@/lib/media/imageCompression'
 import PostCard from '@/components/feed/PostCard'
 import { CommunityRoleBadge } from '@/components/common/PlatformBadge'
 import type { Post } from '@private-voices/shared'
@@ -63,11 +74,21 @@ export default function CommunityDetailPage(): React.JSX.Element {
   const [isPinned, setIsPinned] = useState(false)
   const [notifEnabled, setNotifEnabled] = useState(true)
 
-  // Edit settings state
+  // Edit settings state (Full Profile & Branding customization)
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false)
+  const [editName, setEditName] = useState('')
   const [editDesc, setEditDesc] = useState('')
+  const [editAvatarUrl, setEditAvatarUrl] = useState('')
   const [editCoverUrl, setEditCoverUrl] = useState('')
+  const [editCategory, setEditCategory] = useState('General')
   const [editPrivacy, setEditPrivacy] = useState<'public' | 'private'>('public')
+  const [editBroadcastMode, setEditBroadcastMode] = useState(false)
+  const [editExternalLink, setEditExternalLink] = useState('')
   const [savingSettings, setSavingSettings] = useState(false)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [uploadingCover, setUploadingCover] = useState(false)
+  const avatarFileInputRef = React.useRef<HTMLInputElement | null>(null)
+  const coverFileInputRef = React.useRef<HTMLInputElement | null>(null)
 
   // Post creation state
   const [newPostContent, setNewPostContent] = useState('')
@@ -104,9 +125,14 @@ export default function CommunityDetailPage(): React.JSX.Element {
     }
 
     setCommunity(comm)
+    setEditName(comm.name || '')
     setEditDesc(comm.description || '')
-    setEditCoverUrl(comm.avatar_url || '')
+    setEditAvatarUrl(comm.avatar_url || '')
+    setEditCoverUrl(comm.cover_url || comm.banner_url || '')
+    setEditCategory(comm.category || 'General')
     setEditPrivacy(comm.privacy || 'public')
+    setEditBroadcastMode(Boolean(comm.broadcast_mode))
+    setEditExternalLink(comm.external_link || '')
 
     // Load custom rules from database if present, else fallback
     const customRules = Array.isArray(comm.rules) && comm.rules.length > 0 ? comm.rules : [
@@ -266,6 +292,127 @@ export default function CommunityDetailPage(): React.JSX.Element {
     }
   }
 
+  // Upload Avatar helper for admin
+  async function handleUploadAvatar(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !community) return
+    setUploadingAvatar(true)
+
+    try {
+      let fileToUpload = file
+      try {
+        fileToUpload = await compressImage(file, { maxWidth: 600, maxHeight: 600, quality: 0.85 })
+      } catch (err) {
+        console.warn('Avatar compression skipped:', err)
+      }
+
+      const fileExt = fileToUpload.name.split('.').pop() || 'jpg'
+      const filePath = `communities/${community.id}/avatar-${Date.now()}.${fileExt}`
+
+      let uploadRes = await supabase.storage
+        .from('post-media')
+        .upload(filePath, fileToUpload, { upsert: true })
+
+      if (uploadRes.error) {
+        uploadRes = await supabase.storage
+          .from('stories')
+          .upload(`chat/${filePath}`, fileToUpload, { upsert: true })
+      }
+
+      if (uploadRes.data) {
+        const bucket = uploadRes.data.path.startsWith('chat/') ? 'stories' : 'post-media'
+        const { data: publicUrlData } = supabase.storage
+          .from(bucket)
+          .getPublicUrl(uploadRes.data.path)
+        setEditAvatarUrl(publicUrlData.publicUrl)
+      }
+    } catch (err: any) {
+      alert(`Avatar upload error: ${err.message}`)
+    } finally {
+      setUploadingAvatar(false)
+    }
+  }
+
+  // Upload Cover Banner helper for admin
+  async function handleUploadCover(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !community) return
+    setUploadingCover(true)
+
+    try {
+      let fileToUpload = file
+      try {
+        fileToUpload = await compressImage(file, { maxWidth: 1920, maxHeight: 1080, quality: 0.85 })
+      } catch (err) {
+        console.warn('Cover compression skipped:', err)
+      }
+
+      const fileExt = fileToUpload.name.split('.').pop() || 'jpg'
+      const filePath = `communities/${community.id}/cover-${Date.now()}.${fileExt}`
+
+      let uploadRes = await supabase.storage
+        .from('post-media')
+        .upload(filePath, fileToUpload, { upsert: true })
+
+      if (uploadRes.error) {
+        uploadRes = await supabase.storage
+          .from('stories')
+          .upload(`chat/${filePath}`, fileToUpload, { upsert: true })
+      }
+
+      if (uploadRes.data) {
+        const bucket = uploadRes.data.path.startsWith('chat/') ? 'stories' : 'post-media'
+        const { data: publicUrlData } = supabase.storage
+          .from(bucket)
+          .getPublicUrl(uploadRes.data.path)
+        setEditCoverUrl(publicUrlData.publicUrl)
+      }
+    } catch (err: any) {
+      alert(`Cover upload error: ${err.message}`)
+    } finally {
+      setUploadingCover(false)
+    }
+  }
+
+  // Admin Profile & Branding Save Function
+  async function handleSaveCommunityProfile(e?: React.FormEvent) {
+    if (e) e.preventDefault()
+    if (!community || !editName.trim()) return
+    setSavingSettings(true)
+
+    try {
+      const updatePayload: Record<string, any> = {
+        name: editName.trim(),
+        description: editDesc.trim(),
+        avatar_url: editAvatarUrl.trim() || null,
+        cover_url: editCoverUrl.trim() || null,
+        banner_url: editCoverUrl.trim() || null,
+        category: editCategory,
+        privacy: editPrivacy,
+        broadcast_mode: editBroadcastMode,
+        external_link: editExternalLink.trim() || null,
+        updated_at: new Date().toISOString(),
+      }
+
+      const { error } = await supabase
+        .from('communities')
+        .update(updatePayload)
+        .eq('id', community.id)
+
+      if (error) {
+        throw error
+      }
+
+      alert('Community profile & branding updated successfully!')
+      setShowEditProfileModal(false)
+      fetchCommunityData()
+    } catch (err: any) {
+      alert(`Failed to update community: ${err.message}`)
+    } finally {
+      setSavingSettings(false)
+    }
+  }
+
   async function handleCreateCommunityPost(e: React.FormEvent) {
     e.preventDefault()
     if (!newPostContent.trim() || !currentUserId || !community) return
@@ -361,48 +508,139 @@ export default function CommunityDetailPage(): React.JSX.Element {
         </div>
       </div>
 
-      {/* Community Header Banner Card */}
-      <div className="card overflow-hidden">
-        <div className="h-44 bg-gradient-to-r from-brand-600 via-indigo-600 to-purple-600 relative">
-          {community.cover_url ? (
-            <img src={community.cover_url} alt={community.name} className="w-full h-full object-cover" />
+      {/* Hidden file inputs for direct admin cover and avatar upload */}
+      <input
+        type="file"
+        ref={avatarFileInputRef}
+        onChange={handleUploadAvatar}
+        accept="image/*"
+        className="hidden"
+      />
+      <input
+        type="file"
+        ref={coverFileInputRef}
+        onChange={handleUploadCover}
+        accept="image/*"
+        className="hidden"
+      />
+
+      {/* Grand Facebook / Telegram Style Community Header Card */}
+      <div className="card overflow-hidden shadow-lg border border-gray-200/80 bg-white">
+        {/* Cover Banner Area */}
+        <div className="h-56 sm:h-64 bg-gradient-to-r from-slate-900 via-indigo-950 to-brand-900 relative group overflow-hidden">
+          {community.cover_url || community.banner_url ? (
+            <img
+              src={community.cover_url || community.banner_url}
+              alt={community.name}
+              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-102"
+            />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-white/30 text-4xl font-black tracking-widest uppercase select-none">
-              {community.name}
+            <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-tr from-brand-900 via-indigo-900 to-purple-900 text-white/30 p-6 text-center">
+              <span className="text-4xl sm:text-5xl font-black tracking-widest uppercase select-none opacity-40">
+                {community.name}
+              </span>
+              <p className="text-xs text-white/50 mt-1 font-mono tracking-wider">
+                c/{community.slug}
+              </p>
+            </div>
+          )}
+
+          {/* Cover gradient overlay for contrast */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent pointer-events-none" />
+
+          {/* Admin Cover Upload Quick Action */}
+          {isOwnerOrMod && (
+            <button
+              onClick={() => coverFileInputRef.current?.click()}
+              disabled={uploadingCover}
+              className="absolute top-4 right-4 px-3.5 py-1.5 rounded-xl bg-black/60 hover:bg-black/80 backdrop-blur-md text-white text-xs font-semibold flex items-center gap-2 border border-white/20 transition-all shadow-md active:scale-95"
+              title="Edit Cover Photo"
+            >
+              <Camera size={14} className="text-white" />
+              <span>{uploadingCover ? 'Uploading Cover…' : 'Edit Cover Photo'}</span>
+            </button>
+          )}
+
+          {/* Broadcast Channel Badge in Top Left */}
+          {community.broadcast_mode && (
+            <div className="absolute top-4 left-4 px-3 py-1 rounded-full bg-indigo-600/90 text-white text-[11px] font-bold backdrop-blur-md flex items-center gap-1.5 shadow-md border border-white/20">
+              <Radio size={12} className="animate-pulse text-indigo-200" />
+              <span>Official Channel</span>
             </div>
           )}
         </div>
 
+        {/* Profile Info, Avatar & Action Controls */}
         <div className="p-6 relative pt-0">
-          <div className="flex items-end justify-between -mt-12 mb-4">
-            <div className="w-24 h-24 rounded-2xl bg-white p-1.5 shadow-lg relative z-10">
-              {community.avatar_url ? (
-                <img src={community.avatar_url} alt={community.name} className="w-full h-full rounded-xl object-cover" />
-              ) : (
-                <div className="w-full h-full rounded-xl bg-brand-100 flex items-center justify-center text-brand-700 font-bold text-3xl">
-                  {community.name.charAt(0).toUpperCase()}
-                </div>
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between -mt-16 sm:-mt-20 mb-5 gap-4">
+            {/* Avatar with Admin Edit Camera Pill */}
+            <div className="relative group/avatar self-start">
+              <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-3xl bg-white p-2 shadow-xl relative z-10 border-4 border-white">
+                {community.avatar_url ? (
+                  <img
+                    src={community.avatar_url}
+                    alt={community.name}
+                    className="w-full h-full rounded-2xl object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-600 flex items-center justify-center text-white font-black text-4xl shadow-inner">
+                    {community.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
+
+              {/* Admin Avatar Upload Overlay Pill */}
+              {isOwnerOrMod && (
+                <button
+                  onClick={() => avatarFileInputRef.current?.click()}
+                  disabled={uploadingAvatar}
+                  className="absolute bottom-2 right-2 z-20 w-8 h-8 rounded-full bg-brand-600 text-white flex items-center justify-center shadow-lg border-2 border-white hover:bg-brand-700 transition-transform active:scale-90"
+                  title="Change Community Avatar"
+                >
+                  <Camera size={14} />
+                </button>
               )}
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* Action Bar (Join, Invite, Admin Edit Profile) */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {isOwnerOrMod && (
+                <button
+                  onClick={() => {
+                    setEditName(community.name || '')
+                    setEditDesc(community.description || '')
+                    setEditAvatarUrl(community.avatar_url || '')
+                    setEditCoverUrl(community.cover_url || community.banner_url || '')
+                    setEditCategory(community.category || 'General')
+                    setEditPrivacy(community.privacy || 'public')
+                    setEditBroadcastMode(Boolean(community.broadcast_mode))
+                    setEditExternalLink(community.external_link || '')
+                    setShowEditProfileModal(true)
+                  }}
+                  className="px-4 py-2.5 bg-gray-900 hover:bg-black text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+                >
+                  <Edit3 size={14} />
+                  <span>Edit Profile</span>
+                </button>
+              )}
+
               <button
                 onClick={handleJoinLeave}
-                className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 ${
+                className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 active:scale-95 ${
                   membershipStatus === 'member'
-                    ? 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
+                    ? 'bg-gray-100 text-gray-800 hover:bg-gray-200 border border-gray-300'
                     : membershipStatus === 'pending'
-                    ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                    ? 'bg-amber-50 text-amber-700 border border-amber-300'
                     : 'bg-brand-600 text-white hover:bg-brand-700 shadow-brand-500/25'
                 }`}
               >
                 {membershipStatus === 'member' ? (
                   <>
                     <Check size={15} />
-                    <span>Joined</span>
+                    <span>Joined Group</span>
                   </>
                 ) : membershipStatus === 'pending' ? (
-                  <span>Requested</span>
+                  <span>Requested to Join</span>
                 ) : (
                   <>
                     <Plus size={15} />
@@ -410,12 +648,13 @@ export default function CommunityDetailPage(): React.JSX.Element {
                   </>
                 )}
               </button>
+
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(window.location.href)
                   alert('Community link copied to clipboard!')
                 }}
-                className="px-4 py-2.5 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl font-bold text-xs transition-colors flex items-center gap-1.5 border border-gray-200"
+                className="px-4 py-2.5 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl font-bold text-xs transition-colors flex items-center gap-1.5 border border-gray-200 shadow-2xs active:scale-95"
                 title="Share Community"
               >
                 <Share2 size={15} />
@@ -424,31 +663,81 @@ export default function CommunityDetailPage(): React.JSX.Element {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <h2 className="text-2xl font-bold text-gray-900">{community.name}</h2>
-              {community.privacy === 'private' ? (
-                <span className="flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
-                  <Lock size={12} />
-                  <span>Private Group</span>
-                </span>
-              ) : (
-                <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                  <Globe size={12} />
-                  <span>Public Group</span>
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-brand-600 font-semibold font-mono">c/{community.slug}</p>
-            {community.description && <p className="text-sm text-gray-700 leading-relaxed">{community.description}</p>}
+          {/* Group Title, Identity & Stats */}
+          <div className="space-y-3">
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">
+                  {community.name}
+                </h2>
 
-            <div className="flex items-center gap-4 text-xs text-gray-500 pt-3 border-t border-gray-100">
-              <span className="flex items-center gap-1">
+                {/* Privacy Badge: Public vs Private (Facebook style) */}
+                {community.privacy === 'private' ? (
+                  <span className="flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-50 px-3 py-0.5 rounded-full border border-amber-200/80 shadow-2xs">
+                    <Lock size={12} className="text-amber-600" />
+                    <span>Private Group</span>
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 px-3 py-0.5 rounded-full border border-emerald-200/80 shadow-2xs">
+                    <Globe size={12} className="text-emerald-600" />
+                    <span>Public Group</span>
+                  </span>
+                )}
+
+                {/* Telegram-style channel pill */}
+                {community.broadcast_mode && (
+                  <span className="flex items-center gap-1 text-[11px] font-bold text-indigo-800 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-200">
+                    <Radio size={11} className="text-indigo-600" />
+                    <span>Broadcast Channel</span>
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 mt-1">
+                <p className="text-xs text-brand-600 font-semibold font-mono">
+                  c/{community.slug}
+                </p>
+                {community.external_link && (
+                  <>
+                    <span className="text-gray-300">•</span>
+                    <a
+                      href={community.external_link.startsWith('http') ? community.external_link : `https://${community.external_link}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1"
+                    >
+                      <ExternalLink size={12} />
+                      <span>{community.external_link.replace(/^https?:\/\//, '')}</span>
+                    </a>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Description / Bio */}
+            {community.description && (
+              <p className="text-sm text-gray-700 leading-relaxed max-w-xl">
+                {community.description}
+              </p>
+            )}
+
+            {/* Facebook/Telegram Style Social Counter Banner */}
+            <div className="flex items-center gap-4 text-xs text-gray-500 pt-3 border-t border-gray-100 flex-wrap">
+              <span className="flex items-center gap-1.5">
                 <Users size={14} className="text-gray-400" />
-                <strong className="text-gray-900">{members.length}</strong> members
+                <strong className="text-gray-900 font-bold">{members.length}</strong>
+                <span>{members.length === 1 ? 'member' : 'members'}</span>
               </span>
               <span>•</span>
-              <span className="capitalize font-medium text-gray-600">{community.category || 'General Topic'}</span>
+              <span className="flex items-center gap-1.5">
+                <FileText size={14} className="text-gray-400" />
+                <strong className="text-gray-900 font-bold">{posts.length}</strong>
+                <span>discussions</span>
+              </span>
+              <span>•</span>
+              <span className="capitalize font-semibold text-gray-700 bg-gray-100 px-2 py-0.5 rounded-md">
+                {community.category || 'General'}
+              </span>
             </div>
           </div>
         </div>
@@ -498,12 +787,25 @@ export default function CommunityDetailPage(): React.JSX.Element {
         <div className="space-y-4">
           {/* Post composer inside community */}
           {membershipStatus === 'member' && (
-            isMuted ? (
-              <div className="card p-4 flex items-center gap-3 bg-amber-50/80 border border-amber-200 text-amber-900 rounded-xl">
-                <VolumeX size={20} className="text-amber-600 flex-shrink-0" />
+              isMuted ? (
+                <div className="card p-4 flex items-center gap-3 bg-amber-50/80 border border-amber-200 text-amber-900 rounded-xl">
+                  <VolumeX size={20} className="text-amber-600 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs font-bold">You are currently muted in this community</p>
+                    <p className="text-[11px] text-amber-700">A community moderator has restricted your posting privileges.</p>
+                  </div>
+                </div>
+              ) : community.broadcast_mode && !isOwnerOrMod ? (
+              <div className="card p-4 flex items-center gap-3 bg-indigo-50/70 border border-indigo-200/80 text-indigo-950 rounded-2xl">
+                <Radio size={19} className="text-indigo-600 flex-shrink-0" />
                 <div>
-                  <p className="text-xs font-bold">You are currently muted in this community</p>
-                  <p className="text-[11px] text-amber-700">A community moderator has restricted your posting privileges.</p>
+                  <p className="text-xs font-bold flex items-center gap-1.5">
+                    <span>Broadcast Channel Mode Active</span>
+                    <span className="text-[10px] bg-indigo-200/70 text-indigo-800 font-extrabold px-1.5 py-0.2 rounded-full">Telegram Style</span>
+                  </p>
+                  <p className="text-[11px] text-indigo-700 mt-0.5">
+                    Only channel admins can broadcast new voices. You can listen, react, and reply to discussions below.
+                  </p>
                 </div>
               </div>
             ) : (
@@ -512,16 +814,26 @@ export default function CommunityDetailPage(): React.JSX.Element {
                   rows={3}
                   value={newPostContent}
                   onChange={(e) => setNewPostContent(e.target.value)}
-                  placeholder={`Share something with @${community.slug}...`}
+                  placeholder={
+                    community.broadcast_mode
+                      ? `Broadcast an official announcement to @${community.slug}...`
+                      : `Share something with @${community.slug}...`
+                  }
                   className="input-field text-sm resize-none"
                 />
-                <div className="flex justify-end">
+                <div className="flex justify-between items-center">
+                  {community.broadcast_mode ? (
+                    <span className="text-[11px] font-bold text-indigo-600 flex items-center gap-1">
+                      <Radio size={12} />
+                      <span>Admin Broadcast</span>
+                    </span>
+                  ) : <div />}
                   <button
                     type="submit"
                     disabled={posting || !newPostContent.trim()}
-                    className="btn-primary text-xs py-2 px-4"
+                    className="btn-primary text-xs py-2 px-4 shadow-sm"
                   >
-                    {posting ? 'Posting...' : 'Post to Community'}
+                    {posting ? 'Posting...' : community.broadcast_mode ? 'Broadcast Voice' : 'Post to Community'}
                   </button>
                 </div>
               </form>
@@ -675,31 +987,36 @@ export default function CommunityDetailPage(): React.JSX.Element {
               <h3 className="font-bold text-gray-900 text-base">Community Settings</h3>
             </div>
 
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault()
-                if (!community) return
-                setSavingSettings(true)
+            <form onSubmit={handleSaveCommunityProfile} className="space-y-4 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                    Community Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="e.g. Lagos Tech Founders, Campus Voices"
+                    className="input-field text-xs font-semibold"
+                  />
+                </div>
 
-                const { error } = await supabase
-                  .from('communities')
-                  .update({
-                    description: editDesc.trim(),
-                    avatar_url: editCoverUrl.trim() || null,
-                    privacy: editPrivacy,
-                  })
-                  .eq('id', community.id)
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                    Category Topic
+                  </label>
+                  <input
+                    type="text"
+                    value={editCategory}
+                    onChange={(e) => setEditCategory(e.target.value)}
+                    placeholder="e.g. Technology, Education, Music, Art"
+                    className="input-field text-xs"
+                  />
+                </div>
+              </div>
 
-                setSavingSettings(false)
-                if (error) {
-                  alert(`Failed to update settings: ${error.message}`)
-                } else {
-                  alert('Community settings updated successfully!')
-                  fetchCommunityData()
-                }
-              }}
-              className="space-y-4 text-sm"
-            >
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">
                   Description & Purpose
@@ -708,44 +1025,124 @@ export default function CommunityDetailPage(): React.JSX.Element {
                   rows={3}
                   value={editDesc}
                   onChange={(e) => setEditDesc(e.target.value)}
-                  placeholder="Describe what this community is about..."
+                  placeholder="Describe what this group is about and what members can discuss..."
                   className="input-field text-xs resize-none"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">
-                  Avatar / Cover Image URL
-                </label>
-                <input
-                  type="text"
-                  value={editCoverUrl}
-                  onChange={(e) => setEditCoverUrl(e.target.value)}
-                  placeholder="https://images.unsplash.com/..."
-                  className="input-field text-xs"
-                />
+              {/* Avatar & Cover Banner Visual Pickers */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3 bg-gray-50 rounded-2xl border border-gray-100">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                    Profile Picture / Avatar
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <div className="w-10 h-10 rounded-xl bg-white border border-gray-200 overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-brand-600">
+                      {editAvatarUrl ? (
+                        <img src={editAvatarUrl} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        editName.charAt(0) || 'C'
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={uploadingAvatar}
+                      onClick={() => avatarFileInputRef.current?.click()}
+                      className="btn-secondary text-xs py-2 px-3 flex-1 flex items-center justify-center gap-1.5"
+                    >
+                      <Camera size={13} />
+                      <span>{uploadingAvatar ? 'Uploading...' : 'Upload Image'}</span>
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={editAvatarUrl}
+                    onChange={(e) => setEditAvatarUrl(e.target.value)}
+                    placeholder="Or paste image URL"
+                    className="input-field text-[11px] mt-1.5"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                    Cover Banner Photo
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <div className="w-16 h-10 rounded-xl bg-slate-900 border border-gray-200 overflow-hidden flex-shrink-0">
+                      {editCoverUrl && (
+                        <img src={editCoverUrl} alt="" className="w-full h-full object-cover" />
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={uploadingCover}
+                      onClick={() => coverFileInputRef.current?.click()}
+                      className="btn-secondary text-xs py-2 px-3 flex-1 flex items-center justify-center gap-1.5"
+                    >
+                      <Camera size={13} />
+                      <span>{uploadingCover ? 'Uploading...' : 'Upload Cover'}</span>
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={editCoverUrl}
+                    onChange={(e) => setEditCoverUrl(e.target.value)}
+                    placeholder="Or paste banner URL"
+                    className="input-field text-[11px] mt-1.5"
+                  />
+                </div>
+              </div>
+
+              {/* Group Type & Telegram Channel Mode */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                    Group Privacy (Facebook style)
+                  </label>
+                  <select
+                    value={editPrivacy}
+                    onChange={(e) => setEditPrivacy(e.target.value as 'public' | 'private')}
+                    className="input-field text-xs w-full"
+                  >
+                    <option value="public">🌐 Public (Anyone can discover & join)</option>
+                    <option value="private">🔒 Private (Members-only discussions, admin approves joins)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                    Posting Mode (Telegram style)
+                  </label>
+                  <select
+                    value={editBroadcastMode ? 'broadcast' : 'discussion'}
+                    onChange={(e) => setEditBroadcastMode(e.target.value === 'broadcast')}
+                    className="input-field text-xs w-full"
+                  >
+                    <option value="discussion">👥 Open Group (All members can post)</option>
+                    <option value="broadcast">📢 Broadcast Channel (Only Admins can post, members react)</option>
+                  </select>
+                </div>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">
-                  Privacy Level
+                  Website or Telegram Link (Optional)
                 </label>
-                <select
-                  value={editPrivacy}
-                  onChange={(e) => setEditPrivacy(e.target.value as 'public' | 'private')}
-                  className="input-field text-xs w-full"
-                >
-                  <option value="public">🌐 Public (Anyone can view and join)</option>
-                  <option value="private">🔒 Private (Members-only, join by request)</option>
-                </select>
+                <input
+                  type="text"
+                  value={editExternalLink}
+                  onChange={(e) => setEditExternalLink(e.target.value)}
+                  placeholder="https://t.me/channel or https://example.com"
+                  className="input-field text-xs"
+                />
               </div>
 
               <button
                 type="submit"
                 disabled={savingSettings}
-                className="btn-primary py-2 px-4 text-xs font-bold w-full"
+                className="btn-primary py-2.5 px-4 text-xs font-bold w-full shadow-sm"
               >
-                {savingSettings ? 'Saving Settings...' : 'Save Community Settings'}
+                {savingSettings ? 'Saving Community Profile...' : 'Save Community Profile & Branding'}
               </button>
             </form>
           </div>
@@ -1248,6 +1645,206 @@ export default function CommunityDetailPage(): React.JSX.Element {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Full Admin Edit Community Profile & Branding Modal */}
+      {showEditProfileModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150 overflow-y-auto"
+          onClick={() => setShowEditProfileModal(false)}
+        >
+          <div
+            className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5 my-8 border border-gray-100 animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center shadow-xs">
+                  <Edit3 size={20} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-gray-900 text-base">
+                    Edit Community Profile
+                  </h3>
+                  <p className="text-[11px] text-gray-500">
+                    Update name, pictures, privacy & channel settings
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEditProfileModal(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCommunityProfile} className="space-y-4 text-xs">
+              {/* Community Name */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Community Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="e.g. Lagos Tech Founders, Campus Voices"
+                  className="input-field text-xs font-bold"
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Description / Bio
+                </label>
+                <textarea
+                  rows={3}
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  placeholder="Tell people what this community is about..."
+                  className="input-field text-xs resize-none"
+                />
+              </div>
+
+              {/* Pictures Preview & Live Uploader */}
+              <div className="p-3.5 bg-gray-50 rounded-2xl border border-gray-100 space-y-3">
+                <span className="text-[11px] font-bold text-gray-700 uppercase tracking-wider block">
+                  Community Visuals & Branding
+                </span>
+
+                {/* Avatar Preview */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-brand-100 border border-gray-200 overflow-hidden flex items-center justify-center font-bold text-brand-600 text-base shadow-xs">
+                      {editAvatarUrl ? (
+                        <img src={editAvatarUrl} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        editName.charAt(0) || 'C'
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-900 text-xs">Profile Picture</p>
+                      <p className="text-[10px] text-gray-400">Square icon recommended (500x500)</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={uploadingAvatar}
+                    onClick={() => avatarFileInputRef.current?.click()}
+                    className="btn-secondary text-[11px] py-1.5 px-3 flex items-center gap-1.5 shadow-2xs"
+                  >
+                    <Camera size={13} />
+                    <span>{uploadingAvatar ? 'Uploading...' : 'Change Photo'}</span>
+                  </button>
+                </div>
+
+                {/* Cover Banner Preview */}
+                <div className="space-y-1.5 pt-2 border-t border-gray-200/60">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-gray-900 text-xs">Cover Banner</p>
+                      <p className="text-[10px] text-gray-400">Panoramic banner (1920x1080)</p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={uploadingCover}
+                      onClick={() => coverFileInputRef.current?.click()}
+                      className="btn-secondary text-[11px] py-1.5 px-3 flex items-center gap-1.5 shadow-2xs"
+                    >
+                      <Camera size={13} />
+                      <span>{uploadingCover ? 'Uploading...' : 'Change Cover'}</span>
+                    </button>
+                  </div>
+                  {editCoverUrl && (
+                    <div className="h-20 w-full rounded-xl overflow-hidden border border-gray-200 relative bg-black">
+                      <img src={editCoverUrl} alt="" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Group Type (Facebook Style) & Channel Mode (Telegram Style) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                    Group Privacy
+                  </label>
+                  <select
+                    value={editPrivacy}
+                    onChange={(e) => setEditPrivacy(e.target.value as 'public' | 'private')}
+                    className="input-field text-xs w-full font-medium"
+                  >
+                    <option value="public">🌐 Public (Anyone can view & join)</option>
+                    <option value="private">🔒 Private (Members-only, join by request)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                    Channel Mode
+                  </label>
+                  <select
+                    value={editBroadcastMode ? 'broadcast' : 'discussion'}
+                    onChange={(e) => setEditBroadcastMode(e.target.value === 'broadcast')}
+                    className="input-field text-xs w-full font-medium"
+                  >
+                    <option value="discussion">👥 Open Group (All members can post)</option>
+                    <option value="broadcast">📢 Broadcast Channel (Only Admins post)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Category & Website link */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                    Category Topic
+                  </label>
+                  <input
+                    type="text"
+                    value={editCategory}
+                    onChange={(e) => setEditCategory(e.target.value)}
+                    placeholder="e.g. Technology, Education"
+                    className="input-field text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                    Website or Social Link
+                  </label>
+                  <input
+                    type="text"
+                    value={editExternalLink}
+                    onChange={(e) => setEditExternalLink(e.target.value)}
+                    placeholder="https://t.me/... or https://..."
+                    className="input-field text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setShowEditProfileModal(false)}
+                  className="btn-secondary text-xs py-2 px-4"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingSettings || !editName.trim()}
+                  className="btn-primary text-xs py-2 px-5 font-bold shadow-sm"
+                >
+                  {savingSettings ? 'Saving...' : 'Save Profile'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
