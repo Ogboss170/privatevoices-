@@ -3,11 +3,12 @@
 import React, { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { Lock, UserPlus, UserCheck, MessageSquare, Send } from 'lucide-react'
+import { Lock, UserPlus, UserCheck, MessageSquare, Send, Loader2 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import type { PublicProfile } from '@private-voices/shared'
 import FollowListModal from './FollowListModal'
 import { UserBadgesRow } from '../common/PlatformBadge'
+import ChatDrawer from '@/components/messages/ChatDrawer'
 
 interface PublicProfileHeaderProps {
   profile: PublicProfile
@@ -94,23 +95,84 @@ export default function PublicProfileHeader({
     setIsModalOpen(true)
   }
 
+  const [isStartingChat, setIsStartingChat] = useState(false)
+  const [activeChatConvId, setActiveChatConvId] = useState<string | null>(null)
+
   async function handleStartDM() {
-    if (!currentUserId) {
-      router.push('/login')
-      return
-    }
+    if (isStartingChat) return
+    setIsStartingChat(true)
 
-    const [userA, userB] = currentUserId < profile.id ? [currentUserId, profile.id] : [profile.id, currentUserId]
-    const { data } = await supabase
-      .from('conversations')
-      .upsert({ user_a_id: userA, user_b_id: userB }, { onConflict: 'user_a_id,user_b_id' })
-      .select('id')
-      .maybeSingle()
+    try {
+      let resolvedUserId = currentUserId
+      if (!resolvedUserId) {
+        const { data: authData } = await supabase.auth.getUser()
+        resolvedUserId = authData.user?.id || null
+      }
 
-    if (data) {
-      router.push(`/inbox?c=${data.id}`)
-    } else {
+      if (!resolvedUserId) {
+        router.push('/login')
+        return
+      }
+
+      const [userA, userB] = resolvedUserId < profile.id ? [resolvedUserId, profile.id] : [profile.id, resolvedUserId]
+
+      // 1. Try finding existing conversation
+      const { data: existingConv } = await supabase
+        .from('conversations')
+        .select('id')
+        .eq('user_a_id', userA)
+        .eq('user_b_id', userB)
+        .maybeSingle()
+
+      if (existingConv?.id) {
+        setActiveChatConvId(existingConv.id)
+        return
+      }
+
+      // 2. Insert or upsert new conversation
+      let convId: string | null = null
+      const { data: upsertData, error: upsertErr } = await supabase
+        .from('conversations')
+        .upsert(
+          {
+            user_a_id: userA,
+            user_b_id: userB,
+            last_message: 'Started a new conversation',
+            last_message_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_a_id,user_b_id' }
+        )
+        .select('id')
+        .maybeSingle()
+
+      if (!upsertErr && upsertData?.id) {
+        convId = upsertData.id
+      } else {
+        // Fallback plain insert
+        const { data: insertData } = await supabase
+          .from('conversations')
+          .insert({
+            user_a_id: userA,
+            user_b_id: userB,
+            last_message: 'Started a new conversation',
+            last_message_at: new Date().toISOString(),
+          })
+          .select('id')
+          .maybeSingle()
+        convId = insertData?.id || null
+      }
+
+      if (convId) {
+        setActiveChatConvId(convId)
+      } else {
+        // Fallback navigate to inbox
+        router.push('/inbox')
+      }
+    } catch (err) {
+      console.error('Error starting chat from profile:', err)
       router.push('/inbox')
+    } finally {
+      setIsStartingChat(false)
     }
   }
 
@@ -209,14 +271,39 @@ export default function PublicProfileHeader({
 
             <button
               onClick={handleStartDM}
-              className="btn-secondary flex-1 py-2.5 flex items-center justify-center gap-2"
+              disabled={isStartingChat}
+              className="btn-secondary flex-1 py-2.5 flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              <Send size={15} />
-              <span>Message</span>
+              {isStartingChat ? (
+                <>
+                  <Loader2 size={15} className="animate-spin text-brand-600" />
+                  <span>Opening...</span>
+                </>
+              ) : (
+                <>
+                  <Send size={15} />
+                  <span>Message</span>
+                </>
+              )}
             </button>
           </div>
         )}
       </div>
+
+      {/* Direct In-App Chat Drawer */}
+      {activeChatConvId && (currentUserId || profile.id) && (
+        <ChatDrawer
+          conversationId={activeChatConvId}
+          partner={{
+            id: profile.id,
+            username: profile.username,
+            displayName: profile.displayName,
+            avatarUrl: profile.avatarUrl,
+          }}
+          currentUserId={currentUserId || ''}
+          onClose={() => setActiveChatConvId(null)}
+        />
+      )}
 
       {/* Follow List Modal */}
       <FollowListModal
