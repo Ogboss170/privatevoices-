@@ -205,33 +205,47 @@ function InboxContent(): React.JSX.Element {
   }
 
   const handleStartNewChat = async (targetUser: any) => {
-    if (!currentUserId) return
+    let resolvedUserId = currentUserId
+    if (!resolvedUserId) {
+      const { data: authData } = await supabase.auth.getUser()
+      resolvedUserId = authData.user?.id || null
+    }
+
+    if (!resolvedUserId) {
+      alert('Please log in to start a chat.')
+      return
+    }
+
     setShowNewChatModal(false)
     setSearchQuery('')
     setSearchResults([])
 
-    // Check if conversation already exists between currentUserId and targetUser.id
-    const userA = currentUserId < targetUser.id ? currentUserId : targetUser.id
-    const userB = currentUserId < targetUser.id ? targetUser.id : currentUserId
+    // Check if conversation already exists between resolvedUserId and targetUser.id
+    const userA = resolvedUserId < targetUser.id ? resolvedUserId : targetUser.id
+    const userB = resolvedUserId < targetUser.id ? targetUser.id : resolvedUserId
 
-    const { data: existingConv } = await supabase
-      .from('conversations')
-      .select('*')
-      .eq('user_a_id', userA)
-      .eq('user_b_id', userB)
-      .single()
+    try {
+      // 1. Look for existing conversation (either order)
+      const { data: existingConv } = await supabase
+        .from('conversations')
+        .select('*')
+        .or(`and(user_a_id.eq.${userA},user_b_id.eq.${userB}),and(user_a_id.eq.${userB},user_b_id.eq.${userA})`)
+        .maybeSingle()
 
-    if (existingConv) {
-      setActiveConversation({
-        id: existingConv.id,
-        partner: {
-          id: targetUser.id,
-          username: targetUser.username,
-          displayName: targetUser.display_name,
-          avatarUrl: targetUser.avatar_url,
-        },
-      })
-    } else {
+      if (existingConv) {
+        setActiveConversation({
+          id: existingConv.id,
+          partner: {
+            id: targetUser.id,
+            username: targetUser.username,
+            displayName: targetUser.display_name,
+            avatarUrl: targetUser.avatar_url,
+          },
+        })
+        return
+      }
+
+      // 2. Insert new conversation
       const { data: newConv, error } = await supabase
         .from('conversations')
         .insert({
@@ -241,9 +255,9 @@ function InboxContent(): React.JSX.Element {
           last_message_at: new Date().toISOString(),
         })
         .select()
-        .single()
+        .maybeSingle()
 
-      if (!error && newConv) {
+      if (newConv) {
         setActiveConversation({
           id: newConv.id,
           partner: {
@@ -254,12 +268,50 @@ function InboxContent(): React.JSX.Element {
           },
         })
         fetchInboxData()
+      } else if (error) {
+        console.error('Error creating conversation:', error)
+        // If it was a duplicate key error, fetch it directly
+        const { data: retryConv } = await supabase
+          .from('conversations')
+          .select('*')
+          .or(`and(user_a_id.eq.${userA},user_b_id.eq.${userB}),and(user_a_id.eq.${userB},user_b_id.eq.${userA})`)
+          .maybeSingle()
+
+        if (retryConv) {
+          setActiveConversation({
+            id: retryConv.id,
+            partner: {
+              id: targetUser.id,
+              username: targetUser.username,
+              displayName: targetUser.display_name,
+              avatarUrl: targetUser.avatar_url,
+            },
+          })
+        } else {
+          alert(`Could not start chat: ${error.message}`)
+        }
       }
+    } catch (err: any) {
+      console.error('Failed to start chat:', err)
+      alert(err.message || 'Could not start chat')
     }
   }
 
   const fetchInboxData = useCallback(async () => {
-    if (!currentUserId) return
+    let resolvedUserId = currentUserId
+    if (!resolvedUserId) {
+      const { data: authData } = await supabase.auth.getUser()
+      resolvedUserId = authData.user?.id || null
+      if (resolvedUserId && !currentUserId) {
+        setCurrentUserId(resolvedUserId)
+      }
+    }
+
+    if (!resolvedUserId) {
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -267,21 +319,70 @@ function InboxContent(): React.JSX.Element {
         const { data } = await supabase
           .from('whispers')
           .select('*')
-          .eq('recipient_id', currentUserId)
+          .eq('recipient_id', resolvedUserId)
           .order('created_at', { ascending: false })
 
         setWhispers(data ?? [])
       } else {
         // 1. Fetch conversations where user is user_a or user_b (1-on-1)
-        const { data: directData } = await supabase
+        // Try joined query first
+        let directList: any[] = []
+        const { data: directData, error: directErr } = await supabase
           .from('conversations')
           .select(`
             *,
             user_a:profiles!conversations_user_a_id_fkey(id, username, display_name, avatar_url),
             user_b:profiles!conversations_user_b_id_fkey(id, username, display_name, avatar_url)
           `)
-          .or(`user_a_id.eq.${currentUserId},user_b_id.eq.${currentUserId}`)
+          .or(`user_a_id.eq.${resolvedUserId},user_b_id.eq.${resolvedUserId}`)
           .order('last_message_at', { ascending: false })
+
+        if (!directErr && directData) {
+          directList = directData.filter((c: any) => !c.is_group)
+        } else {
+          console.warn('Direct conversations joined query fallback:', directErr?.message)
+          // Fallback: fetch raw conversations without strict FK join, then manually resolve profiles
+          const { data: rawConvs, error: rawErr } = await supabase
+            .from('conversations')
+            .select('*')
+            .or(`user_a_id.eq.${resolvedUserId},user_b_id.eq.${resolvedUserId}`)
+            .order('last_message_at', { ascending: false })
+
+          if (rawErr) {
+            console.error('Error fetching raw conversations:', rawErr)
+          }
+
+          if (rawConvs && rawConvs.length > 0) {
+            const raw1on1 = rawConvs.filter((c: any) => !c.is_group)
+            const partnerIds = Array.from(
+              new Set(
+                raw1on1.map((c: any) => (c.user_a_id === resolvedUserId ? c.user_b_id : c.user_a_id)).filter(Boolean)
+              )
+            )
+
+            let partnerProfilesMap: Record<string, any> = {}
+            if (partnerIds.length > 0) {
+              const { data: profileRows } = await supabase
+                .from('profiles')
+                .select('id, username, display_name, avatar_url')
+                .in('id', partnerIds)
+
+              for (const p of profileRows || []) {
+                partnerProfilesMap[p.id] = p
+              }
+            }
+
+            directList = raw1on1.map((c: any) => {
+              const isUserA = c.user_a_id === resolvedUserId
+              const partnerProfile = partnerProfilesMap[isUserA ? c.user_b_id : c.user_a_id] || null
+              return {
+                ...c,
+                user_a: isUserA ? null : partnerProfile,
+                user_b: isUserA ? partnerProfile : null,
+              }
+            })
+          }
+        }
 
         // 2. Fetch group conversations user is a member of
         let groupConvs: any[] = []
@@ -289,7 +390,7 @@ function InboxContent(): React.JSX.Element {
           const { data: memberRows } = await supabase
             .from('conversation_members')
             .select('conversation_id')
-            .eq('user_id', currentUserId)
+            .eq('user_id', resolvedUserId)
 
           if (memberRows && memberRows.length > 0) {
             const groupIds = memberRows.map((r: any) => r.conversation_id)
@@ -307,7 +408,6 @@ function InboxContent(): React.JSX.Element {
         }
 
         // Merge and sort all conversations
-        const directList = (directData ?? []).filter((c: any) => !c.is_group)
         const convs = [...groupConvs, ...directList].sort(
           (a, b) => new Date(b.last_message_at || 0).getTime() - new Date(a.last_message_at || 0).getTime()
         )
