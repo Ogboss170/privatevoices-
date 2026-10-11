@@ -663,13 +663,59 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
     }
   }
 
-  function handleImageDoubleTap(e: React.MouseEvent) {
-    e.stopPropagation()
+  const lastTapRef = useRef<number>(0)
+  const [showCopiedToast, setShowCopiedToast] = useState(false)
+
+  function triggerDoubleTapLike(e?: React.SyntheticEvent) {
+    if (e) e.stopPropagation()
     if (!isLiked) {
       handleToggleLike()
     }
+    // Mobile tactile feedback
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate([15, 30, 25])
+      } catch {}
+    }
     setShowHeartAnim(true)
     setTimeout(() => setShowHeartAnim(false), 900)
+  }
+
+  function handleTouchTap(e: React.TouchEvent) {
+    const now = Date.now()
+    const DOUBLE_TAP_DELAY = 320
+    if (lastTapRef.current && now - lastTapRef.current < DOUBLE_TAP_DELAY) {
+      e.preventDefault()
+      triggerDoubleTapLike(e)
+      lastTapRef.current = 0
+    } else {
+      lastTapRef.current = now
+    }
+  }
+
+  async function handleSharePost(e?: React.MouseEvent) {
+    if (e) e.stopPropagation()
+    const postUrl = `${window.location.origin}/post/${post.id}`
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: `Voice by @${post.author.username}`,
+          text: post.content ? post.content.slice(0, 100) : 'Listen to this voice on Private Voices',
+          url: postUrl,
+        })
+        return
+      } catch (err: any) {
+        if (err.name === 'AbortError') return
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(postUrl)
+      setShowCopiedToast(true)
+      setTimeout(() => setShowCopiedToast(false), 2400)
+    } catch {
+      alert('Post link: ' + postUrl)
+    }
   }
 
   return (
@@ -805,9 +851,24 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
         </div>
       )}
 
-      {/* Text-only Content (with clean X-style 'See more' truncation threshold for long posts) */}
+      {/* Text-only Content (with clean X-style 'See more' truncation threshold for long posts and double-tap to like) */}
       {(!post.imageUrls || post.imageUrls.length === 0) && !post.videoUrl && post.content && (
-        <div className="px-3.5 text-gray-900 dark:text-gray-100 text-[15px] sm:text-base leading-relaxed break-words">
+        <div
+          className="relative px-3.5 text-gray-900 dark:text-gray-100 text-[15px] sm:text-base leading-relaxed break-words select-none cursor-pointer"
+          onDoubleClick={triggerDoubleTapLike}
+          onTouchEnd={handleTouchTap}
+        >
+          {/* Floating Pop Heart Animation on Double Tap for Text Posts */}
+          {showHeartAnim && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+              <div className="animate-in zoom-in-50 fade-in duration-200">
+                <Heart
+                  size={80}
+                  className="text-rose-500 fill-rose-500 drop-shadow-[0_8px_24px_rgba(244,63,94,0.5)] animate-bounce"
+                />
+              </div>
+            </div>
+          )}
           {post.content.length > 280 && !isContentExpanded ? (
             <div className="space-y-1">
               <span className="whitespace-pre-line">
@@ -888,7 +949,8 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
             <div
               className="relative w-full aspect-square sm:aspect-[4/5] max-h-[520px] rounded-2xl overflow-hidden bg-black/5 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-800 cursor-pointer group select-none"
               onClick={() => setLightboxIndex(0)}
-              onDoubleClick={handleImageDoubleTap}
+              onDoubleClick={triggerDoubleTapLike}
+              onTouchEnd={handleTouchTap}
             >
               <Image
                 src={post.imageUrls[0]}
@@ -1091,18 +1153,21 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
           </button>
 
           {/* 3. Share / Send (Instagram Paper Plane) */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              navigator.clipboard.writeText(`${window.location.origin}/post/${post.id}`)
-              alert('Post link copied to clipboard!')
-            }}
-            aria-label="Share post"
-            className="p-1 -m-1 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-transform active:scale-90 cursor-pointer"
-          >
-            <Share2 size={22} strokeWidth={1.8} />
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={handleSharePost}
+              aria-label="Share post"
+              className="p-1 -m-1 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-transform active:scale-90 cursor-pointer"
+            >
+              <Share2 size={22} strokeWidth={1.8} />
+            </button>
+            {showCopiedToast && (
+              <span className="absolute -top-7 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-gray-900 text-white text-[10px] rounded-full whitespace-nowrap shadow-md pointer-events-none animate-in fade-in zoom-in-95 duration-150">
+                Link copied!
+              </span>
+            )}
+          </div>
 
           {/* 4. Repost */}
           <button
