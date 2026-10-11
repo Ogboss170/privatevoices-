@@ -1321,14 +1321,14 @@ export default function SettingsScreen() {
 
         <TouchableOpacity
           style={styles.rowItem}
-          onPress={() => router.push('/preview')}
+          onPress={() => router.push('/preview' as any)}
           activeOpacity={0.7}
         >
           <View style={styles.rowLeft}>
             <Sparkles size={18} color="#6366f1" />
             <View>
               <Text style={styles.rowLabel}>App Preview</Text>
-              <Text style={styles.rowSub}>Roadmap, early access & tester tasks</Text>
+              <Text style={styles.rowSubLabel}>Roadmap, early access & tester tasks</Text>
             </View>
           </View>
           <ChevronRight size={18} color={colors.gray400} />
@@ -1336,14 +1336,14 @@ export default function SettingsScreen() {
 
         <TouchableOpacity
           style={styles.rowItem}
-          onPress={() => router.push('/rate')}
+          onPress={() => router.push('/rate' as any)}
           activeOpacity={0.7}
         >
           <View style={styles.rowLeft}>
             <Star size={18} color="#eab308" />
             <View>
               <Text style={styles.rowLabel}>Rate Private Voices</Text>
-              <Text style={styles.rowSub}>Share your experience & feedback</Text>
+              <Text style={styles.rowSubLabel}>Share your experience & feedback</Text>
             </View>
           </View>
           <ChevronRight size={18} color={colors.gray400} />

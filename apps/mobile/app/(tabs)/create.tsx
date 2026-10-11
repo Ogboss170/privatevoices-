@@ -246,7 +246,8 @@ export default function CreateScreen() {
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         {/* Top Header Bar */}
         <View style={styles.header}>
@@ -276,7 +277,13 @@ export default function CreateScreen() {
         </View>
 
         {/* Composer Main Body */}
-        <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
+        <ScrollView
+          style={styles.body}
+          contentContainerStyle={styles.bodyContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          showsVerticalScrollIndicator={false}
+        >
           {/* User Header & Audience Selector */}
           <View style={styles.userInfoRow}>
             <View style={styles.avatarPlaceholder}>

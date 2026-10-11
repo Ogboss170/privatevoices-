@@ -1,6 +1,7 @@
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
+  ScrollView, TouchableWithoutFeedback, Keyboard,
 } from 'react-native'
 import { useState } from 'react'
 import { Link } from 'expo-router'
@@ -14,6 +15,7 @@ export default function LoginScreen() {
 
   async function handleLogin() {
     if (!email || !password) return
+    Keyboard.dismiss()
     setLoading(true)
 
     const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -28,76 +30,90 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
-      <View style={styles.inner}>
-        {/* Logo */}
-        <View style={styles.logoContainer}>
-          <View style={styles.logoCircle}>
-            <Text style={styles.logoEmoji}>💬</Text>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
+          <View style={styles.inner}>
+            {/* Logo */}
+            <View style={styles.logoContainer}>
+              <View style={styles.logoCircle}>
+                <Text style={styles.logoEmoji}>💬</Text>
+              </View>
+              <Text style={styles.appName}>Private Voices</Text>
+              <Text style={styles.tagline}>Speak freely. Stay private.</Text>
+            </View>
+
+            {/* Form */}
+            <View style={styles.form}>
+              <Text style={styles.label}>Email</Text>
+              <TextInput
+                style={styles.input}
+                value={email}
+                onChangeText={setEmail}
+                placeholder="you@example.com"
+                placeholderTextColor="#9ca3af"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoComplete="email"
+                returnKeyType="next"
+              />
+
+              <Text style={styles.label}>Password</Text>
+              <TextInput
+                style={styles.input}
+                value={password}
+                onChangeText={setPassword}
+                placeholder="••••••••"
+                placeholderTextColor="#9ca3af"
+                secureTextEntry
+                autoComplete="password"
+                returnKeyType="done"
+                onSubmitEditing={handleLogin}
+              />
+
+              <View style={styles.forgotPasswordRow}>
+                <Link href={'/(auth)/forgot-password' as any}>
+                  <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+                </Link>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.button, loading && styles.buttonDisabled]}
+                onPress={handleLogin}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.buttonText}>Sign in</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>Don't have an account? </Text>
+              <Link href={'/(auth)/onboarding' as any}>
+                <Text style={styles.link}>Create one</Text>
+              </Link>
+            </View>
           </View>
-          <Text style={styles.appName}>Private Voices</Text>
-          <Text style={styles.tagline}>Speak freely. Stay private.</Text>
-        </View>
-
-        {/* Form */}
-        <View style={styles.form}>
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            placeholder="you@example.com"
-            placeholderTextColor="#9ca3af"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoComplete="email"
-          />
-
-          <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            placeholder="••••••••"
-            placeholderTextColor="#9ca3af"
-            secureTextEntry
-            autoComplete="password"
-          />
-
-          <View style={styles.forgotPasswordRow}>
-            <Link href={'/(auth)/forgot-password' as any}>
-              <Text style={styles.forgotPasswordText}>Forgot password?</Text>
-            </Link>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Sign in</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Don't have an account? </Text>
-          <Link href={'/(auth)/onboarding' as any}>
-            <Text style={styles.link}>Create one</Text>
-          </Link>
-        </View>
-      </View>
+        </ScrollView>
+      </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   )
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f9fafb' },
-  inner: { flex: 1, justifyContent: 'center', paddingHorizontal: 24, paddingBottom: 32 },
+  scrollContent: { flexGrow: 1, justifyContent: 'center' },
+  inner: { paddingHorizontal: 24, paddingVertical: 32 },
   logoContainer: { alignItems: 'center', marginBottom: 40 },
   logoCircle: {
     width: 64, height: 64, borderRadius: 20,

@@ -1277,7 +1277,9 @@ export function ChatModal({
                 })}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.listContent}
-                onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="interactive"
+                onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
                 renderItem={({ item }) => {
                   const isMe = item.sender_id === currentUserId
                   const isTemp = String(item.id).startsWith('temp-')

@@ -9,6 +9,9 @@ import {
   Switch,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native'
 import { X, Lock, Globe, Camera } from 'lucide-react-native'
 import { Image } from 'expo-image'
@@ -130,95 +133,107 @@ export function EditProfileModal({
   }
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.container}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Edit Profile</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <X size={20} color={colors.gray500} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.form}>
-            {/* Avatar Photo Picker */}
-            <View style={styles.avatarPickerContainer}>
-              <TouchableOpacity style={styles.avatarCircle} onPress={handlePickAvatar} activeOpacity={0.8}>
-                {avatarUri ? (
-                  <Image source={{ uri: avatarUri }} style={styles.avatarImg} />
-                ) : (
-                  <Text style={styles.avatarLetter}>{displayName.charAt(0).toUpperCase() || 'U'}</Text>
-                )}
-                <View style={styles.cameraOverlay}>
-                  <Camera size={16} color="#ffffff" />
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handlePickAvatar}>
-                <Text style={styles.changeAvatarText}>Change Profile Photo</Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.keyboardContainer}
+        >
+          <View style={styles.container}>
+            <View style={styles.header}>
+              <Text style={styles.title}>Edit Profile</Text>
+              <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+                <X size={20} color={colors.gray500} />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.label}>Display Name</Text>
-            <TextInput
-              style={styles.input}
-              value={displayName}
-              onChangeText={setDisplayName}
-              placeholder="Your name"
-              placeholderTextColor={colors.gray400}
-            />
-
-            <Text style={styles.label}>Bio</Text>
-            <TextInput
-              style={[styles.input, styles.bioInput]}
-              multiline
-              maxLength={160}
-              value={bio}
-              onChangeText={setBio}
-              placeholder="Tell the world about yourself..."
-              placeholderTextColor={colors.gray400}
-            />
-            <Text style={styles.counter}>{bio.length}/160</Text>
-
-            <View style={styles.privacyRow}>
-              <View style={styles.privacyInfo}>
-                {isPrivate ? (
-                  <Lock size={20} color={colors.brand} />
-                ) : (
-                  <Globe size={20} color={colors.gray500} />
-                )}
-                <View>
-                  <Text style={styles.privacyTitle}>Private Account</Text>
-                  <Text style={styles.privacyDesc}>
-                    Only approved followers can see your posts
-                  </Text>
-                </View>
-              </View>
-              <Switch
-                value={isPrivate}
-                onValueChange={setIsPrivate}
-                trackColor={{ false: colors.gray300, true: colors.brand }}
-              />
-            </View>
-          </View>
-
-          <View style={styles.footer}>
-            <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.saveBtn, loading && styles.disabledBtn]}
-              onPress={handleSave}
-              disabled={loading}
+            <ScrollView
+              style={styles.formScroll}
+              contentContainerStyle={styles.form}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
             >
-              {loading ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <Text style={styles.saveText}>Save</Text>
-              )}
-            </TouchableOpacity>
+              {/* Avatar Photo Picker */}
+              <View style={styles.avatarPickerContainer}>
+                <TouchableOpacity style={styles.avatarCircle} onPress={handlePickAvatar} activeOpacity={0.8}>
+                  {avatarUri ? (
+                    <Image source={{ uri: avatarUri }} style={styles.avatarImg} />
+                  ) : (
+                    <Text style={styles.avatarLetter}>{displayName.charAt(0).toUpperCase() || 'U'}</Text>
+                  )}
+                  <View style={styles.cameraOverlay}>
+                    <Camera size={16} color="#ffffff" />
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handlePickAvatar}>
+                  <Text style={styles.changeAvatarText}>Change Profile Photo</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.label}>Display Name</Text>
+              <TextInput
+                style={styles.input}
+                value={displayName}
+                onChangeText={setDisplayName}
+                placeholder="Your name"
+                placeholderTextColor={colors.gray400}
+                returnKeyType="next"
+              />
+
+              <Text style={styles.label}>Bio</Text>
+              <TextInput
+                style={[styles.input, styles.bioInput]}
+                multiline
+                maxLength={160}
+                value={bio}
+                onChangeText={setBio}
+                placeholder="Tell the world about yourself..."
+                placeholderTextColor={colors.gray400}
+                textAlignVertical="top"
+              />
+              <Text style={styles.counter}>{bio.length}/160</Text>
+
+              <View style={styles.privacyRow}>
+                <View style={styles.privacyInfo}>
+                  {isPrivate ? (
+                    <Lock size={20} color={colors.brand} />
+                  ) : (
+                    <Globe size={20} color={colors.gray500} />
+                  )}
+                  <View>
+                    <Text style={styles.privacyTitle}>Private Account</Text>
+                    <Text style={styles.privacyDesc}>
+                      Only approved followers can see your posts
+                    </Text>
+                  </View>
+                </View>
+                <Switch
+                  value={isPrivate}
+                  onValueChange={setIsPrivate}
+                  trackColor={{ false: colors.gray300, true: colors.brand }}
+                />
+              </View>
+            </ScrollView>
+
+            <View style={styles.footer}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.saveBtn, loading && styles.disabledBtn]}
+                onPress={handleSave}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.saveText}>Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   )
@@ -226,13 +241,16 @@ export function EditProfileModal({
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  keyboardContainer: { width: '100%' },
   container: {
     backgroundColor: '#ffffff',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
     gap: 16,
+    maxHeight: '85%',
   },
+  formScroll: { maxHeight: 380 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

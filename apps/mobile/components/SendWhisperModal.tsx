@@ -8,6 +8,10 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native'
 import { X, Send, Lock } from 'lucide-react-native'
 import { supabase } from '../lib/supabase'
@@ -34,6 +38,7 @@ export function SendWhisperModal({
 
   async function handleSend() {
     if (!content.trim()) return
+    Keyboard.dismiss()
     setLoading(true)
 
     const { error } = await supabase.from('whispers').insert({
@@ -51,90 +56,100 @@ export function SendWhisperModal({
   }
 
   function handleClose() {
+    Keyboard.dismiss()
     setContent('')
     setSent(false)
     onClose()
   }
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
-      <View style={styles.overlay}>
-        <View style={styles.container}>
-          <View style={styles.header}>
-            <View style={styles.headerTitleRow}>
-              <Text style={styles.emoji}>🤫</Text>
-              <View>
-                <Text style={styles.title}>Send Anonymous Whisper</Text>
-                <Text style={styles.subtitle}>To @{recipientUsername}</Text>
-              </View>
-            </View>
-
-            <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
-              <X size={20} color={colors.gray500} />
-            </TouchableOpacity>
-          </View>
-
-          {sent ? (
-            <View style={styles.sentContainer}>
-              <Text style={styles.sentEmoji}>📬</Text>
-              <Text style={styles.sentTitle}>Whisper Sent!</Text>
-              <Text style={styles.sentDesc}>
-                Your message was delivered anonymously. @{recipientUsername} will not see your identity.
-              </Text>
-              <TouchableOpacity style={styles.doneBtn} onPress={handleClose}>
-                <Text style={styles.doneText}>Done</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.form}>
-              <TextInput
-                style={styles.input}
-                multiline
-                maxLength={500}
-                placeholder={`Write something honest or inspiring for ${recipientDisplayName}...`}
-                placeholderTextColor={colors.gray400}
-                value={content}
-                onChangeText={setContent}
-              />
-
-              <View style={styles.metaRow}>
-                <View style={styles.lockInfo}>
-                  <Lock size={12} color={colors.gray400} />
-                  <Text style={styles.lockText}>Your identity is kept completely private</Text>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <View style={styles.overlay}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.keyboardContainer}
+          >
+            <View style={styles.container}>
+              <View style={styles.header}>
+                <View style={styles.headerTitleRow}>
+                  <Text style={styles.emoji}>🤫</Text>
+                  <View>
+                    <Text style={styles.title}>Send Anonymous Whisper</Text>
+                    <Text style={styles.subtitle}>To @{recipientUsername}</Text>
+                  </View>
                 </View>
-                <Text style={styles.counter}>{content.length}/500</Text>
+
+                <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
+                  <X size={20} color={colors.gray500} />
+                </TouchableOpacity>
               </View>
 
-              <View style={styles.footer}>
-                <TouchableOpacity style={styles.cancelBtn} onPress={handleClose}>
-                  <Text style={styles.cancelText}>Cancel</Text>
-                </TouchableOpacity>
+              {sent ? (
+                <View style={styles.sentContainer}>
+                  <Text style={styles.sentEmoji}>📬</Text>
+                  <Text style={styles.sentTitle}>Whisper Sent!</Text>
+                  <Text style={styles.sentDesc}>
+                    Your message was delivered anonymously. @{recipientUsername} will not see your identity.
+                  </Text>
+                  <TouchableOpacity style={styles.doneBtn} onPress={handleClose}>
+                    <Text style={styles.doneText}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.form}>
+                  <TextInput
+                    style={styles.input}
+                    multiline
+                    maxLength={500}
+                    placeholder={`Write something honest or inspiring for ${recipientDisplayName}...`}
+                    placeholderTextColor={colors.gray400}
+                    value={content}
+                    onChangeText={setContent}
+                    textAlignVertical="top"
+                  />
 
-                <TouchableOpacity
-                  style={[styles.sendBtn, (!content.trim() || loading) && styles.disabledBtn]}
-                  onPress={handleSend}
-                  disabled={!content.trim() || loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <View style={styles.btnRow}>
-                      <Text style={styles.sendText}>Send</Text>
-                      <Send size={14} color="#fff" />
+                  <View style={styles.metaRow}>
+                    <View style={styles.lockInfo}>
+                      <Lock size={12} color={colors.gray400} />
+                      <Text style={styles.lockText}>Your identity is kept completely private</Text>
                     </View>
-                  )}
-                </TouchableOpacity>
-              </View>
+                    <Text style={styles.counter}>{content.length}/500</Text>
+                  </View>
+
+                  <View style={styles.footer}>
+                    <TouchableOpacity style={styles.cancelBtn} onPress={handleClose}>
+                      <Text style={styles.cancelText}>Cancel</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.sendBtn, (!content.trim() || loading) && styles.disabledBtn]}
+                      onPress={handleSend}
+                      disabled={!content.trim() || loading}
+                    >
+                      {loading ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <View style={styles.btnRow}>
+                          <Text style={styles.sendText}>Send</Text>
+                          <Send size={14} color="#fff" />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
             </View>
-          )}
+          </KeyboardAvoidingView>
         </View>
-      </View>
+      </TouchableWithoutFeedback>
     </Modal>
   )
 }
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  keyboardContainer: { width: '100%' },
   container: {
     backgroundColor: '#ffffff',
     borderTopLeftRadius: 24,
