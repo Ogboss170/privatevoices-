@@ -1174,7 +1174,7 @@ export default function ChatDrawer({
         }
       }
 
-      const { data: newMsg, error } = await supabase
+      let { data: newMsg, error } = await supabase
         .from('messages')
         .insert({
           conversation_id: conversationId,
@@ -1195,6 +1195,24 @@ export default function ChatDrawer({
         })
         .select('*')
         .single()
+
+      // Fallback: database missing newer columns -> send with base schema
+      if (error && (error.code === 'PGRST204' || error.code === '42703' || /column/i.test(error.message))) {
+        console.warn('Retrying message insert with base columns:', error.message)
+        isE2ee = false
+        const retry = await supabase
+          .from('messages')
+          .insert({
+            conversation_id: conversationId,
+            sender_id: currentUserId,
+            content: messageContent,
+            image_url: uploadedImgUrl,
+          })
+          .select('*')
+          .single()
+        newMsg = retry.data
+        error = retry.error
+      }
 
       if (error) {
         console.error('Failed to send message:', error)
