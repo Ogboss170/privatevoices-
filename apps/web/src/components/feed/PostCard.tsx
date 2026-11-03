@@ -567,18 +567,40 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
       return
     }
 
-    const { data: newComment, error } = await supabase
+    let commentPayload: any = {
+      post_id: post.id,
+      author_id: userRes.user.id,
+      content: commentText.trim(),
+      parent_id: replyToComment?.id || null,
+    }
+
+    if (isMaskedComment) {
+      commentPayload.is_masked = true
+      commentPayload.masked_persona = 'Masked Voice'
+    }
+
+    let { data: newComment, error } = await supabase
       .from('comments')
-      .insert({
-        post_id: post.id,
-        author_id: userRes.user.id,
-        content: commentText.trim(),
-        parent_id: replyToComment?.id || null,
-        is_masked: isMaskedComment,
-        masked_persona: isMaskedComment ? 'Masked Voice' : null,
-      })
+      .insert(commentPayload)
       .select('*, author:profiles!comments_author_id_fkey(id, username, display_name, avatar_url)')
       .maybeSingle()
+
+    // Resilient fallback if schema cache is pending
+    if (error && /is_masked|masked_persona/i.test(error.message)) {
+      const fallbackComment = {
+        post_id: post.id,
+        author_id: userRes.user.id,
+        content: isMaskedComment ? `🎭 [Masked Voice]: ${commentText.trim()}` : commentText.trim(),
+        parent_id: replyToComment?.id || null,
+      }
+      const retry = await supabase
+        .from('comments')
+        .insert(fallbackComment)
+        .select('*, author:profiles!comments_author_id_fkey(id, username, display_name, avatar_url)')
+        .maybeSingle()
+      newComment = retry.data
+      error = retry.error
+    }
 
     if (error) {
       alert(`Could not post comment: ${error.message}`)

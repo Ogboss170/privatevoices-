@@ -262,17 +262,38 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
       finalContent = `${finalContent}\n\n${uploadedVideoUrl}`
     }
 
-    const { data: newPost, error: postError } = await supabase
+    let insertPayload: any = {
+      author_id: user.user.id,
+      content: finalContent,
+      image_urls: uploadedUrls,
+    }
+
+    if (isMasked) {
+      insertPayload.is_masked = true
+      insertPayload.masked_persona = maskedPersona
+    }
+
+    let { data: newPost, error: postError } = await supabase
       .from('posts')
-      .insert({
-        author_id: user.user.id,
-        content: finalContent,
-        image_urls: uploadedUrls,
-        is_masked: isMasked,
-        masked_persona: isMasked ? maskedPersona : null,
-      })
+      .insert(insertPayload)
       .select('id')
       .single()
+
+    // Resilient fallback: if Supabase PostgREST schema cache has not yet reloaded the new columns
+    if (postError && /is_masked|masked_persona/i.test(postError.message)) {
+      const fallbackPayload = {
+        author_id: user.user.id,
+        content: isMasked ? `🎭 [Masked Voice: ${maskedPersona}]\n${finalContent}` : finalContent,
+        image_urls: uploadedUrls,
+      }
+      const retry = await supabase
+        .from('posts')
+        .insert(fallbackPayload)
+        .select('id')
+        .single()
+      newPost = retry.data
+      postError = retry.error
+    }
 
     if (postError) {
       setError(postError.message)

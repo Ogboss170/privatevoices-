@@ -211,31 +211,55 @@ function CreatePostContent(): React.JSX.Element {
       return
     }
 
+    let insertPayload: any = {
+      author_id: userRes.user.id,
+      content: finalContent || 'Voice attachment',
+      image_urls: uploadedUrls,
+      moderation_status: evalResult.action,
+      is_sensitive: evalResult.isSensitive || false,
+    }
+
+    if (isMasked) {
+      insertPayload.is_masked = true
+      insertPayload.masked_persona = maskedPersona
+    }
+
     let { data: newPost, error } = await supabase
       .from('posts')
-      .insert({
-        author_id: userRes.user.id,
-        content: finalContent || 'Voice attachment',
-        image_urls: uploadedUrls,
-        moderation_status: evalResult.action,
-        is_sensitive: evalResult.isSensitive || false,
-        is_masked: isMasked,
-        masked_persona: isMasked ? maskedPersona : null,
-      })
+      .insert(insertPayload)
       .select('id')
       .single()
 
-    // Fallback: moderation columns may not exist yet (migration 016 not applied)
+    // Fallback 1: moderation columns may not exist yet
     if (error && /moderation_status|is_sensitive/i.test(error.message)) {
+      const retryPayload: any = {
+        author_id: userRes.user.id,
+        content: finalContent || 'Voice attachment',
+        image_urls: uploadedUrls,
+      }
+      if (isMasked) {
+        retryPayload.is_masked = true
+        retryPayload.masked_persona = maskedPersona
+      }
       const retry = await supabase
         .from('posts')
-        .insert({
-          author_id: userRes.user.id,
-          content: finalContent || 'Voice attachment',
-          image_urls: uploadedUrls,
-          is_masked: isMasked,
-          masked_persona: isMasked ? maskedPersona : null,
-        })
+        .insert(retryPayload)
+        .select('id')
+        .single()
+      newPost = retry.data
+      error = retry.error
+    }
+
+    // Fallback 2: if Supabase schema cache hasn't reloaded migration 053 yet
+    if (error && /is_masked|masked_persona/i.test(error.message)) {
+      const basicPayload = {
+        author_id: userRes.user.id,
+        content: isMasked ? `🎭 [Masked Voice: ${maskedPersona}]\n${finalContent}` : (finalContent || 'Voice attachment'),
+        image_urls: uploadedUrls,
+      }
+      const retry = await supabase
+        .from('posts')
+        .insert(basicPayload)
         .select('id')
         .single()
       newPost = retry.data
