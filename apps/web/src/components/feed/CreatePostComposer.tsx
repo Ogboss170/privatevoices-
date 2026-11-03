@@ -2,7 +2,7 @@
 
 import React, { useState, useRef } from 'react'
 import Image from 'next/image'
-import { Image as ImageIcon, Send, X, BarChart2, Plus, Trash2, Mic, Film, Square } from 'lucide-react'
+import { Image as ImageIcon, Send, X, BarChart2, Plus, Trash2, Mic, Film, Square, EyeOff, Sparkles } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import MentionAutocomplete from '../common/MentionAutocomplete'
 import { compressImage } from '@/lib/media/imageCompression'
@@ -35,6 +35,8 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
   const [showPollCreator, setShowPollCreator] = useState(false)
   const [pollQuestion, setPollQuestion] = useState('')
   const [pollOptions, setPollOptions] = useState(['', ''])
+  const [isMasked, setIsMasked] = useState(false)
+  const [maskedPersona, setMaskedPersona] = useState('Thoughtful Owl')
 
   const mentionMatch = content.match(/(?:^|\s)@([a-zA-Z0-9_]*)$/)
   const mentionQuery = mentionMatch ? mentionMatch[1] : null
@@ -266,6 +268,8 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
         author_id: user.user.id,
         content: finalContent,
         image_urls: uploadedUrls,
+        is_masked: isMasked,
+        masked_persona: isMasked ? maskedPersona : null,
       })
       .select('id')
       .single()
@@ -411,6 +415,37 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
           </div>
         )}
 
+        {/* Masked Voice Persona Selector Banner */}
+        {isMasked && (
+          <div className="p-3 rounded-2xl bg-gradient-to-r from-purple-50 via-slate-50 to-brand-50/50 dark:from-purple-950/40 dark:via-slate-800 dark:to-slate-800/60 border border-purple-200 dark:border-purple-800/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full bg-purple-600 text-white flex items-center justify-center shrink-0">
+                <EyeOff size={14} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-purple-900 dark:text-purple-200">
+                  Posting as Masked Voice
+                </p>
+                <p className="text-[11px] text-purple-700/80 dark:text-purple-300/70">
+                  Your identity and profile will remain hidden from other members.
+                </p>
+              </div>
+            </div>
+
+            <select
+              value={maskedPersona}
+              onChange={(e) => setMaskedPersona(e.target.value)}
+              className="text-xs bg-white dark:bg-slate-900 border border-purple-200 dark:border-purple-800/80 rounded-lg px-2.5 py-1 text-purple-900 dark:text-purple-100 font-semibold focus:outline-none cursor-pointer"
+            >
+              <option value="Thoughtful Owl">🦉 Thoughtful Owl</option>
+              <option value="Quiet Thinker">🌙 Quiet Thinker</option>
+              <option value="Curious Fox">🦊 Curious Fox</option>
+              <option value="Gentle Breeze">🍃 Gentle Breeze</option>
+              <option value="Masked Voice">🎭 Masked Voice</option>
+            </select>
+          </div>
+        )}
+
         {/* Image preview strip */}
         {previewUrls.length > 0 && (
           <div className="flex gap-2 overflow-x-auto pb-1">
@@ -551,6 +586,21 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
               title="Create Poll"
             >
               <BarChart2 size={18} />
+            </button>
+
+            {/* Masked Voices Toggle (Speak Anonymously) */}
+            <button
+              type="button"
+              onClick={() => setIsMasked(!isMasked)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                isMasked
+                  ? 'bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 ring-1 ring-purple-400/50'
+                  : 'text-gray-500 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-slate-800'
+              }`}
+              title="Speak with Mask (Hide your identity from other members)"
+            >
+              <EyeOff size={15} className={isMasked ? 'text-purple-600 dark:text-purple-400' : ''} />
+              <span>{isMasked ? 'Masked' : 'Mask'}</span>
             </button>
 
             {imageFiles.length > 0 && (

@@ -31,6 +31,7 @@ import {
   TrendingUp,
   Pin,
   Sparkles,
+  EyeOff,
 } from 'lucide-react-native'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
@@ -760,44 +761,63 @@ export function MobilePostCard({ post, currentUserId, communityRole, onDelete, o
     <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.authorGroup}
-          onPress={() => onPressAuthor?.(post.authorId)}
-          activeOpacity={onPressAuthor ? 0.7 : 1}
-          disabled={!onPressAuthor}
-        >
-          <View style={styles.avatarCircle}>
-            {post.author.avatarUrl ? (
-              <Image source={{ uri: getOptimizedImageUrl(post.author.avatarUrl, 'avatar-sm') }} style={styles.avatarImg} />
-            ) : (
-              <Text style={styles.avatarInitial}>
-                {post.author.displayName.charAt(0).toUpperCase()}
-              </Text>
-            )}
+        {post.isMasked ? (
+          <View style={styles.authorGroup}>
+            <View style={[styles.avatarCircle, { backgroundColor: '#581c87' }]}>
+              <EyeOff size={20} color="#e9d5ff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <Text style={[styles.displayName, { color: themeColors.textPrimary }]}>
+                  {post.maskedPersona || 'Masked Voice'}
+                </Text>
+                <View style={{ backgroundColor: '#f3e8ff', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#7e22ce' }}>🎭 Masked</Text>
+                </View>
+              </View>
+              <Text style={[styles.username, { color: themeColors.textMuted }]}>Pseudonymous Voice</Text>
+            </View>
           </View>
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <Text style={[styles.displayName, { color: themeColors.textPrimary }]}>{post.author.displayName}</Text>
-              <UserBadgesRow badges={authorBadges} size={14} />
-              {post.communityId && authorCommunityRole && (
-                <CommunityRoleBadge role={authorCommunityRole} size={14} showLabel={false} />
+        ) : (
+          <TouchableOpacity
+            style={styles.authorGroup}
+            onPress={() => onPressAuthor?.(post.authorId)}
+            activeOpacity={onPressAuthor ? 0.7 : 1}
+            disabled={!onPressAuthor}
+          >
+            <View style={styles.avatarCircle}>
+              {post.author.avatarUrl ? (
+                <Image source={{ uri: getOptimizedImageUrl(post.author.avatarUrl, 'avatar-sm') }} style={styles.avatarImg} />
+              ) : (
+                <Text style={styles.avatarInitial}>
+                  {post.author.displayName.charAt(0).toUpperCase()}
+                </Text>
               )}
             </View>
-            <Text style={[styles.username, { color: themeColors.textMuted }]}>@{post.author.username}</Text>
-            {post.community && (
-              <TouchableOpacity
-                onPress={() => router.push(`/community/${post.community?.slug}` as any)}
-                activeOpacity={0.7}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2 }}
-              >
-                <Text style={{ fontSize: 11 }}>📌</Text>
-                <Text style={{ fontSize: 11, fontWeight: '600', color: colors.brand }}>
-                  {post.community.name}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <Text style={[styles.displayName, { color: themeColors.textPrimary }]}>{post.author.displayName}</Text>
+                <UserBadgesRow badges={authorBadges} size={14} />
+                {post.communityId && authorCommunityRole && (
+                  <CommunityRoleBadge role={authorCommunityRole} size={14} showLabel={false} />
+                )}
+              </View>
+              <Text style={[styles.username, { color: themeColors.textMuted }]}>@{post.author.username}</Text>
+              {post.community && (
+                <TouchableOpacity
+                  onPress={() => router.push(`/community/${post.community?.slug}` as any)}
+                  activeOpacity={0.7}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2 }}
+                >
+                  <Text style={{ fontSize: 11 }}>📌</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: colors.brand }}>
+                    {post.community.name}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity onPress={handleOpenOptionsMenu} style={styles.deleteBtn}>
           <MoreVertical size={20} color="#9ca3af" />

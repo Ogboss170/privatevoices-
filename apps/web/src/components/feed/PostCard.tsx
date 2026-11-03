@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Heart, MessageCircle, Repeat, Bookmark, Share2, Trash2, MoreVertical, Flag, ShieldOff, ChevronLeft, ChevronRight, X, TrendingUp, BarChart2, Pin, Mic, Film, Sparkles, Radio } from 'lucide-react'
+import { Heart, MessageCircle, Repeat, Bookmark, Share2, Trash2, MoreVertical, Flag, ShieldOff, ChevronLeft, ChevronRight, X, TrendingUp, BarChart2, Pin, Mic, Film, Sparkles, Radio, EyeOff } from 'lucide-react'
 import type { Post } from '@private-voices/shared'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import FormattedText from '../common/FormattedText'
@@ -107,6 +107,7 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
   const [commentText, setCommentText] = useState('')
   const [loadingComments, setLoadingComments] = useState(false)
   const [submittingComment, setSubmittingComment] = useState(false)
+  const [isMaskedComment, setIsMaskedComment] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [showInsightsModal, setShowInsightsModal] = useState(false)
@@ -573,6 +574,8 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
         author_id: userRes.user.id,
         content: commentText.trim(),
         parent_id: replyToComment?.id || null,
+        is_masked: isMaskedComment,
+        masked_persona: isMaskedComment ? 'Masked Voice' : null,
       })
       .select('*, author:profiles!comments_author_id_fkey(id, username, display_name, avatar_url)')
       .maybeSingle()
@@ -725,53 +728,82 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
     >
       {/* ── 1. Post Author Header ── */}
       <div className="flex items-center justify-between px-4 pt-3.5 pb-2">
-        <Link href={`/@${post.author.username}`} className="flex items-center gap-3 group min-w-0">
-          {/* Private Voices Avatar Ring */}
-          <div className="relative p-[1.5px] rounded-full bg-gradient-to-tr from-brand-400/80 via-purple-500/80 to-amber-300/80 shrink-0 group-hover:scale-105 transition-transform shadow-xs">
-            <div className="w-9 h-9 rounded-full bg-white dark:bg-slate-900 p-0.5">
-              <div className="w-full h-full rounded-full bg-brand-100 dark:bg-slate-800 flex items-center justify-center font-bold text-xs text-brand-600 overflow-hidden">
-                {post.author.avatarUrl ? (
-                  <Image
-                    src={post.author.avatarUrl}
-                    alt={post.author.displayName}
-                    width={36}
-                    height={36}
-                    className="rounded-full object-cover"
-                  />
-                ) : (
-                  post.author.displayName.charAt(0).toUpperCase()
-                )}
+        {post.isMasked ? (
+          <div className="flex items-center gap-3 min-w-0 select-none">
+            {/* Mask Avatar */}
+            <div className="relative p-[1.5px] rounded-full bg-gradient-to-tr from-purple-500 via-indigo-600 to-slate-700 shrink-0 shadow-xs">
+              <div className="w-9 h-9 rounded-full bg-slate-900 text-purple-300 flex items-center justify-center">
+                <EyeOff size={18} />
+              </div>
+            </div>
+
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <h3 className="font-bold text-xs text-purple-900 dark:text-purple-200 truncate">
+                  {post.maskedPersona || 'Masked Voice'}
+                </h3>
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300">
+                  🎭 Masked
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
+                <span>Pseudonymous Voice</span>
+                <span>•</span>
+                <span>
+                  {new Date(post.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                </span>
               </div>
             </div>
           </div>
+        ) : (
+          <Link href={`/@${post.author.username}`} className="flex items-center gap-3 group min-w-0">
+            {/* Private Voices Avatar Ring */}
+            <div className="relative p-[1.5px] rounded-full bg-gradient-to-tr from-brand-400/80 via-purple-500/80 to-amber-300/80 shrink-0 group-hover:scale-105 transition-transform shadow-xs">
+              <div className="w-9 h-9 rounded-full bg-white dark:bg-slate-900 p-0.5">
+                <div className="w-full h-full rounded-full bg-brand-100 dark:bg-slate-800 flex items-center justify-center font-bold text-xs text-brand-600 overflow-hidden">
+                  {post.author.avatarUrl ? (
+                    <Image
+                      src={post.author.avatarUrl}
+                      alt={post.author.displayName}
+                      width={36}
+                      height={36}
+                      className="rounded-full object-cover"
+                    />
+                  ) : (
+                    post.author.displayName.charAt(0).toUpperCase()
+                  )}
+                </div>
+              </div>
+            </div>
 
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <h3 className="font-bold text-xs text-gray-900 dark:text-gray-100 group-hover:text-brand-600 transition-colors truncate">
-                {post.author.displayName}
-              </h3>
-              <UserBadgesRow badges={authorBadges} size={13} />
-              {authorCommunityRole && <CommunityRoleBadge role={authorCommunityRole} size={12} />}
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <h3 className="font-bold text-xs text-gray-900 dark:text-gray-100 group-hover:text-brand-600 transition-colors truncate">
+                  {post.author.displayName}
+                </h3>
+                <UserBadgesRow badges={authorBadges} size={13} />
+                {authorCommunityRole && <CommunityRoleBadge role={authorCommunityRole} size={12} />}
+              </div>
+              <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
+                <span className="font-mono">@{post.author.username}</span>
+                <span>•</span>
+                <span>
+                  {new Date(post.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                </span>
+              </div>
+              {post.community && (
+                <Link
+                  href={`/community/${post.community.slug}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-brand-600 hover:underline mt-0.5"
+                >
+                  <span>📌</span>
+                  <span>{post.community.name}</span>
+                </Link>
+              )}
             </div>
-            <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
-              <span className="font-mono">@{post.author.username}</span>
-              <span>•</span>
-              <span>
-                {new Date(post.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-              </span>
-            </div>
-            {post.community && (
-              <Link
-                href={`/community/${post.community.slug}`}
-                onClick={(e) => e.stopPropagation()}
-                className="inline-flex items-center gap-1 text-[10px] font-semibold text-brand-600 hover:underline mt-0.5"
-              >
-                <span>📌</span>
-                <span>{post.community.name}</span>
-              </Link>
-            )}
-          </div>
-        </Link>
+          </Link>
+        )}
 
         <div className="flex items-center gap-2 relative">
           <span className="text-xs text-gray-400">
@@ -1286,22 +1318,43 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
               visible={isMentioning}
               onSelect={handleSelectMention}
             />
-            <form onSubmit={handleAddComment} className="flex gap-2">
-              <input
-                type="text"
-                placeholder={replyToComment ? `Replying to @${replyToComment.username}…` : "Write a comment… (use @ to mention)"}
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                className="input-field text-xs py-2 flex-1"
-                autoFocus={!!replyToComment}
-              />
-              <button
-                type="submit"
-                disabled={submittingComment || !commentText.trim()}
-                className="btn-primary text-xs py-2 px-3"
-              >
-                {replyToComment ? 'Reply' : 'Post'}
-              </button>
+            <form onSubmit={handleAddComment} className="space-y-1.5">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder={
+                    replyToComment
+                      ? `Replying to @${replyToComment.username}…`
+                      : isMaskedComment
+                      ? "Write a thought anonymously as Masked Voice…"
+                      : "Write a thought… (use @ to mention)"
+                  }
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  className="input-field text-xs py-2 flex-1"
+                  autoFocus={!!replyToComment}
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsMaskedComment(!isMaskedComment)}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
+                    isMaskedComment
+                      ? 'bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 ring-1 ring-purple-400/50'
+                      : 'text-gray-500 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-slate-800'
+                  }`}
+                  title="Comment as Masked Voice"
+                >
+                  <EyeOff size={14} />
+                  <span className="hidden sm:inline">{isMaskedComment ? 'Masked' : 'Mask'}</span>
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingComment || !commentText.trim()}
+                  className="btn-primary text-xs py-2 px-3"
+                >
+                  {replyToComment ? 'Reply' : 'Post'}
+                </button>
+              </div>
             </form>
           </div>
 
@@ -1359,13 +1412,20 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
                       <div className="bg-gray-50 dark:bg-slate-800/60 p-2.5 rounded-lg space-y-1">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex gap-2 text-xs flex-1">
-                            <Link
-                              href={`/@${comment.author?.username || 'user'}`}
-                              className="font-semibold text-gray-900 dark:text-gray-100 hover:text-brand-600 transition-colors flex-shrink-0"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              @{comment.author?.username || 'user'}
-                            </Link>
+                            {comment.is_masked ? (
+                              <span className="font-semibold text-purple-700 dark:text-purple-300 flex items-center gap-1 flex-shrink-0">
+                                <span>🎭</span>
+                                <span>{comment.masked_persona || 'Masked Voice'}</span>
+                              </span>
+                            ) : (
+                              <Link
+                                href={`/@${comment.author?.username || 'user'}`}
+                                className="font-semibold text-gray-900 dark:text-gray-100 hover:text-brand-600 transition-colors flex-shrink-0"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                @{comment.author?.username || 'user'}
+                              </Link>
+                            )}
                             <div className="text-gray-700 dark:text-gray-200 flex-1 whitespace-pre-line">
                               <FormattedText text={comment.content} />
                             </div>
@@ -1422,13 +1482,20 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
                               <div key={reply.id} className="bg-purple-50/50 dark:bg-purple-950/20 p-2 rounded-lg space-y-1">
                                 <div className="flex items-start justify-between gap-2 text-xs">
                                   <div className="flex gap-2 flex-1">
-                                    <Link
-                                      href={`/@${reply.author?.username || 'user'}`}
-                                      className="font-semibold text-purple-900 dark:text-purple-300 hover:text-brand-600 transition-colors flex-shrink-0"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      @{reply.author?.username || 'user'}
-                                    </Link>
+                                    {reply.is_masked ? (
+                                      <span className="font-semibold text-purple-700 dark:text-purple-300 flex items-center gap-1 flex-shrink-0">
+                                        <span>🎭</span>
+                                        <span>{reply.masked_persona || 'Masked Voice'}</span>
+                                      </span>
+                                    ) : (
+                                      <Link
+                                        href={`/@${reply.author?.username || 'user'}`}
+                                        className="font-semibold text-purple-900 dark:text-purple-300 hover:text-brand-600 transition-colors flex-shrink-0"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        @{reply.author?.username || 'user'}
+                                      </Link>
+                                    )}
                                     <div className="text-gray-700 dark:text-gray-200 flex-1 whitespace-pre-line">
                                       <FormattedText text={reply.content} />
                                     </div>

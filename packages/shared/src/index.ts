@@ -108,6 +108,8 @@ export interface Post {
   isPinned?: boolean;
   pinnedAt?: string | null;
   pinnedBy?: string | null;
+  isMasked?: boolean;
+  maskedPersona?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -118,6 +120,8 @@ export interface CreatePostDto {
   audioUrl?: string | null;
   audioDuration?: number | null;
   videoUrl?: string | null;
+  isMasked?: boolean;
+  maskedPersona?: string | null;
 }
 
 export interface Comment {
@@ -128,6 +132,8 @@ export interface Comment {
   content: string;
   parentId?: string | null;
   replies?: Comment[];
+  isMasked?: boolean;
+  maskedPersona?: string | null;
   createdAt: string;
   likeCount?: number;
   isLikedByMe?: boolean;
@@ -137,6 +143,8 @@ export interface CreateCommentDto {
   postId: string;
   content: string;
   parentId?: string | null;
+  isMasked?: boolean;
+  maskedPersona?: string | null;
 }
 
 export interface ReportContentDto {
