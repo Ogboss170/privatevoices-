@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import Image from 'next/image'
-import { X, TrendingUp, Heart, MessageCircle, Repeat, Bookmark, Share2, Award, Zap, Clock, Eye, Users, Shield, Lock } from 'lucide-react'
+import { X, TrendingUp, Heart, MessageCircle, Repeat, Bookmark, Share2, Award, Zap, Clock, Eye, Users, Shield, Lock, Sparkles } from 'lucide-react'
 import type { Post } from '@private-voices/shared'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
@@ -198,12 +198,12 @@ export default function PostInsightsModal({ post, currentUserId, onClose }: Post
             </div>
 
             <div className="bg-white p-3.5 rounded-xl border border-gray-200 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center flex-shrink-0">
-                <Heart size={18} />
+              <div className="w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
+                <Sparkles size={18} />
               </div>
               <div>
                 <p className="text-lg font-bold text-gray-900 leading-none">{likeCount}</p>
-                <p className="text-xs text-gray-500 mt-0.5">Likes</p>
+                <p className="text-xs text-gray-500 mt-0.5">Resonated</p>
               </div>
             </div>
 

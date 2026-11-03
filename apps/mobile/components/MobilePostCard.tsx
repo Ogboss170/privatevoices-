@@ -30,6 +30,7 @@ import {
   ChevronRight,
   TrendingUp,
   Pin,
+  Sparkles,
 } from 'lucide-react-native'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
@@ -1001,23 +1002,25 @@ export function MobilePostCard({ post, currentUserId, communityRole, onDelete, o
           </Text>
         </TouchableOpacity>
 
-        {/* 3. Like */}
+        {/* 3. Resonate (Replaces Like) */}
         <TouchableOpacity
-          style={styles.actionBtn}
+          style={[styles.actionBtn, isLiked && styles.resonatedBtn]}
           onPress={handleToggleLike}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           accessibilityRole="button"
-          accessibilityLabel={`Like. ${likeCount} likes`}
+          accessibilityLabel={isLiked ? 'Resonated' : 'Resonate with this thought'}
           accessibilityState={{ selected: isLiked }}
         >
           <Animated.View style={animatedHeartStyle}>
-            <Heart
-              size={18}
-              color={isLiked ? '#ef4444' : colors.gray500}
-              fill={isLiked ? '#ef4444' : 'none'}
+            <Sparkles
+              size={17}
+              color={isLiked ? '#d97706' : colors.gray500}
+              fill={isLiked ? '#fbbf24' : 'none'}
             />
           </Animated.View>
-          <Text style={[styles.actionText, isLiked && styles.likedText]}>{likeCount}</Text>
+          <Text style={[styles.actionText, isLiked && styles.resonatedText]}>
+            {isLiked ? 'Resonated' : 'Resonate'}
+          </Text>
         </TouchableOpacity>
 
         {/* 4. Views: Author can tap to view Analytics & Insights; Public cannot tap (display-only) */}
@@ -1265,10 +1268,11 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   content: {
-    fontSize: 15,
-    color: colors.gray800,
-    lineHeight: 22,
-    marginBottom: 16,
+    fontSize: 16,
+    color: colors.gray900,
+    lineHeight: 24,
+    letterSpacing: -0.2,
+    marginBottom: 14,
   },
   footer: {
     flexDirection: 'row',
@@ -1294,6 +1298,15 @@ const styles = StyleSheet.create({
   likedText: {
     color: '#ef4444',
     fontWeight: '600',
+  },
+  resonatedBtn: {
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderRadius: 16,
+    paddingHorizontal: 8,
+  },
+  resonatedText: {
+    color: '#d97706',
+    fontWeight: '700',
   },
   commentsContainer: {
     marginTop: 12,

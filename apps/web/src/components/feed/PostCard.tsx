@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Heart, MessageCircle, Repeat, Bookmark, Share2, Trash2, MoreVertical, Flag, ShieldOff, ChevronLeft, ChevronRight, X, TrendingUp, BarChart2, Pin, Mic, Film } from 'lucide-react'
+import { Heart, MessageCircle, Repeat, Bookmark, Share2, Trash2, MoreVertical, Flag, ShieldOff, ChevronLeft, ChevronRight, X, TrendingUp, BarChart2, Pin, Mic, Film, Sparkles, Radio } from 'lucide-react'
 import type { Post } from '@private-voices/shared'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import FormattedText from '../common/FormattedText'
@@ -723,11 +723,11 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
       ref={cardRef}
       className="bg-white dark:bg-slate-900 border-y sm:border sm:rounded-3xl border-gray-100 dark:border-slate-800/80 shadow-2xs overflow-hidden transition-colors"
     >
-      {/* ── 1. Instagram-Style Post Author Header ── */}
-      <div className="flex items-center justify-between px-3.5 py-3">
-        <Link href={`/@${post.author.username}`} className="flex items-center gap-2.5 group min-w-0">
-          {/* Instagram Story Gradient Ring around Avatar */}
-          <div className="relative p-[2px] rounded-full bg-gradient-to-tr from-amber-400 via-rose-500 to-purple-600 shrink-0 group-hover:scale-105 transition-transform">
+      {/* ── 1. Post Author Header ── */}
+      <div className="flex items-center justify-between px-4 pt-3.5 pb-2">
+        <Link href={`/@${post.author.username}`} className="flex items-center gap-3 group min-w-0">
+          {/* Private Voices Avatar Ring */}
+          <div className="relative p-[1.5px] rounded-full bg-gradient-to-tr from-brand-400/80 via-purple-500/80 to-amber-300/80 shrink-0 group-hover:scale-105 transition-transform shadow-xs">
             <div className="w-9 h-9 rounded-full bg-white dark:bg-slate-900 p-0.5">
               <div className="w-full h-full rounded-full bg-brand-100 dark:bg-slate-800 flex items-center justify-center font-bold text-xs text-brand-600 overflow-hidden">
                 {post.author.avatarUrl ? (
@@ -851,21 +851,23 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
         </div>
       )}
 
-      {/* Post Content / Caption (rendered above attachments like X & Facebook) */}
+      {/* Post Content / Thought (Thought Card typography) */}
       {post.content && (
         <div
-          className="relative px-3.5 text-gray-900 dark:text-gray-100 text-[15px] sm:text-base leading-relaxed break-words select-none cursor-pointer"
+          className="relative px-4 py-1 text-gray-900 dark:text-gray-100 text-[16px] sm:text-[17px] leading-[1.6] tracking-[-0.01em] break-words select-none cursor-pointer"
           onDoubleClick={triggerDoubleTapLike}
           onTouchEnd={handleTouchTap}
         >
-          {/* Floating Pop Heart Animation on Double Tap for Text Posts */}
+          {/* Floating Pop Sparkles/Resonance Animation on Double Tap */}
           {showHeartAnim && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
               <div className="animate-in zoom-in-50 fade-in duration-200">
-                <Heart
-                  size={80}
-                  className="text-rose-500 fill-rose-500 drop-shadow-[0_8px_24px_rgba(244,63,94,0.5)] animate-bounce"
-                />
+                <div className="p-4 rounded-full bg-amber-500/10 backdrop-blur-xs flex items-center justify-center">
+                  <Sparkles
+                    size={72}
+                    className="text-amber-500 fill-amber-400 drop-shadow-[0_8px_24px_rgba(245,158,11,0.5)] animate-bounce"
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -914,59 +916,67 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
         initialPoll={post.poll}
       />
 
-      {/* Voice Whisper Audio Attachment */}
+      {/* Voice Whisper Audio Hero */}
       {post.audioUrl && (
-        <div className="mt-2.5">
-          <VoiceWaveformPlayer
-            audioUrl={post.audioUrl}
-            duration={post.audioDuration}
-            theme="brand"
-            barCount={22}
-          />
+        <div className="px-3.5 my-2.5">
+          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-50/70 via-purple-50/40 to-brand-50/50 dark:from-slate-800/80 dark:via-purple-950/20 dark:to-slate-800/60 border border-amber-200/50 dark:border-slate-700/60 shadow-xs">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400 mb-2">
+              <Mic size={13} className="text-amber-600 dark:text-amber-400 animate-pulse" />
+              <span>Voice Thought</span>
+            </div>
+            <VoiceWaveformPlayer
+              audioUrl={post.audioUrl}
+              duration={post.audioDuration}
+              theme="brand"
+              barCount={24}
+            />
+          </div>
         </div>
       )}
 
       {/* Video Attachment Preview */}
       {post.videoUrl && (
-        <div className="mt-2.5 relative rounded-2xl overflow-hidden bg-black max-h-[440px] border border-gray-200">
+        <div className="mx-3.5 my-2.5 relative rounded-2xl overflow-hidden bg-black max-h-[360px] border border-gray-200 dark:border-slate-800">
           <video
             src={post.videoUrl}
             controls
             playsInline
-            className="w-full max-h-[440px] object-contain"
+            className="w-full max-h-[360px] object-contain"
           />
           <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-xs text-[10px] text-white flex items-center gap-1 font-semibold pointer-events-none">
             <Film size={12} className="text-purple-400" />
-            <span>Video</span>
+            <span>Video Attachment</span>
           </div>
         </div>
       )}
 
-      {/* Images Grid & Lightbox */}
+      {/* Supporting Images Grid & Lightbox */}
       {post.imageUrls && post.imageUrls.length > 0 && (
-        <div className="mt-2">
+        <div className="px-3.5 my-2">
           {post.imageUrls.length === 1 && (
             <div
-              className="relative w-full aspect-square sm:aspect-[4/5] max-h-[520px] rounded-2xl overflow-hidden bg-black/5 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-800 cursor-pointer group select-none"
+              className="relative w-full aspect-[16/10] sm:aspect-[16/9] max-h-[380px] rounded-2xl overflow-hidden bg-black/5 dark:bg-slate-800/60 border border-gray-200/70 dark:border-slate-800 cursor-pointer group select-none"
               onClick={() => setLightboxIndex(0)}
               onDoubleClick={triggerDoubleTapLike}
               onTouchEnd={handleTouchTap}
             >
               <Image
                 src={post.imageUrls[0]}
-                alt="Voice attachment"
+                alt="Supporting visual"
                 fill
                 className="object-cover group-hover:scale-[1.01] transition-transform duration-200"
               />
 
-              {/* Instagram Floating Pop Heart Animation on Double Tap */}
+              {/* Floating Pop Sparkles on Double Tap for Images */}
               {showHeartAnim && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
                   <div className="animate-in zoom-in-50 fade-in duration-200">
-                    <Heart
-                      size={96}
-                      className="text-white fill-white drop-shadow-[0_8px_24px_rgba(0,0,0,0.5)] animate-bounce"
-                    />
+                    <div className="p-4 rounded-full bg-amber-500/20 backdrop-blur-xs flex items-center justify-center">
+                      <Sparkles
+                        size={80}
+                        className="text-amber-400 fill-amber-300 drop-shadow-[0_8px_24px_rgba(0,0,0,0.6)] animate-bounce"
+                      />
+                    </div>
                   </div>
                 </div>
               )}
@@ -1115,99 +1125,99 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
         </div>
       )}
 
-      {/* ── 2. Instagram Action Row: Like, Comment, Share (left) + Views, Bookmark (right) ── */}
-      <div className="flex items-center justify-between px-3.5 pt-3 pb-2 text-gray-800 dark:text-gray-200 select-none">
+      {/* ── 2. Action Row: Resonate, Comment, Share (left) + Views, Bookmark (right) ── */}
+      <div className="flex items-center justify-between px-4 pt-3 pb-2 text-gray-800 dark:text-gray-200 select-none">
         <div className="flex items-center gap-4">
-          {/* 1. Like (Instagram Heart) */}
+          {/* 1. Resonate (Replaces Instagram Like) */}
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation()
               handleToggleLike()
             }}
-            aria-label={`Like. ${likeCount} likes`}
+            aria-label={isLiked ? 'Resonated' : 'Resonate with this thought'}
             aria-pressed={isLiked}
-            className={`p-1 -m-1 transition-transform active:scale-125 cursor-pointer ${
-              isLiked ? 'text-rose-500' : 'text-gray-800 dark:text-gray-200 hover:text-gray-500'
+            className={`flex items-center gap-1.5 py-1 px-2.5 -ml-1 rounded-full text-xs font-medium transition-all active:scale-95 cursor-pointer ${
+              isLiked
+                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold'
+                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800'
             }`}
           >
-            <Heart
-              size={24}
-              strokeWidth={1.8}
-              fill={isLiked ? 'currentColor' : 'none'}
-              className={isLiked ? 'animate-[bounce_0.3s_ease-in-out_1]' : ''}
+            <Sparkles
+              size={18}
+              strokeWidth={1.9}
+              className={`transition-transform ${isLiked ? 'fill-amber-400 text-amber-500 scale-110' : ''}`}
             />
+            <span>{isLiked ? 'Resonated' : 'Resonate'}</span>
           </button>
 
-          {/* 2. Comment (Instagram Speech Bubble) */}
+          {/* 2. Dialogue / Comments */}
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation()
               handleLoadComments()
             }}
-            aria-label={`Comment. ${commentCount} comments`}
-            className="p-1 -m-1 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-transform active:scale-90 cursor-pointer"
+            aria-label={`Conversation. ${commentCount} thoughts shared`}
+            className="flex items-center gap-1.5 py-1 px-2 rounded-full text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors active:scale-95 cursor-pointer"
           >
-            <MessageCircle size={24} strokeWidth={1.8} className="-scale-x-100" />
+            <MessageCircle size={18} strokeWidth={1.8} className="-scale-x-100" />
+            {commentCount > 0 && <span className="font-semibold">{commentCount}</span>}
           </button>
 
-          {/* 3. Share / Send (Instagram Paper Plane) */}
+          {/* 3. Share Thought */}
           <div className="relative">
             <button
               type="button"
               onClick={handleSharePost}
-              aria-label="Share post"
-              className="p-1 -m-1 text-gray-800 dark:text-gray-200 hover:text-gray-500 transition-transform active:scale-90 cursor-pointer"
+              aria-label="Share thought"
+              className="p-1.5 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-colors active:scale-90 cursor-pointer"
             >
-              <Share2 size={22} strokeWidth={1.8} />
+              <Share2 size={17} strokeWidth={1.8} />
             </button>
             {showCopiedToast && (
-              <span className="absolute -top-7 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-gray-900 text-white text-[10px] rounded-full whitespace-nowrap shadow-md pointer-events-none animate-in fade-in zoom-in-95 duration-150">
-                Link copied!
+              <span className="absolute -top-7 left-1/2 -translate-x-1/2 px-2.5 py-0.5 bg-gray-900 text-white text-[10px] rounded-full whitespace-nowrap shadow-md pointer-events-none animate-in fade-in zoom-in-95 duration-150">
+                Thought link copied!
               </span>
             )}
           </div>
 
-          {/* 4. Repost */}
+          {/* 4. Echo / Repost */}
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation()
               handleToggleRepost()
             }}
-            aria-label={`Repost. ${repostCount} reposts`}
+            aria-label={`Echo thought. ${repostCount} echoes`}
             aria-pressed={isReposted}
-            className={`p-1 -m-1 transition-transform active:rotate-45 cursor-pointer ${
-              isReposted ? 'text-emerald-500' : 'text-gray-800 dark:text-gray-200 hover:text-gray-500'
+            className={`p-1.5 rounded-full transition-colors active:rotate-45 cursor-pointer ${
+              isReposted
+                ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/30'
+                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800'
             }`}
-            title="Repost"
+            title="Echo thought"
           >
-            <Repeat size={21} strokeWidth={1.8} />
+            <Repeat size={17} strokeWidth={1.8} />
           </button>
         </div>
 
-        {/* Right side: Views & Bookmark */}
-        <div className="flex items-center gap-3">
-          {/* Views Analytics */}
-          {isOwner ? (
+        {/* Right side: Views Analytics & Bookmark */}
+        <div className="flex items-center gap-2">
+          {/* Private Analytics for Owner */}
+          {isOwner && (
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation()
                 setShowInsightsModal(true)
               }}
-              title="Post Analytics & Insights"
-              className="flex items-center gap-1 text-xs font-semibold text-brand-600 dark:text-brand-400 hover:opacity-80 transition-opacity cursor-pointer"
+              title="Private Post Analytics"
+              className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/30 transition-colors cursor-pointer"
             >
-              <BarChart2 size={18} strokeWidth={2} />
+              <BarChart2 size={15} strokeWidth={2} />
               <span>{viewCount}</span>
             </button>
-          ) : (
-            <div className="flex items-center gap-1 text-xs text-gray-400">
-              <BarChart2 size={18} strokeWidth={1.8} />
-              <span>{viewCount}</span>
-            </div>
           )}
 
           {/* Bookmark / Save */}
@@ -1217,14 +1227,14 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
               e.stopPropagation()
               handleToggleSave()
             }}
-            aria-label="Bookmark post"
+            aria-label="Save thought"
             aria-pressed={isSaved}
-            className={`p-1 -m-1 transition-transform active:scale-110 cursor-pointer ${
-              isSaved ? 'text-gray-900 dark:text-gray-100' : 'text-gray-800 dark:text-gray-200 hover:text-gray-500'
+            className={`p-1.5 rounded-full transition-colors active:scale-110 cursor-pointer ${
+              isSaved ? 'text-gray-900 dark:text-gray-100' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800'
             }`}
           >
             <Bookmark
-              size={24}
+              size={18}
               strokeWidth={1.8}
               fill={isSaved ? 'currentColor' : 'none'}
             />
@@ -1232,21 +1242,24 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
         </div>
       </div>
 
-      {/* ── 3. Likes & Comments Block ── */}
-      <div className="px-3.5 pb-3 space-y-1 text-xs">
-        {/* Likes Count */}
-        <div className="font-bold text-gray-900 dark:text-gray-100">
-          {likeCount.toLocaleString()} {likeCount === 1 ? 'like' : 'likes'}
-        </div>
+      {/* ── 3. Resonance Indicator & Dialogue Summary ── */}
+      <div className="px-4 pb-3 space-y-1 text-xs">
+        {/* Subtle Resonance state (Zero vanity pressure: never displays public like counts like '1,420 likes') */}
+        {isLiked && (
+          <div className="flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400 font-medium">
+            <Sparkles size={12} className="fill-amber-400 text-amber-500" />
+            <span>This thought resonated with you</span>
+          </div>
+        )}
 
-        {/* View all comments link */}
+        {/* View all comments / dialogue link */}
         {commentCount > 0 && !showComments && (
           <button
             type="button"
             onClick={handleLoadComments}
-            className="text-gray-400 dark:text-gray-500 text-xs hover:text-gray-600 dark:hover:text-gray-300 pt-0.5 block cursor-pointer"
+            className="text-gray-500 dark:text-gray-400 text-xs hover:text-brand-600 dark:hover:text-brand-400 pt-0.5 block cursor-pointer transition-colors"
           >
-            View all {commentCount} comments
+            View conversation ({commentCount} {commentCount === 1 ? 'thought' : 'thoughts'})
           </button>
         )}
       </div>
