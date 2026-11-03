@@ -851,8 +851,8 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
         </div>
       )}
 
-      {/* Text-only Content (with clean X-style 'See more' truncation threshold for long posts and double-tap to like) */}
-      {(!post.imageUrls || post.imageUrls.length === 0) && !post.videoUrl && post.content && (
+      {/* Post Content / Caption (rendered above attachments like X & Facebook) */}
+      {post.content && (
         <div
           className="relative px-3.5 text-gray-900 dark:text-gray-100 text-[15px] sm:text-base leading-relaxed break-words select-none cursor-pointer"
           onDoubleClick={triggerDoubleTapLike}
@@ -1232,59 +1232,12 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
         </div>
       </div>
 
-      {/* ── 3. Instagram Likes & Caption Block ── */}
+      {/* ── 3. Likes & Comments Block ── */}
       <div className="px-3.5 pb-3 space-y-1 text-xs">
         {/* Likes Count */}
         <div className="font-bold text-gray-900 dark:text-gray-100">
           {likeCount.toLocaleString()} {likeCount === 1 ? 'like' : 'likes'}
         </div>
-
-        {/* Caption: Username + Content (with See more truncation for long captions) */}
-        {((post.imageUrls && post.imageUrls.length > 0) || post.videoUrl) && post.content && (
-          <div className="text-gray-800 dark:text-gray-200 text-xs leading-relaxed">
-            <Link
-              href={`/@${post.author.username}`}
-              className="font-bold mr-1.5 text-gray-900 dark:text-gray-100 hover:underline"
-            >
-              {post.author.username}
-            </Link>
-            {post.content.length > 140 && !isContentExpanded ? (
-              <span>
-                <span className="whitespace-pre-line">
-                  <FormattedText text={post.content.slice(0, 120).trim() + '...'} />
-                </span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setIsContentExpanded(true)
-                  }}
-                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 font-semibold ml-1 cursor-pointer"
-                >
-                  more
-                </button>
-              </span>
-            ) : (
-              <span>
-                <span className="whitespace-pre-line">
-                  <FormattedText text={post.content} />
-                </span>
-                {post.content.length > 140 && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setIsContentExpanded(false)
-                    }}
-                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 font-semibold ml-1 cursor-pointer"
-                  >
-                    less
-                  </button>
-                )}
-              </span>
-            )}
-          </div>
-        )}
 
         {/* View all comments link */}
         {commentCount > 0 && !showComments && (
