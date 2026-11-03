@@ -221,6 +221,8 @@ export default function FeedPage() {
               isLikedByMe,
               isSavedByMe,
               isRepostedByMe,
+              isMasked: !!p.is_masked,
+              maskedPersona: p.masked_persona || null,
               createdAt: p.created_at,
               updatedAt: p.updated_at,
             }
