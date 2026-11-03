@@ -14,6 +14,7 @@ import { colors } from '../../constants/colors'
 import { MobilePostCard } from '../../components/MobilePostCard'
 import { HomeHeader } from '../../components/HomeHeader'
 import { StoriesTray } from '../../components/StoriesTray'
+import { MobileThoughtStarter } from '../../components/MobileThoughtStarter'
 import { SkeletonCard } from '../../components/SkeletonCard'
 import { PublicProfileModal } from '../../components/PublicProfileModal'
 import type { Post } from '@private-voices/shared'
@@ -165,6 +166,8 @@ export default function HomeScreen() {
               isLikedByMe,
               isSavedByMe,
               isRepostedByMe,
+              isMasked: !!p.is_masked,
+              maskedPersona: p.masked_persona || null,
               createdAt: p.created_at,
               updatedAt: p.updated_at,
             }
@@ -225,6 +228,9 @@ export default function HomeScreen() {
 
       {/* 24-Hour Stories Tray */}
       <StoriesTray />
+
+      {/* Daily Thought Starter reflection banner */}
+      <MobileThoughtStarter />
 
       {/* Tab filter bar */}
       <View style={[styles.tabRow, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.surfaceBorder, marginBottom: 12 }]}>

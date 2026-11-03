@@ -25,6 +25,7 @@ import {
   Users,
   Lock,
   ChevronDown,
+  EyeOff,
 } from 'lucide-react-native'
 import * as ImagePicker from 'expo-image-picker'
 import { supabase } from '../../lib/supabase'
@@ -52,6 +53,11 @@ export default function CreateScreen() {
   // Poll state
   const [showPollCreator, setShowPollCreator] = useState(false)
   const [pollOptions, setPollOptions] = useState(['', ''])
+
+  // Masked Voice state
+  const [isMasked, setIsMasked] = useState(false)
+  const [maskedPersona, setMaskedPersona] = useState('Thoughtful Owl')
+  const [showPersonaModal, setShowPersonaModal] = useState(false)
 
   const handleCancel = () => {
     if (content.trim() || mediaItems.length > 0 || pollOptions.some((o) => o.trim())) {
@@ -196,15 +202,38 @@ export default function CreateScreen() {
       return
     }
 
-    const { data: newPost, error } = await supabase
+    let insertPayload: any = {
+      author_id: user.user.id,
+      content: finalContent || (uploadedUrls.length > 0 ? 'Voice attachment' : ''),
+      image_urls: uploadedUrls,
+    }
+
+    if (isMasked) {
+      insertPayload.is_masked = true
+      insertPayload.masked_persona = maskedPersona
+    }
+
+    let { data: newPost, error } = await supabase
       .from('posts')
-      .insert({
-        author_id: user.user.id,
-        content: finalContent || (uploadedUrls.length > 0 ? 'Voice attachment' : ''),
-        image_urls: uploadedUrls,
-      })
+      .insert(insertPayload)
       .select('id')
       .single()
+
+    // Resilient fallback if schema cache hasn't reloaded
+    if (error && /is_masked|masked_persona/i.test(error.message)) {
+      const fallbackPayload = {
+        author_id: user.user.id,
+        content: isMasked ? `🎭 [Masked Voice: ${maskedPersona}]\n${finalContent}` : (finalContent || (uploadedUrls.length > 0 ? 'Voice attachment' : '')),
+        image_urls: uploadedUrls,
+      }
+      const retry = await supabase
+        .from('posts')
+        .insert(fallbackPayload)
+        .select('id')
+        .single()
+      newPost = retry.data
+      error = retry.error
+    }
 
     if (!error && newPost && showPollCreator && validPollOptions.length >= 2) {
       const { data: newPoll } = await supabase
@@ -360,6 +389,28 @@ export default function CreateScreen() {
               )}
             </View>
           )}
+
+          {/* Masked Voices Active Banner */}
+          {isMasked && (
+            <View style={styles.maskedBanner}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                <View style={styles.maskIconCircle}>
+                  <EyeOff size={16} color="#ffffff" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.maskedBannerTitle}>Posting as {maskedPersona}</Text>
+                  <Text style={styles.maskedBannerSubtitle}>Your real identity and profile are hidden</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={styles.personaBtn}
+                onPress={() => setShowPersonaModal(true)}
+              >
+                <Text style={styles.personaBtnText}>Change</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </ScrollView>
 
         {/* Bottom Attachment Toolbar & Character Counter */}
@@ -388,6 +439,14 @@ export default function CreateScreen() {
               onPress={() => setShowPollCreator(!showPollCreator)}
             >
               <BarChart2 size={22} color={colors.gray600} />
+            </TouchableOpacity>
+
+            {/* Mask Toggle Button */}
+            <TouchableOpacity
+              style={[styles.toolbarItem, isMasked && styles.maskedToolbarActive]}
+              onPress={() => setIsMasked(!isMasked)}
+            >
+              <EyeOff size={20} color={isMasked ? '#7e22ce' : colors.gray600} />
             </TouchableOpacity>
           </View>
 
@@ -425,6 +484,44 @@ export default function CreateScreen() {
                   >
                     {opt.label}
                   </Text>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+      {/* Masked Persona Selector Modal */}
+      <Modal visible={showPersonaModal} transparent animationType="fade">
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowPersonaModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Choose a Masked Persona</Text>
+            {[
+              { id: 'Thoughtful Owl', label: '🦉 Thoughtful Owl', desc: 'For philosophy & deep reflections' },
+              { id: 'Quiet Thinker', label: '🌙 Quiet Thinker', desc: 'For late-night musings' },
+              { id: 'Curious Fox', label: '🦊 Curious Fox', desc: 'For unconventional questions' },
+              { id: 'Gentle Breeze', label: '🍃 Gentle Breeze', desc: 'For empathy & advice' },
+              { id: 'Masked Voice', label: '🎭 Masked Voice', desc: 'Standard anonymous persona' },
+            ].map((p) => {
+              const isSelected = maskedPersona === p.id
+              return (
+                <TouchableOpacity
+                  key={p.id}
+                  style={[styles.audienceOption, isSelected && styles.audienceOptionSelected]}
+                  onPress={() => {
+                    setMaskedPersona(p.id)
+                    setShowPersonaModal(false)
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.audienceOptionText, isSelected && styles.audienceOptionTextSelected]}>
+                      {p.label}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: colors.gray500, marginTop: 2 }}>{p.desc}</Text>
+                  </View>
                 </TouchableOpacity>
               )
             })}
@@ -668,6 +765,52 @@ const styles = StyleSheet.create({
   audienceOptionTextSelected: {
     color: colors.brand,
     fontWeight: '600',
+  },
+  maskedToolbarActive: {
+    backgroundColor: '#f3e8ff',
+    borderRadius: 8,
+  },
+  maskedBanner: {
+    marginTop: 14,
+    backgroundColor: '#faf5ff',
+    borderWidth: 1,
+    borderColor: '#e9d5ff',
+    borderRadius: 16,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  maskIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#7e22ce',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  maskedBannerTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#581c87',
+  },
+  maskedBannerSubtitle: {
+    fontSize: 11,
+    color: '#7e22ce',
+    marginTop: 1,
+  },
+  personaBtn: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#d8b4fe',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  personaBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#7e22ce',
   },
 })
 
