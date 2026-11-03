@@ -6,6 +6,7 @@ import { Bell, Sparkles, SlidersHorizontal, Plus, Radio } from 'lucide-react'
 import PostCard from '@/components/feed/PostCard'
 import StoriesTray from '@/components/stories/StoriesTray'
 import PeopleYouMayKnow from '@/components/social/PeopleYouMayKnow'
+import DailyThoughtStarter from '@/components/feed/DailyThoughtStarter'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import type { Post, FeedMode } from '@private-voices/shared'
 import { extractPostMediaAndCleanContent } from '@private-voices/shared'
@@ -346,6 +347,9 @@ export default function FeedPage() {
       <div className="py-2.5 px-1 border-b border-gray-100 dark:border-slate-800/80 bg-white/50 dark:bg-slate-900/50">
         <StoriesTray />
       </div>
+
+      {/* ── 4. Daily Thought Starter (Sparking Authentic Perspectives) ── */}
+      <DailyThoughtStarter />
 
       {/* 4. Feed Content */}
       {loading ? (

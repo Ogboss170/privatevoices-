@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import React, { useState, useEffect, useRef, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import {
   X,
@@ -16,6 +16,7 @@ import {
   Plus,
   Trash2,
   Check,
+  EyeOff,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { ModerationService } from '@/lib/moderation/moderation.service'
@@ -30,8 +31,9 @@ const SAMPLE_GIFS = [
 
 const EMOJIS = ['😊', '🤫', '🔥', '❤️', '🙌', '🎉', '💯', '✨', '👀', '💡', '🚀', '😎']
 
-export default function CreatePostPage(): React.JSX.Element {
+function CreatePostContent(): React.JSX.Element {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createSupabaseBrowserClient()
 
   const [profile, setProfile] = useState<any>(null)
@@ -44,11 +46,22 @@ export default function CreatePostPage(): React.JSX.Element {
   const [pollQuestion, setPollQuestion] = useState('')
   const [pollOptions, setPollOptions] = useState<string[]>(['', ''])
 
+  const [isMasked, setIsMasked] = useState(false)
+  const [maskedPersona, setMaskedPersona] = useState('Thoughtful Owl')
+
   const [showGifPicker, setShowGifPicker] = useState(false)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [showDiscardModal, setShowDiscardModal] = useState(false)
   const [loading, setLoading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+
+  // Populate prompt from URL if provided (e.g. from Daily Thought Starter)
+  useEffect(() => {
+    const initialContent = searchParams.get('initialContent')
+    if (initialContent) {
+      setContent(initialContent)
+    }
+  }, [searchParams])
 
   const imageInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
@@ -206,6 +219,8 @@ export default function CreatePostPage(): React.JSX.Element {
         image_urls: uploadedUrls,
         moderation_status: evalResult.action,
         is_sensitive: evalResult.isSensitive || false,
+        is_masked: isMasked,
+        masked_persona: isMasked ? maskedPersona : null,
       })
       .select('id')
       .single()
@@ -218,6 +233,8 @@ export default function CreatePostPage(): React.JSX.Element {
           author_id: userRes.user.id,
           content: finalContent || 'Voice attachment',
           image_urls: uploadedUrls,
+          is_masked: isMasked,
+          masked_persona: isMasked ? maskedPersona : null,
         })
         .select('id')
         .single()
@@ -466,6 +483,37 @@ export default function CreatePostPage(): React.JSX.Element {
             )}
           </div>
         )}
+
+        {/* Masked Voice Persona Selector Card */}
+        {isMasked && (
+          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-50 via-slate-50 to-brand-50/50 border border-purple-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center shrink-0">
+                <EyeOff size={16} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-purple-900">
+                  Posting as Masked Voice
+                </p>
+                <p className="text-[11px] text-purple-700/80">
+                  Your identity and profile will remain hidden from other members.
+                </p>
+              </div>
+            </div>
+
+            <select
+              value={maskedPersona}
+              onChange={(e) => setMaskedPersona(e.target.value)}
+              className="text-xs bg-white border border-purple-200 rounded-xl px-3 py-1.5 text-purple-900 font-semibold focus:outline-none cursor-pointer"
+            >
+              <option value="Thoughtful Owl">🦉 Thoughtful Owl</option>
+              <option value="Quiet Thinker">🌙 Quiet Thinker</option>
+              <option value="Curious Fox">🦊 Curious Fox</option>
+              <option value="Gentle Breeze">🍃 Gentle Breeze</option>
+              <option value="Masked Voice">🎭 Masked Voice</option>
+            </select>
+          </div>
+        )}
       </main>
 
       {/* ── Attachment Toolbar (Sticky Bottom) ── */}
@@ -512,6 +560,21 @@ export default function CreatePostPage(): React.JSX.Element {
               title="Poll"
             >
               <BarChart2 size={20} />
+            </button>
+
+            {/* Masked Voices Toggle */}
+            <button
+              type="button"
+              onClick={() => setIsMasked((prev) => !prev)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                isMasked
+                  ? 'bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 ring-1 ring-purple-400/50'
+                  : 'text-gray-500 hover:text-purple-600 hover:bg-purple-50'
+              }`}
+              title="Speak with Mask (Hide your identity from other members)"
+            >
+              <EyeOff size={16} />
+              <span>{isMasked ? 'Masked' : 'Mask'}</span>
             </button>
           </div>
 
@@ -599,5 +662,13 @@ export default function CreatePostPage(): React.JSX.Element {
         </div>
       )}
     </div>
+  )
+}
+
+export default function CreatePostPage(): React.JSX.Element {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-white flex items-center justify-center text-sm text-gray-400">Loading editor...</div>}>
+      <CreatePostContent />
+    </Suspense>
   )
 }
