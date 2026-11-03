@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Sparkles, MessageCircle, ChevronRight, X } from 'lucide-react'
+import { Sparkles, ChevronRight, X } from 'lucide-react'
+import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
-const THOUGHT_PROMPTS = [
+const FALLBACK_PROMPTS = [
   {
     tag: 'Daily Reflection',
     prompt: 'What is an opinion or perspective you hold that you rarely share out loud?',
@@ -33,25 +34,66 @@ const THOUGHT_PROMPTS = [
 ]
 
 export default function DailyThoughtStarter(): React.JSX.Element | null {
-  const [promptIndex, setPromptIndex] = useState(0)
+  const supabase = createSupabaseBrowserClient()
+  const [currentPrompt, setCurrentPrompt] = useState<{ tag: string; prompt: string; icon: string } | null>(null)
   const [dismissed, setDismissed] = useState(false)
 
   useEffect(() => {
-    // Pick daily prompt based on day of year
-    const now = new Date()
-    const dayOfYear = Math.floor(
-      (now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24)
-    )
-    setPromptIndex(dayOfYear % THOUGHT_PROMPTS.length)
-
-    // Check if dismissed for the session
+    // Check if user dismissed for this browser session
     const isDismissed = sessionStorage.getItem('pv_thought_starter_dismissed') === 'true'
-    if (isDismissed) setDismissed(true)
-  }, [])
+    if (isDismissed) {
+      setDismissed(true)
+      return
+    }
 
-  if (dismissed) return null
+    async function fetchTodayPrompt() {
+      try {
+        const todayStr = new Date().toISOString().split('T')[0]
 
-  const currentPrompt = THOUGHT_PROMPTS[promptIndex]
+        // 1. Check for prompt scheduled for today
+        const { data: dbPrompt } = await supabase
+          .from('daily_thought_prompts')
+          .select('tag, prompt, icon')
+          .eq('is_active', true)
+          .eq('active_date', todayStr)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (dbPrompt) {
+          setCurrentPrompt(dbPrompt)
+          return
+        }
+
+        // 2. Check for latest active prompt
+        const { data: latestPrompt } = await supabase
+          .from('daily_thought_prompts')
+          .select('tag, prompt, icon')
+          .eq('is_active', true)
+          .order('active_date', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (latestPrompt) {
+          setCurrentPrompt(latestPrompt)
+          return
+        }
+      } catch {
+        // Fall back to local rotation if database query fails or table not yet migrated
+      }
+
+      // 3. Fallback based on day of year
+      const now = new Date()
+      const dayOfYear = Math.floor(
+        (now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24)
+      )
+      setCurrentPrompt(FALLBACK_PROMPTS[dayOfYear % FALLBACK_PROMPTS.length])
+    }
+
+    fetchTodayPrompt()
+  }, [supabase])
+
+  if (dismissed || !currentPrompt) return null
 
   function handleDismiss() {
     setDismissed(true)

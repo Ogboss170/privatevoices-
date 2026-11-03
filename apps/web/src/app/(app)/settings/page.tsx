@@ -48,6 +48,7 @@ import {
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { useWebTheme, LANGUAGE_OPTIONS } from '@/context/WebThemeContext'
 import EditProfileModal from '@/components/profile/EditProfileModal'
+import AdminThoughtPromptsManager from '@/components/admin/AdminThoughtPromptsManager'
 import PostCard from '@/components/feed/PostCard'
 import type { Post } from '@private-voices/shared'
 import { extractPostMediaAndCleanContent } from '@private-voices/shared'
@@ -600,6 +601,7 @@ export default function SettingsPage(): React.JSX.Element {
             { id: 'privacy', label: 'Privacy', icon: Lock },
             { id: 'notifications', label: 'Alerts', icon: Bell },
             { id: 'appearance', label: 'Theme', icon: SunMoon },
+            ...(profile?.is_admin ? [{ id: 'admin', label: 'Daily Prompts', icon: Sparkles }] : []),
             { id: 'about', label: 'About & Danger', icon: Shield },
           ].map((tab) => {
             const Icon = tab.icon
@@ -621,6 +623,13 @@ export default function SettingsPage(): React.JSX.Element {
             )
           })}
         </div>
+      )}
+
+      {/* ── ADMIN: DAILY THOUGHT PROMPTS ── */}
+      {profile?.is_admin && (searchQuery || activeCategory === 'admin') && (
+        <section id="section-admin" className="space-y-4">
+          <AdminThoughtPromptsManager />
+        </section>
       )}
 
       {/* ── 1. ACCOUNT ── */}
