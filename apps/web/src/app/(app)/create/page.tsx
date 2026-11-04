@@ -17,10 +17,13 @@ import {
   Trash2,
   Check,
   EyeOff,
+  MapPin,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { ModerationService } from '@/lib/moderation/moderation.service'
 import { compressImage } from '@/lib/media/imageCompression'
+import { LocationPickerModal } from '@/components/common/LocationPickerModal'
+import type { LocationPlace } from '@private-voices/shared'
 
 const SAMPLE_GIFS = [
   'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM2Q1Y2E0MmE5OWIyZTZjNmEzZTVjMjIxM2ZhMWRlYTUwNmNlZjJjZCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0HlHJGHe3yAMhdQY/giphy.gif',
@@ -48,6 +51,10 @@ function CreatePostContent(): React.JSX.Element {
 
   const [isMasked, setIsMasked] = useState(false)
   const [maskedPersona, setMaskedPersona] = useState('Thoughtful Owl')
+
+  // Location Tagging state
+  const [selectedLocation, setSelectedLocation] = useState<LocationPlace | null>(null)
+  const [showLocationPicker, setShowLocationPicker] = useState(false)
 
   const [showGifPicker, setShowGifPicker] = useState(false)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
@@ -222,6 +229,15 @@ function CreatePostContent(): React.JSX.Element {
     if (isMasked) {
       insertPayload.is_masked = true
       insertPayload.masked_persona = maskedPersona
+    }
+
+    if (selectedLocation && !isMasked) {
+      insertPayload.location_place_id = selectedLocation.placeId
+      insertPayload.location_name = selectedLocation.name
+      insertPayload.location_city = selectedLocation.city || null
+      insertPayload.location_country = selectedLocation.country || null
+      insertPayload.location_lat = selectedLocation.latitude || null
+      insertPayload.location_lng = selectedLocation.longitude || null
     }
 
     let { data: newPost, error } = await supabase
@@ -508,6 +524,27 @@ function CreatePostContent(): React.JSX.Element {
           </div>
         )}
 
+        {/* Selected Location Pill */}
+        {selectedLocation && !isMasked && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-50 border border-brand-200/80 w-fit text-xs text-brand-700 shadow-2xs">
+            <MapPin size={14} className="text-brand-600 shrink-0" />
+            <span className="font-semibold">{selectedLocation.name}</span>
+            {(selectedLocation.city || selectedLocation.country) && (
+              <span className="text-[11px] text-brand-600/70">
+                • {[selectedLocation.city, selectedLocation.country].filter(Boolean).join(', ')}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => setSelectedLocation(null)}
+              className="ml-1 p-0.5 hover:bg-brand-200/50 rounded-full text-brand-500"
+              title="Remove location"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        )}
+
         {/* Masked Voice Persona Selector Card */}
         {isMasked && (
           <div className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-50 via-slate-50 to-brand-50/50 border border-purple-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
@@ -585,6 +622,22 @@ function CreatePostContent(): React.JSX.Element {
             >
               <BarChart2 size={20} />
             </button>
+
+            {/* Location Tagging */}
+            {!isMasked && (
+              <button
+                type="button"
+                onClick={() => setShowLocationPicker(true)}
+                className={`p-2.5 rounded-full transition-colors ${
+                  selectedLocation
+                    ? 'text-brand-600 bg-brand-50'
+                    : 'text-gray-500 hover:text-brand-600 hover:bg-brand-50'
+                }`}
+                title="Add Location"
+              >
+                <MapPin size={20} />
+              </button>
+            )}
 
             {/* Masked Voices Toggle */}
             <button
@@ -685,6 +738,14 @@ function CreatePostContent(): React.JSX.Element {
           </div>
         </div>
       )}
+
+      {/* Location Picker Modal */}
+      <LocationPickerModal
+        isOpen={showLocationPicker}
+        onClose={() => setShowLocationPicker(false)}
+        initialSelected={selectedLocation}
+        onSelectLocation={(loc) => setSelectedLocation(loc)}
+      />
     </div>
   )
 }

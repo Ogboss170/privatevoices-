@@ -168,6 +168,12 @@ export default function HomeScreen() {
               isRepostedByMe,
               isMasked: !!p.is_masked,
               maskedPersona: p.masked_persona || null,
+              locationName: p.location_name || null,
+              locationCity: p.location_city || null,
+              locationCountry: p.location_country || null,
+              locationPlaceId: p.location_place_id || null,
+              locationLat: p.location_lat || null,
+              locationLng: p.location_lng || null,
               createdAt: p.created_at,
               updatedAt: p.updated_at,
             }

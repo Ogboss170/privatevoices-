@@ -2,9 +2,11 @@
 
 import React, { useState, useRef } from 'react'
 import Image from 'next/image'
-import { X, Send, Sparkles, Image as ImageIcon, Trash2, Film, Mic, Play, Pause, Square } from 'lucide-react'
+import { X, Send, Sparkles, Image as ImageIcon, Trash2, Film, Mic, Play, Pause, Square, MapPin } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import VoiceWaveformPlayer from '@/components/common/VoiceWaveformPlayer'
+import { LocationPickerModal } from '@/components/common/LocationPickerModal'
+import type { LocationPlace, StoryLocationSticker } from '@private-voices/shared'
 
 interface CreateStoryModalProps {
   onClose: () => void
@@ -20,6 +22,12 @@ export default function CreateStoryModal({ onClose, onCreated }: CreateStoryModa
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Story Location Sticker state
+  const [locationSticker, setLocationSticker] = useState<StoryLocationSticker | null>(null)
+  const [showLocationPicker, setShowLocationPicker] = useState(false)
+  const [isDraggingSticker, setIsDraggingSticker] = useState(false)
+  const stickerDragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null)
 
   // Voice Recording
   const [isRecording, setIsRecording] = useState(false)
@@ -146,13 +154,32 @@ export default function CreateStoryModal({ onClose, onCreated }: CreateStoryModa
 
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
 
-    const { error: insertError } = await supabase.from('stories').insert({
+    const storyPayload: any = {
       author_id: userRes.user.id,
       content: content.trim() || null,
       media_url: uploadedUrl,
       media_type: chosenMediaType,
       expires_at: expiresAt,
-    })
+    }
+
+    if (locationSticker) {
+      storyPayload.location_sticker = locationSticker
+    }
+
+    let { error: insertError } = await supabase.from('stories').insert(storyPayload)
+
+    // Resilient fallback: if schema cache does not have location_sticker yet
+    if (insertError && /location_sticker/i.test(insertError.message)) {
+      const fallbackPayload = {
+        author_id: userRes.user.id,
+        content: content.trim() || null,
+        media_url: uploadedUrl,
+        media_type: chosenMediaType,
+        expires_at: expiresAt,
+      }
+      const retry = await supabase.from('stories').insert(fallbackPayload)
+      insertError = retry.error
+    }
 
     if (insertError) {
       setError(insertError.message)
@@ -215,6 +242,63 @@ export default function CreateStoryModal({ onClose, onCreated }: CreateStoryModa
                 </div>
               )}
 
+              {/* Interactive Draggable / Scalable Location Sticker Overlay */}
+              {locationSticker && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: `${locationSticker.x}%`,
+                    top: `${locationSticker.y}%`,
+                    transform: `translate(-50%, -50%) scale(${locationSticker.scale || 1.0})`,
+                    cursor: isDraggingSticker ? 'grabbing' : 'grab',
+                  }}
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    setIsDraggingSticker(true)
+                    stickerDragRef.current = {
+                      startX: e.clientX,
+                      startY: e.clientY,
+                      origX: locationSticker.x,
+                      origY: locationSticker.y,
+                    }
+
+                    const handleMouseMove = (moveEvent: MouseEvent) => {
+                      if (!stickerDragRef.current) return
+                      const deltaX = moveEvent.clientX - stickerDragRef.current.startX
+                      const deltaY = moveEvent.clientY - stickerDragRef.current.startY
+                      const newX = Math.max(10, Math.min(90, stickerDragRef.current.origX + (deltaX / 300) * 100))
+                      const newY = Math.max(10, Math.min(90, stickerDragRef.current.origY + (deltaY / 200) * 100))
+                      setLocationSticker((prev) => prev ? { ...prev, x: newX, y: newY } : null)
+                    }
+
+                    const handleMouseUp = () => {
+                      setIsDraggingSticker(false)
+                      stickerDragRef.current = null
+                      window.removeEventListener('mousemove', handleMouseMove)
+                      window.removeEventListener('mouseup', handleMouseUp)
+                    }
+
+                    window.addEventListener('mousemove', handleMouseMove)
+                    window.addEventListener('mouseup', handleMouseUp)
+                  }}
+                  className="z-20 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/95 text-gray-900 shadow-xl border border-white/50 backdrop-blur-md select-none group/sticker"
+                >
+                  <MapPin size={13} className="text-red-500 fill-red-500" />
+                  <span className="font-bold text-xs">{locationSticker.name}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setLocationSticker(null)
+                    }}
+                    className="p-0.5 rounded-full hover:bg-gray-200 text-gray-500"
+                    title="Remove sticker"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={handleRemoveMedia}
@@ -273,6 +357,25 @@ export default function CreateStoryModal({ onClose, onCreated }: CreateStoryModa
 
           {error && <p className="text-xs text-red-600">{error}</p>}
 
+          {/* Location Sticker Toolbar Trigger */}
+          <div className="flex items-center justify-between pt-1">
+            <button
+              type="button"
+              onClick={() => setShowLocationPicker(true)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                locationSticker
+                  ? 'bg-red-50 text-red-600 border border-red-200'
+                  : 'text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200'
+              }`}
+            >
+              <MapPin size={14} className={locationSticker ? 'text-red-500 fill-red-500' : 'text-gray-500'} />
+              <span>{locationSticker ? `📍 ${locationSticker.name}` : 'Add Location Sticker'}</span>
+            </button>
+            {locationSticker && (
+              <span className="text-[11px] text-gray-400">Drag to position sticker</span>
+            )}
+          </div>
+
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary flex-1 text-xs py-2.5">
               Cancel
@@ -288,6 +391,24 @@ export default function CreateStoryModal({ onClose, onCreated }: CreateStoryModa
           </div>
         </form>
       </div>
+
+      {/* Location Picker Modal for Story */}
+      <LocationPickerModal
+        isOpen={showLocationPicker}
+        onClose={() => setShowLocationPicker(false)}
+        initialSelected={locationSticker ? { placeId: locationSticker.placeId, name: locationSticker.name, city: locationSticker.city, country: locationSticker.country } : null}
+        onSelectLocation={(loc) => {
+          setLocationSticker({
+            placeId: loc.placeId,
+            name: loc.name,
+            city: loc.city || null,
+            country: loc.country || null,
+            x: 50,
+            y: 40,
+            scale: 1.0,
+          })
+        }}
+      />
     </div>
   )
 }

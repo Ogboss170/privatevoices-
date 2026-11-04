@@ -14,6 +14,10 @@ import {
   Send,
   MessageCircle,
   ExternalLink,
+  Award,
+  Crown,
+  ShieldCheck,
+  CheckCircle2,
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
@@ -222,22 +226,146 @@ export default function InviteFriendsPage(): React.JSX.Element {
       </div>
 
       {/* Referral Info & Perks Box */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
-        <div className="p-4 rounded-xl bg-white border border-gray-200/80 space-y-1">
-          <div className="flex items-center gap-2 text-brand-600 mb-1">
-            <Users size={16} />
-            <span className="text-xs font-bold uppercase tracking-wider">Your Friends</span>
+      {/* ── Official Referral Rewards Program Dashboard ── */}
+      <div className="card p-6 sm:p-7 bg-white dark:bg-slate-900 border border-gray-200/90 dark:border-slate-800 rounded-3xl space-y-6 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-800 pb-5">
+          <div>
+            <div className="flex items-center gap-2 text-brand-600 dark:text-brand-400 font-bold text-xs uppercase tracking-wider mb-1">
+              <Award size={15} />
+              <span>Private Voices Referral Milestones</span>
+            </div>
+            <h3 className="text-xl font-extrabold text-gray-900 dark:text-white">
+              Your Referral Rewards
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              Grow Private Voices authentically. Unlock prestigious community achievements.
+            </p>
           </div>
-          <p className="text-xl font-extrabold text-gray-900">{inviteStats.invitedCount}</p>
-          <p className="text-xs text-gray-500">Friends who joined Private Voices with your link.</p>
+
+          <div className="px-5 py-3 rounded-2xl bg-gradient-to-br from-brand-50 to-purple-50 dark:from-slate-800 dark:to-slate-800/60 border border-brand-100 dark:border-slate-700/80 text-center sm:text-right">
+            <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block">
+              Successful Referrals
+            </span>
+            <span className="text-2xl font-black text-brand-600 dark:text-brand-400">
+              {inviteStats.invitedCount}
+            </span>
+            <span className="text-[10px] text-gray-400 block">
+              {inviteStats.invitedCount < 500
+                ? `${500 - inviteStats.invitedCount} more to unlock Community Ambassador`
+                : inviteStats.invitedCount < 5000
+                ? `${5000 - inviteStats.invitedCount} more to unlock Legendary Community Builder`
+                : 'All referral tiers achieved!'}
+            </span>
+          </div>
         </div>
 
-        <div className="p-4 rounded-xl bg-white border border-gray-200/80 space-y-1">
-          <div className="flex items-center gap-2 text-amber-500 mb-1">
-            <Sparkles size={16} />
-            <span className="text-xs font-bold uppercase tracking-wider">Early Supporter</span>
+        {/* Milestone Cards Grid */}
+        <div className="space-y-4">
+          <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+            Next Achievements
+          </h4>
+
+          {/* Milestone 1: Community Ambassador */}
+          <div className="p-4 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-2xl bg-amber-400 text-white flex items-center justify-center font-bold text-lg shadow-sm shrink-0">
+                🟡
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h5 className="font-bold text-sm text-gray-900 dark:text-white">
+                    Community Ambassador
+                  </h5>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                    Yellow Badge
+                  </span>
+                </div>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                  500 successful referrals • Recognition for helping grow Private Voices.
+                </p>
+              </div>
+            </div>
+
+            <div className="sm:text-right min-w-[140px]">
+              <div className="flex items-center sm:justify-end gap-2 text-xs font-bold text-gray-800 dark:text-gray-200 mb-1.5">
+                <span>{inviteStats.invitedCount}</span>
+                <span className="text-gray-400">/ 500</span>
+                {inviteStats.invitedCount >= 500 && (
+                  <Check size={14} className="text-emerald-600 ml-1 font-bold" />
+                )}
+              </div>
+              <div className="w-full bg-amber-200/60 dark:bg-amber-950 rounded-full h-2 overflow-hidden">
+                <div
+                  className="bg-amber-500 h-2 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, (inviteStats.invitedCount / 500) * 100)}%` }}
+                />
+              </div>
+            </div>
           </div>
-          <p className="text-xs font-medium text-gray-700">Invite 3 friends to unlock preview perks and community badges.</p>
+
+          {/* Milestone 2: Legendary Community Builder */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white border border-amber-400/40 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-400 via-sky-500 to-indigo-600 text-amber-300 flex items-center justify-center shadow-md shrink-0 border border-amber-300">
+                <Crown size={20} className="fill-amber-300" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h5 className="font-bold text-sm text-white">
+                    Legendary Community Builder
+                  </h5>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/50">
+                    Blue & Gold Badge
+                  </span>
+                </div>
+                <p className="text-xs text-indigo-200 mt-0.5">
+                  5,000 successful referrals • Prestigious permanent referral distinction.
+                </p>
+              </div>
+            </div>
+
+            <div className="sm:text-right min-w-[140px]">
+              <div className="flex items-center sm:justify-end gap-2 text-xs font-bold text-indigo-100 mb-1.5">
+                <span>{inviteStats.invitedCount}</span>
+                <span className="text-indigo-300">/ 5,000</span>
+                {inviteStats.invitedCount >= 5000 && (
+                  <Check size={14} className="text-amber-400 ml-1 font-bold" />
+                )}
+              </div>
+              <div className="w-full bg-indigo-950 rounded-full h-2 overflow-hidden border border-indigo-800">
+                <div
+                  className="bg-gradient-to-r from-amber-400 to-sky-400 h-2 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, (inviteStats.invitedCount / 5000) * 100)}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Identity Verification Distinction Note */}
+          <div className="p-4 rounded-2xl bg-sky-50/70 dark:bg-sky-950/20 border border-sky-200/70 dark:border-sky-800/40 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-sky-500 text-white flex items-center justify-center shrink-0">
+              <CheckCircle2 size={18} className="fill-white text-sky-500" />
+            </div>
+            <div className="text-xs">
+              <span className="font-bold text-sky-950 dark:text-sky-200">
+                Identity Verification (Blue Badge)
+              </span>
+              <p className="text-sky-800/80 dark:text-sky-300/80 mt-0.5">
+                The blue verified check represents real identity and account authenticity only, awarded through official Trust & Safety verification independently of referral counts.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Anti-Cheating & Integrity Notice */}
+        <div className="pt-3 border-t border-gray-100 dark:border-slate-800 text-[11px] text-gray-500 dark:text-gray-400 space-y-1">
+          <div className="flex items-center gap-1.5 font-bold text-gray-700 dark:text-gray-300">
+            <ShieldCheck size={14} className="text-brand-600" />
+            <span>Anti-Cheating & Quality Rules</span>
+          </div>
+          <p>
+            Referrals are audited in real-time. Self-referrals, duplicate accounts, and automated bots are excluded. Only verified accounts are credited toward milestone badges.
+          </p>
         </div>
       </div>
 

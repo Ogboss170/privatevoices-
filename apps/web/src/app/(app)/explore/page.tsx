@@ -16,12 +16,13 @@ import {
   ArrowRight,
   ShieldCheck,
   Flame,
+  MapPin,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import PostCard from '@/components/feed/PostCard'
 import type { Post } from '@private-voices/shared'
 
-type SearchTab = 'all' | 'people' | 'voices' | 'communities'
+type SearchTab = 'all' | 'people' | 'voices' | 'communities' | 'places'
 
 function ExploreContent(): React.JSX.Element {
   const router = useRouter()
@@ -44,6 +45,7 @@ function ExploreContent(): React.JSX.Element {
   const [profiles, setProfiles] = useState<any[]>([])
   const [voices, setVoices] = useState<Post[]>([])
   const [communities, setCommunities] = useState<any[]>([])
+  const [places, setPlaces] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
 
   // Sync state if URL query params change (e.g. from clicking a #hashtag link)
@@ -206,6 +208,23 @@ function ExploreContent(): React.JSX.Element {
           } else {
             setVoices([])
           }
+
+          // Fetch Places (Locations)
+          if (tab === 'all' || tab === 'places') {
+            try {
+              const res = await fetch(`/api/location/search?q=${encodeURIComponent(cleanTerm)}`)
+              if (res.ok) {
+                const data = await res.json()
+                setPlaces(data.places || [])
+              } else {
+                setPlaces([])
+              }
+            } catch {
+              setPlaces([])
+            }
+          } else {
+            setPlaces([])
+          }
         }
       } catch (err) {
         console.error('Search error:', err)
@@ -326,6 +345,7 @@ function ExploreContent(): React.JSX.Element {
           { id: 'voices', label: 'Voices', icon: MessageSquare, count: voices.length },
           { id: 'people', label: 'People', icon: User, count: profiles.length },
           { id: 'communities', label: 'Communities', icon: Users, count: communities.length },
+          { id: 'places', label: 'Places', icon: MapPin, count: places.length },
         ].map((tab) => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id
@@ -700,6 +720,60 @@ function ExploreContent(): React.JSX.Element {
                       <span className="text-xs font-semibold text-purple-600 group-hover:underline flex-shrink-0">
                         View
                       </span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ════════════════════ TAB: PLACES ════════════════════ */}
+          {activeTab === 'places' && (
+            <div className="space-y-4">
+              {isSearching && (
+                <div className="flex items-center justify-between text-xs text-gray-500 px-1">
+                  <span>
+                    Places matching <strong className="text-gray-900">"{searchTerm}"</strong>
+                  </span>
+                  <span>{places.length} found</span>
+                </div>
+              )}
+
+              {places.length === 0 ? (
+                <div className="py-12 text-center text-gray-400">
+                  <MapPin size={32} className="mx-auto mb-2 text-gray-300" />
+                  <p className="text-sm font-semibold text-gray-900">No places found</p>
+                  <p className="text-xs">Try searching for a city, country, or neighborhood</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {places.map((place) => (
+                    <Link
+                      key={place.placeId}
+                      href={`/location/${encodeURIComponent(place.placeId)}?name=${encodeURIComponent(place.name)}${place.city ? `&city=${encodeURIComponent(place.city)}` : ''}${place.country ? `&country=${encodeURIComponent(place.country)}` : ''}`}
+                      className="p-3.5 bg-white rounded-2xl border border-gray-100 hover:border-brand-300 hover:shadow-xs flex items-center justify-between transition-all group"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center shrink-0">
+                          <MapPin size={18} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-bold text-sm text-gray-900 group-hover:text-brand-600 transition-colors truncate">
+                              {place.name}
+                            </h4>
+                            {place.category && (
+                              <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+                                {place.category}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-400 truncate">
+                            {[place.city, place.region, place.country].filter(Boolean).join(', ')}
+                          </p>
+                        </div>
+                      </div>
+                      <ArrowRight size={15} className="text-gray-400 group-hover:text-brand-600 transition-colors shrink-0" />
                     </Link>
                   ))}
                 </div>

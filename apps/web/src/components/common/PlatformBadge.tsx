@@ -3,7 +3,7 @@
 import React from 'react'
 import { CheckCircle2, Sparkles, FlaskConical, Crown, ShieldCheck, Award } from 'lucide-react'
 
-export type BadgeType = 'verified' | 'early_supporter' | 'beta_tester' | string
+export type BadgeType = 'verified' | 'early_supporter' | 'beta_tester' | 'community_ambassador' | 'legendary_builder' | string
 
 interface PlatformBadgeProps {
   badgeId: BadgeType
@@ -95,6 +95,37 @@ export function PlatformBadge({
             <Award size={size - 2} className="text-emerald-600 fill-emerald-500/30" />
           </span>
           {showLabel && <span className="text-[10px] font-bold text-emerald-600">VIP</span>}
+        </span>
+      )
+
+    case 'community_ambassador':
+      return (
+        <span
+          title="Community Ambassador • 500+ authentic referrals"
+          className={`inline-flex items-center gap-1 text-amber-500 flex-shrink-0 cursor-default select-none ${className}`}
+        >
+          <span className="p-0.5 rounded-full bg-amber-400/15 border border-amber-400/40 shadow-xs">
+            <Award size={size - 2} className="text-amber-500 fill-amber-400" />
+          </span>
+          {showLabel && <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400">Ambassador</span>}
+        </span>
+      )
+
+    case 'legendary_builder':
+      return (
+        <span
+          title="Legendary Community Builder • Prestigious 5,000+ referrals distinction"
+          className={`inline-flex items-center gap-1 text-indigo-600 flex-shrink-0 cursor-default select-none ${className}`}
+        >
+          {/* Distinctive Blue & Gold Crown / Ring */}
+          <span className="p-0.5 rounded-full bg-gradient-to-tr from-amber-400 via-sky-500 to-indigo-600 border border-amber-300 shadow-sm">
+            <Crown size={size - 2} className="text-white fill-amber-300" />
+          </span>
+          {showLabel && (
+            <span className="text-[11px] font-black bg-gradient-to-r from-amber-500 via-sky-600 to-indigo-600 bg-clip-text text-transparent">
+              Legendary Builder
+            </span>
+          )}
         </span>
       )
 

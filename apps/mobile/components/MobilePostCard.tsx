@@ -32,6 +32,7 @@ import {
   Pin,
   Sparkles,
   EyeOff,
+  MapPin,
 } from 'lucide-react-native'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
@@ -803,6 +804,14 @@ export function MobilePostCard({ post, currentUserId, communityRole, onDelete, o
                 )}
               </View>
               <Text style={[styles.username, { color: themeColors.textMuted }]}>@{post.author.username}</Text>
+              {post.locationName && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 }}>
+                  <MapPin size={11} color={colors.brand} />
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: colors.brand }} numberOfLines={1}>
+                    {post.locationName}
+                  </Text>
+                </View>
+              )}
               {post.community && (
                 <TouchableOpacity
                   onPress={() => router.push(`/community/${post.community?.slug}` as any)}
@@ -990,6 +999,23 @@ export function MobilePostCard({ post, currentUserId, communityRole, onDelete, o
           </View>
         </SafeAreaView>
       </Modal>
+
+      {/* Location Badge below media */}
+      {post.locationName && (
+        <View style={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 6 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', backgroundColor: '#f1f5f9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
+            <MapPin size={12} color={colors.brand} />
+            <Text style={{ fontSize: 11, fontWeight: '600', color: colors.gray800 }}>
+              {post.locationName}
+            </Text>
+            {(post.locationCity || post.locationCountry) && (
+              <Text style={{ fontSize: 10, color: colors.gray500 }}>
+                • {[post.locationCity, post.locationCountry].filter(Boolean).join(', ')}
+              </Text>
+            )}
+          </View>
+        </View>
+      )}
 
       {/* Footer / Actions (Order: Comment -> Repost -> Like -> Views -> Bookmark -> Share) */}
       <View style={styles.footer}>

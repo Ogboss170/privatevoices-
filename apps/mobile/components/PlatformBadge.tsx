@@ -70,6 +70,26 @@ export function PlatformBadge({ badgeId, size = 15, showLabel = false }: Platfor
         </View>
       )
 
+    case 'community_ambassador':
+      return (
+        <View style={styles.badgeContainer}>
+          <View style={[styles.iconWrapAmber, { backgroundColor: '#fef3c7', borderColor: '#f59e0b' }]}>
+            <Award size={size - 2} color="#d97706" />
+          </View>
+          {showLabel && <Text style={[styles.label, { color: '#d97706' }]}>Ambassador</Text>}
+        </View>
+      )
+
+    case 'legendary_builder':
+      return (
+        <View style={styles.badgeContainer}>
+          <View style={[styles.iconWrapPurple, { backgroundColor: '#1e1b4b', borderColor: '#f59e0b', borderWidth: 1.5 }]}>
+            <Crown size={size - 2} color="#facc15" />
+          </View>
+          {showLabel && <Text style={[styles.label, { color: '#2563eb', fontWeight: '800' }]}>Legendary Builder</Text>}
+        </View>
+      )
+
     default:
       return null
   }

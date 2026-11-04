@@ -85,6 +85,30 @@ export interface PostCommunity {
   privacy?: 'public' | 'private';
 }
 
+export interface LocationPlace {
+  id?: string;
+  placeId: string;
+  name: string;
+  city?: string | null;
+  region?: string | null;
+  country?: string | null;
+  countryCode?: string | null;
+  category?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+}
+
+export interface StoryLocationSticker {
+  placeId: string;
+  name: string;
+  city?: string | null;
+  country?: string | null;
+  x: number; // percentage from left [0..100]
+  y: number; // percentage from top [0..100]
+  scale?: number; // scale multiplier, default 1.0
+  rotation?: number; // degrees
+}
+
 export interface Post {
   id: string;
   authorId: string;
@@ -110,6 +134,13 @@ export interface Post {
   pinnedBy?: string | null;
   isMasked?: boolean;
   maskedPersona?: string | null;
+  locationId?: string | null;
+  locationName?: string | null;
+  locationCity?: string | null;
+  locationCountry?: string | null;
+  locationLat?: number | null;
+  locationLng?: number | null;
+  locationPlaceId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -122,6 +153,12 @@ export interface CreatePostDto {
   videoUrl?: string | null;
   isMasked?: boolean;
   maskedPersona?: string | null;
+  locationPlaceId?: string | null;
+  locationName?: string | null;
+  locationCity?: string | null;
+  locationCountry?: string | null;
+  locationLat?: number | null;
+  locationLng?: number | null;
 }
 
 export interface Comment {

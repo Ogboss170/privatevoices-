@@ -2,11 +2,13 @@
 
 import React, { useState, useRef } from 'react'
 import Image from 'next/image'
-import { Image as ImageIcon, Send, X, BarChart2, Plus, Trash2, Mic, Film, Square, EyeOff, Sparkles } from 'lucide-react'
+import { Image as ImageIcon, Send, X, BarChart2, Plus, Trash2, Mic, Film, Square, EyeOff, Sparkles, MapPin } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import MentionAutocomplete from '../common/MentionAutocomplete'
 import { compressImage } from '@/lib/media/imageCompression'
 import VoiceWaveformPlayer from '../common/VoiceWaveformPlayer'
+import { LocationPickerModal } from '../common/LocationPickerModal'
+import type { LocationPlace } from '@private-voices/shared'
 
 interface CreatePostComposerProps {
   onPostCreated?: () => void
@@ -37,6 +39,10 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
   const [pollOptions, setPollOptions] = useState(['', ''])
   const [isMasked, setIsMasked] = useState(false)
   const [maskedPersona, setMaskedPersona] = useState('Thoughtful Owl')
+
+  // Location Tagging state
+  const [selectedLocation, setSelectedLocation] = useState<LocationPlace | null>(null)
+  const [showLocationPicker, setShowLocationPicker] = useState(false)
 
   const mentionMatch = content.match(/(?:^|\s)@([a-zA-Z0-9_]*)$/)
   const mentionQuery = mentionMatch ? mentionMatch[1] : null
@@ -273,6 +279,16 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
       insertPayload.masked_persona = maskedPersona
     }
 
+    // Attach location metadata if selected (only when not anonymous)
+    if (selectedLocation && !isMasked) {
+      insertPayload.location_place_id = selectedLocation.placeId
+      insertPayload.location_name = selectedLocation.name
+      insertPayload.location_city = selectedLocation.city || null
+      insertPayload.location_country = selectedLocation.country || null
+      insertPayload.location_lat = selectedLocation.latitude || null
+      insertPayload.location_lng = selectedLocation.longitude || null
+    }
+
     let { data: newPost, error: postError } = await supabase
       .from('posts')
       .insert(insertPayload)
@@ -280,7 +296,7 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
       .single()
 
     // Resilient fallback: if Supabase PostgREST schema cache has not yet reloaded the new columns
-    if (postError && /is_masked|masked_persona/i.test(postError.message)) {
+    if (postError && /is_masked|masked_persona|location_/i.test(postError.message)) {
       const fallbackPayload = {
         author_id: user.user.id,
         content: isMasked ? `🎭 [Masked Voice: ${maskedPersona}]\n${finalContent}` : finalContent,
@@ -332,6 +348,7 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
     setImageFiles([])
     setPreviewUrls([])
     setShowPollCreator(false)
+    setSelectedLocation(null)
     setPollQuestion('')
     setPollOptions(['', ''])
     setLoading(false)
@@ -433,6 +450,27 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
                 <span>Add Option</span>
               </button>
             )}
+          </div>
+        )}
+
+        {/* Selected Location Pill */}
+        {selectedLocation && !isMasked && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-50/80 dark:bg-brand-950/30 border border-brand-200/60 dark:border-brand-800/40 w-fit text-xs text-brand-700 dark:text-brand-300">
+            <MapPin size={13} className="text-brand-600 dark:text-brand-400 shrink-0" />
+            <span className="font-semibold">{selectedLocation.name}</span>
+            {(selectedLocation.city || selectedLocation.country) && (
+              <span className="text-[11px] text-brand-600/70 dark:text-brand-400/70">
+                • {[selectedLocation.city, selectedLocation.country].filter(Boolean).join(', ')}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => setSelectedLocation(null)}
+              className="ml-1 p-0.5 hover:bg-brand-200/50 dark:hover:bg-brand-800/50 rounded-full text-brand-500"
+              title="Remove location"
+            >
+              <X size={12} />
+            </button>
           </div>
         )}
 
@@ -609,6 +647,22 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
               <BarChart2 size={18} />
             </button>
 
+            {/* Location Tagging */}
+            {!isMasked && (
+              <button
+                type="button"
+                onClick={() => setShowLocationPicker(true)}
+                className={`p-2 rounded-lg transition-colors ${
+                  selectedLocation
+                    ? 'text-brand-600 bg-brand-50 dark:bg-brand-950/40'
+                    : 'text-gray-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-slate-800'
+                }`}
+                title="Add Location"
+              >
+                <MapPin size={18} />
+              </button>
+            )}
+
             {/* Masked Voices Toggle (Speak Anonymously) */}
             <button
               type="button"
@@ -656,6 +710,14 @@ export default function CreatePostComposer({ onPostCreated }: CreatePostComposer
           </button>
         </div>
       </form>
+
+      {/* Location Picker Modal */}
+      <LocationPickerModal
+        isOpen={showLocationPicker}
+        onClose={() => setShowLocationPicker(false)}
+        initialSelected={selectedLocation}
+        onSelectLocation={(loc) => setSelectedLocation(loc)}
+      />
     </div>
   )
 }

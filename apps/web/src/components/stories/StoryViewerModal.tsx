@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { X, ChevronLeft, ChevronRight, Eye, Clock, Sparkles, Volume2, Mic, Film } from 'lucide-react'
+import { X, ChevronLeft, ChevronRight, Eye, Clock, Sparkles, Volume2, Mic, Film, MapPin } from 'lucide-react'
+import Link from 'next/link'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import VoiceWaveformPlayer from '@/components/common/VoiceWaveformPlayer'
 
@@ -219,6 +220,31 @@ export default function StoryViewerModal({
               />
             </div>
           ) : null}
+
+          {/* Location Sticker Display */}
+          {currentStory.location_sticker && (
+            <div
+              style={{
+                position: 'absolute',
+                left: `${currentStory.location_sticker.x || 50}%`,
+                top: `${currentStory.location_sticker.y || 25}%`,
+                transform: `translate(-50%, -50%) scale(${currentStory.location_sticker.scale || 1.0})`,
+                zIndex: 25,
+              }}
+            >
+              <Link
+                href={`/location/${encodeURIComponent(currentStory.location_sticker.placeId || currentStory.location_sticker.name)}?name=${encodeURIComponent(currentStory.location_sticker.name)}${currentStory.location_sticker.city ? `&city=${encodeURIComponent(currentStory.location_sticker.city)}` : ''}${currentStory.location_sticker.country ? `&country=${encodeURIComponent(currentStory.location_sticker.country)}` : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onClose()
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white text-gray-900 shadow-2xl border border-white/60 font-bold text-xs backdrop-blur-md active:scale-95 transition-transform"
+              >
+                <MapPin size={13} className="text-red-500 fill-red-500" />
+                <span>{currentStory.location_sticker.name}</span>
+              </Link>
+            </div>
+          )}
 
           {currentStory.content && (
             <p className="text-base font-semibold leading-relaxed tracking-wide bg-black/50 backdrop-blur-md px-4 py-2.5 rounded-xl border border-white/10 max-w-full break-words">

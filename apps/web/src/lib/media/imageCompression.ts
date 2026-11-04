@@ -27,10 +27,9 @@ export async function compressImage(
     return file
   }
 
-  // If already under 150KB, skip heavy compression
-  if (file.size < 150 * 1024) {
-    return file
-  }
+  // NOTE: Privacy protection - we always redraw JPEG/PNG images through HTML5 Canvas
+  // even if under 150KB, because HTML5 canvas re-encoding completely strips any
+  // embedded GPS EXIF tags, device serial numbers, or location metadata from the raw file.
 
   return new Promise((resolve, reject) => {
     const reader = new FileReader()

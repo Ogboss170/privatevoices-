@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Heart, MessageCircle, Repeat, Bookmark, Share2, Trash2, MoreVertical, Flag, ShieldOff, ChevronLeft, ChevronRight, X, TrendingUp, BarChart2, Pin, Mic, Film, Sparkles, Radio, EyeOff } from 'lucide-react'
+import { Heart, MessageCircle, Repeat, Bookmark, Share2, Trash2, MoreVertical, Flag, ShieldOff, ChevronLeft, ChevronRight, X, TrendingUp, BarChart2, Pin, Mic, Film, Sparkles, Radio, EyeOff, MapPin } from 'lucide-react'
 import type { Post } from '@private-voices/shared'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import FormattedText from '../common/FormattedText'
@@ -812,6 +812,19 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
                 <span>
                   {new Date(post.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
                 </span>
+                {post.locationName && (
+                  <>
+                    <span>•</span>
+                    <Link
+                      href={`/location/${encodeURIComponent(post.locationPlaceId || post.locationName)}?name=${encodeURIComponent(post.locationName)}${post.locationCity ? `&city=${encodeURIComponent(post.locationCity)}` : ''}${post.locationCountry ? `&country=${encodeURIComponent(post.locationCountry)}` : ''}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-0.5 text-brand-600 dark:text-brand-400 hover:underline font-medium truncate max-w-[150px]"
+                    >
+                      <MapPin size={11} className="shrink-0" />
+                      <span className="truncate">{post.locationName}</span>
+                    </Link>
+                  </>
+                )}
               </div>
               {post.community && (
                 <Link
@@ -1176,6 +1189,25 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
               {lightboxIndex + 1} / {post.imageUrls.length}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Location Badge below media/attachments */}
+      {post.locationName && (
+        <div className="px-4 pt-1 pb-1">
+          <Link
+            href={`/location/${encodeURIComponent(post.locationPlaceId || post.locationName)}?name=${encodeURIComponent(post.locationName)}${post.locationCity ? `&city=${encodeURIComponent(post.locationCity)}` : ''}${post.locationCountry ? `&country=${encodeURIComponent(post.locationCountry)}` : ''}`}
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100/80 hover:bg-brand-50 dark:bg-slate-800/80 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-300 hover:text-brand-600 dark:hover:text-brand-400 text-xs font-medium transition-colors border border-gray-200/60 dark:border-slate-700/60"
+          >
+            <MapPin size={12} className="text-brand-600 dark:text-brand-400" />
+            <span>{post.locationName}</span>
+            {(post.locationCity || post.locationCountry) && (
+              <span className="text-[11px] text-gray-400">
+                • {[post.locationCity, post.locationCountry].filter(Boolean).join(', ')}
+              </span>
+            )}
+          </Link>
         </div>
       )}
 
