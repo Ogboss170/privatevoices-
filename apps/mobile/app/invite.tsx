@@ -21,6 +21,9 @@ import {
   Users,
   X,
   Award,
+  Crown,
+  ShieldCheck,
+  CheckCircle2,
 } from 'lucide-react-native'
 import QRCode from 'react-native-qrcode-svg'
 import { useRouter } from 'expo-router'
@@ -192,50 +195,168 @@ export default function InviteFriendsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Stats & Perk Banners */}
-        <View style={styles.perksRow}>
-          <View
-            style={[
-              styles.perkCard,
-              {
-                backgroundColor: themeColors.surface,
-                borderColor: themeColors.surfaceBorder,
-              },
-            ]}
-          >
-            <View style={styles.perkHeader}>
-              <Users size={16} color={colors.brand} />
-              <Text style={styles.perkLabel}>Invited Friends</Text>
-            </View>
-            <Text
-              style={[styles.perkValue, { color: themeColors.textPrimary }]}
-            >
-              {referralCount}
-            </Text>
-            <Text style={[styles.perkDesc, { color: themeColors.textMuted }]}>
-              Joined through your invite
-            </Text>
-          </View>
-
-          <View
-            style={[
-              styles.perkCard,
-              {
-                backgroundColor: themeColors.surface,
-                borderColor: themeColors.surfaceBorder,
-              },
-            ]}
-          >
-            <View style={styles.perkHeader}>
-              <Award size={16} color="#f59e0b" />
-              <Text style={[styles.perkLabel, { color: '#d97706' }]}>
-                Preview Perk
+        {/* Stats & Referral Rewards Milestones */}
+        <View
+          style={[
+            styles.rewardsContainer,
+            {
+              backgroundColor: themeColors.surface,
+              borderColor: themeColors.surfaceBorder,
+            },
+          ]}
+        >
+          {/* Header */}
+          <View style={styles.rewardsHeader}>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                <Award size={16} color={colors.brand} />
+                <Text style={styles.rewardsHeaderSub}>Referral Milestones</Text>
+              </View>
+              <Text style={[styles.rewardsHeaderTitle, { color: themeColors.textPrimary }]}>
+                Your Referral Rewards
               </Text>
             </View>
-            <Text
-              style={[styles.perkDesc, { color: themeColors.textMuted, marginTop: 4 }]}
-            >
-              Earn early supporter badge & perks when friends register.
+            <View style={[styles.referralCounterPill, { backgroundColor: isDark ? '#1e293b' : '#f8fafc' }]}>
+              <Text style={{ fontSize: 10, color: colors.gray500, fontWeight: '700', textTransform: 'uppercase' }}>
+                Successful
+              </Text>
+              <Text style={[styles.referralBigCount, { color: colors.brand }]}>
+                {referralCount}
+              </Text>
+            </View>
+          </View>
+
+          <Text style={{ fontSize: 12, color: themeColors.textMuted, marginBottom: 14 }}>
+            {referralCount < 500
+              ? `${500 - referralCount} more to unlock Community Ambassador`
+              : referralCount < 5000
+              ? `${5000 - referralCount} more to unlock Legendary Community Builder`
+              : 'All referral milestone tiers unlocked!'}
+          </Text>
+
+          {/* Milestone 1: Community Ambassador */}
+          <View
+            style={[
+              styles.milestoneCard,
+              { backgroundColor: isDark ? '#451a03' : '#fffbeb', borderColor: '#fde68a' },
+            ]}
+          >
+            <View style={styles.milestoneTop}>
+              <View style={[styles.milestoneIconWrap, { backgroundColor: '#f59e0b' }]}>
+                <Text style={{ fontSize: 16 }}>🟡</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[styles.milestoneTitle, { color: isDark ? '#fef3c7' : '#78350f' }]}>
+                    Community Ambassador
+                  </Text>
+                  <View style={{ backgroundColor: '#fef3c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                    <Text style={{ fontSize: 9, fontWeight: '700', color: '#b45309' }}>500 Ref</Text>
+                  </View>
+                </View>
+                <Text style={[styles.milestoneDesc, { color: isDark ? '#fde68a' : '#92400e' }]}>
+                  Recognition for helping grow Private Voices.
+                </Text>
+              </View>
+            </View>
+
+            {/* Progress Bar */}
+            <View style={{ marginTop: 10 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#fef3c7' : '#92400e' }}>
+                  Progress
+                </Text>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#fef3c7' : '#92400e' }}>
+                  {referralCount} / 500
+                </Text>
+              </View>
+              <View style={[styles.progressBarBg, { backgroundColor: isDark ? '#78350f' : '#fde68a' }]}>
+                <View
+                  style={[
+                    styles.progressBarFill,
+                    {
+                      backgroundColor: '#f59e0b',
+                      width: `${Math.min(100, (referralCount / 500) * 100)}%`,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* Milestone 2: Legendary Community Builder */}
+          <View
+            style={[
+              styles.milestoneCard,
+              { backgroundColor: '#0f172a', borderColor: '#f59e0b', borderWidth: 1.5 },
+            ]}
+          >
+            <View style={styles.milestoneTop}>
+              <View
+                style={[
+                  styles.milestoneIconWrap,
+                  { backgroundColor: '#1e1b4b', borderColor: '#f59e0b', borderWidth: 1 },
+                ]}
+              >
+                <Crown size={16} color="#facc15" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[styles.milestoneTitle, { color: '#ffffff' }]}>
+                    Legendary Community Builder
+                  </Text>
+                  <View style={{ backgroundColor: 'rgba(250, 204, 21, 0.2)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                    <Text style={{ fontSize: 9, fontWeight: '800', color: '#facc15' }}>Blue & Gold</Text>
+                  </View>
+                </View>
+                <Text style={[styles.milestoneDesc, { color: '#93c5fd' }]}>
+                  Permanent prestige distinction for 5,000+ members.
+                </Text>
+              </View>
+            </View>
+
+            {/* Progress Bar */}
+            <View style={{ marginTop: 10 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#bfdbfe' }}>
+                  Progress
+                </Text>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#facc15' }}>
+                  {referralCount} / 5,000
+                </Text>
+              </View>
+              <View style={[styles.progressBarBg, { backgroundColor: '#1e293b' }]}>
+                <View
+                  style={[
+                    styles.progressBarFill,
+                    {
+                      backgroundColor: '#3b82f6',
+                      width: `${Math.min(100, (referralCount / 5000) * 100)}%`,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* Identity Verification Distinction Note */}
+          <View style={[styles.verificationNoteCard, { backgroundColor: isDark ? '#082f49' : '#f0f9ff', borderColor: '#bae6fd' }]}>
+            <CheckCircle2 size={18} color="#0284c7" />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: isDark ? '#e0f2fe' : '#0369a1' }}>
+                Identity Verification (Blue Check)
+              </Text>
+              <Text style={{ fontSize: 11, color: isDark ? '#bae6fd' : '#0284c7', marginTop: 2, lineHeight: 15 }}>
+                The official blue check is reserved strictly for real-world identity and account authenticity, awarded independently of referral milestones.
+              </Text>
+            </View>
+          </View>
+
+          {/* Anti-Cheating & Audit Notice */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+            <ShieldCheck size={14} color={colors.brand} />
+            <Text style={{ fontSize: 11, color: themeColors.textMuted }}>
+              Anti-abuse active. Only verified accounts count.
             </Text>
           </View>
         </View>
@@ -382,36 +503,84 @@ const styles = StyleSheet.create({
   copyLinkBtn: { paddingVertical: 4 },
   copyLinkText: { color: colors.brand, fontSize: 13, fontWeight: '600' },
 
-  perksRow: {
-    flexDirection: 'row',
+  rewardsContainer: {
+    padding: 18,
+    borderRadius: 24,
+    borderWidth: 1,
     gap: 12,
   },
-  perkCard: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 18,
-    borderWidth: 1,
-    gap: 4,
-  },
-  perkHeader: {
+  rewardsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'space-between',
+    gap: 12,
   },
-  perkLabel: {
+  rewardsHeaderSub: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.brand,
     textTransform: 'uppercase',
   },
-  perkValue: {
-    fontSize: 22,
+  rewardsHeaderTitle: {
+    fontSize: 18,
     fontWeight: '800',
-    marginTop: 2,
   },
-  perkDesc: {
+  referralCounterPill: {
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  referralBigCount: {
+    fontSize: 20,
+    fontWeight: '900',
+  },
+  milestoneCard: {
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 6,
+  },
+  milestoneTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  milestoneIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  milestoneTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  milestoneDesc: {
     fontSize: 11,
     lineHeight: 15,
+    marginTop: 2,
+  },
+  progressBarBg: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: 6,
+    borderRadius: 3,
+  },
+  verificationNoteCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: 4,
   },
 
   modalOverlay: {
