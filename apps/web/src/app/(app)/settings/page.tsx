@@ -49,6 +49,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { useWebTheme, LANGUAGE_OPTIONS } from '@/context/WebThemeContext'
 import EditProfileModal from '@/components/profile/EditProfileModal'
 import AdminThoughtPromptsManager from '@/components/admin/AdminThoughtPromptsManager'
+import AdminReferralReviewQueue from '@/components/admin/AdminReferralReviewQueue'
 import PostCard from '@/components/feed/PostCard'
 import type { Post } from '@private-voices/shared'
 import { extractPostMediaAndCleanContent } from '@private-voices/shared'
@@ -625,10 +626,11 @@ export default function SettingsPage(): React.JSX.Element {
         </div>
       )}
 
-      {/* ── ADMIN: DAILY THOUGHT PROMPTS ── */}
+      {/* ── ADMIN: DAILY THOUGHT PROMPTS & REFERRAL AUDITS ── */}
       {profile?.is_admin && (searchQuery || activeCategory === 'admin') && (
-        <section id="section-admin" className="space-y-4">
+        <section id="section-admin" className="space-y-6">
           <AdminThoughtPromptsManager />
+          <AdminReferralReviewQueue />
         </section>
       )}
 
