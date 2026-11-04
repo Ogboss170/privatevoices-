@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Search, PlusSquare, Inbox, Users, User, Bell, Radio, Feather } from 'lucide-react'
+import { Home, Search, PlusSquare, Inbox, Users, User, Bell, Radio, Bookmark, Feather } from 'lucide-react'
 import RightSidebar from '@/components/layout/RightSidebar'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { useWebTheme } from '@/context/WebThemeContext'
@@ -18,6 +18,7 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
     { href: '/feed',          label: t.home,          Icon: Home },
     { href: '/explore',       label: t.explore,       Icon: Search },
     { href: '/spaces',        label: 'Spaces',        Icon: Radio },
+    { href: '/saved',         label: 'Saved',         Icon: Bookmark },
     { href: '/create',        label: t.create,        Icon: PlusSquare },
     { href: '/inbox',         label: t.inbox,         Icon: Inbox },
     { href: '/communities',   label: t.community,     Icon: Users },

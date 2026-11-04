@@ -24,7 +24,7 @@ export default function ProfileDashboardPage(): React.JSX.Element {
   const [showEditModal, setShowEditModal] = useState(false)
   const [showFollowModal, setShowFollowModal] = useState(false)
   const [followModalTab, setFollowModalTab] = useState<'followers' | 'following'>('followers')
-  const [activeSection, setActiveSection] = useState<'posts' | 'voices' | 'reposts' | 'tagged'>('posts')
+  const [activeSection, setActiveSection] = useState<'posts' | 'voices' | 'reposts' | 'tagged' | 'saved'>('posts')
 
   const fetchUserData = useCallback(async () => {
     setLoading(true)
@@ -383,6 +383,25 @@ export default function ProfileDashboardPage(): React.JSX.Element {
             <span className="absolute bottom-0 h-0.5 w-12 bg-brand-600 rounded-full transition-all duration-200" />
           )}
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSection('saved')}
+          title="Saved Bookmarks"
+          aria-label="Saved Bookmarks"
+          className="flex-1 py-3 flex flex-col items-center justify-center relative transition-colors focus:outline-none"
+        >
+          <Bookmark
+            size={20}
+            className={`transition-colors ${
+              activeSection === 'saved' ? 'text-brand-600 fill-brand-600' : 'text-gray-400 hover:text-gray-600'
+            }`}
+            strokeWidth={activeSection === 'saved' ? 2.5 : 1.8}
+          />
+          {activeSection === 'saved' && (
+            <span className="absolute bottom-0 h-0.5 w-12 bg-brand-600 rounded-full transition-all duration-200" />
+          )}
+        </button>
       </div>
 
       {/* Section Content */}
@@ -504,6 +523,46 @@ export default function ProfileDashboardPage(): React.JSX.Element {
           </div>
         )
       })()}
+
+      {activeSection === 'saved' && (
+        savedPosts.length === 0 ? (
+          <div className="card p-12 text-center text-gray-400 space-y-2 flex flex-col items-center">
+            <div className="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center text-amber-600 mb-2">
+              <Bookmark size={22} className="fill-amber-600" />
+            </div>
+            <p className="text-sm font-semibold text-gray-700">No saved voices</p>
+            <p className="text-xs text-gray-500">
+              Posts and voices you bookmark will appear here. You can also view your saved Thoughts of the Day in your{' '}
+              <Link href="/saved" className="text-purple-600 font-bold underline">
+                Saved Sanctuary
+              </Link>.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between pb-1">
+              <span className="text-xs text-gray-500 font-medium">{savedPosts.length} saved voices</span>
+              <Link href="/saved" className="text-xs font-bold text-purple-600 hover:text-purple-700 flex items-center gap-1">
+                <span>View Full Saved Hub</span>
+                <ExternalLink size={12} />
+              </Link>
+            </div>
+            {savedPosts.map((post) => (
+              <PostCard
+                key={post.id}
+                post={post}
+                currentUserId={profile.id}
+                onDelete={(id) => setPosts((prev) => prev.filter((p) => p.id !== id))}
+                onToggleSave={(id, isSaved) => {
+                  if (!isSaved) {
+                    setSavedPosts((prev) => prev.filter((p) => p.id !== id))
+                  }
+                }}
+              />
+            ))}
+          </div>
+        )
+      )}
 
       {/* Edit Profile Modal */}
       {showEditModal && (

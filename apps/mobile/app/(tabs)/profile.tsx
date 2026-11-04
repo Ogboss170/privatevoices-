@@ -39,7 +39,7 @@ export default function ProfileScreen() {
   } | null>(null)
   const [userBadges, setUserBadges] = useState<string[]>([])
   const [stats, setStats] = useState({ followerCount: 0, followingCount: 0, postCount: 0 })
-  const [activeTab, setActiveTab] = useState<'posts' | 'voices' | 'reposts' | 'tagged'>('posts')
+  const [activeTab, setActiveTab] = useState<'posts' | 'voices' | 'reposts' | 'tagged' | 'saved'>('posts')
   const [posts, setPosts] = useState<Post[]>([])
   const [savedPosts, setSavedPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
@@ -408,6 +408,23 @@ export default function ProfileScreen() {
           />
           {activeTab === 'tagged' && <View style={styles.activeIndicator} />}
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'saved' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('saved')}
+          activeOpacity={0.7}
+          accessibilityLabel="Saved Bookmarks"
+          accessibilityRole="tab"
+          accessibilityState={{ selected: activeTab === 'saved' }}
+        >
+          <Bookmark
+            size={22}
+            color={activeTab === 'saved' ? colors.brand : themeColors.textMuted}
+            strokeWidth={activeTab === 'saved' ? 2.4 : 1.8}
+            fill={activeTab === 'saved' ? colors.brand : 'none'}
+          />
+          {activeTab === 'saved' && <View style={styles.activeIndicator} />}
+        </TouchableOpacity>
       </View>
 
       {/* Tab Content */}
@@ -531,6 +548,36 @@ export default function ProfileScreen() {
           </View>
         )
       })()}
+
+      {activeTab === 'saved' && (
+        savedPosts.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#fef3c7', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+              <Bookmark size={24} color="#d97706" fill="#d97706" />
+            </View>
+            <Text style={styles.emptyTitle}>No Saved Voices</Text>
+            <Text style={styles.emptyText}>Voices, whispers, and thoughts you bookmark will stay safe in this tab.</Text>
+          </View>
+        ) : (
+          <View style={styles.postsList}>
+            {savedPosts.map((item) => (
+              <MobilePostCard
+                key={item.id}
+                post={item}
+                currentUserId={user?.id}
+                onDelete={(id) => setPosts((prev) => prev.filter((p) => p.id !== id))}
+                onPressAuthor={(authorId) => setSelectedProfileTarget({ userId: authorId })}
+                onPressMention={(username) => setSelectedProfileTarget({ username })}
+                onToggleSave={(id, isSaved) => {
+                  if (!isSaved) {
+                    setSavedPosts((prev) => prev.filter((p) => p.id !== id))
+                  }
+                }}
+              />
+            ))}
+          </View>
+        )
+      )}
 
       {/* Edit Profile Modal */}
       {profile && (
