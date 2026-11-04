@@ -731,6 +731,9 @@ export interface SpaceParticipant {
   role: SpaceRole;
   handRaised: boolean;
   isMuted: boolean;
+  isMasked?: boolean;
+  maskedPersona?: string | null;
+  voiceFilter?: 'none' | 'deep' | 'helium' | 'robot' | 'whisper' | string;
   joinedAt: string;
 }
 
@@ -738,6 +741,8 @@ export interface LiveSpace {
   id: string;
   title: string;
   topic?: string | null;
+  pinnedPrompt?: string | null;
+  isMaskedAllowed?: boolean;
   hostId: string;
   host?: {
     id: string;

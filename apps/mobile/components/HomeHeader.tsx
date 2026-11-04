@@ -7,7 +7,7 @@ import {
   Animated as RNAnimated,
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { Plus, Bell } from 'lucide-react-native'
+import { Plus, Bell, Radio } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../lib/supabase'
 import { useTheme } from '../context/ThemeContext'
@@ -111,8 +111,19 @@ export function HomeHeader({ currentUserId }: HomeHeaderProps) {
             </TouchableOpacity>
           </RNAnimated.View>
 
-          {/* Right: 🔔 Notifications */}
+          {/* Right: 🎙️ Spaces & 🔔 Notifications */}
           <View style={styles.headerRightSlot}>
+            <TouchableOpacity
+              style={styles.headerRightBtn}
+              onPress={() => router.push('/spaces' as any)}
+              activeOpacity={0.7}
+              accessible
+              accessibilityRole="button"
+              accessibilityLabel="Live Voice Spaces"
+            >
+              <Radio color={ACCENT} size={20} strokeWidth={2.2} />
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={styles.headerRightBtn}
               onPress={() => router.push('/notifications' as any)}

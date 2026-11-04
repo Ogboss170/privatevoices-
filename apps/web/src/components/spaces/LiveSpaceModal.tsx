@@ -57,6 +57,8 @@ export function LiveSpaceModal({
   const [myParticipant, setMyParticipant] = useState<SpaceParticipant | null>(null)
   const [isMuted, setIsMuted] = useState(true)
   const [handRaised, setHandRaised] = useState(false)
+  const [isMasked, setIsMasked] = useState(false)
+  const [maskedPersona, setMaskedPersona] = useState('Thoughtful Owl')
   const [selectedVoiceFilter, setSelectedVoiceFilter] = useState<VoiceFilterType>('none')
   const [showVoiceFilterPicker, setShowVoiceFilterPicker] = useState(false)
   const [speakingUsers, setSpeakingUsers] = useState<Set<string>>(new Set())
@@ -100,6 +102,8 @@ export function LiveSpaceModal({
           id: spaceData.id,
           title: spaceData.title,
           topic: spaceData.topic,
+          pinnedPrompt: spaceData.pinned_prompt,
+          isMaskedAllowed: spaceData.is_masked_allowed ?? true,
           hostId: spaceData.host_id,
           host: spaceData.host ? {
             id: spaceData.host.id,
@@ -129,12 +133,15 @@ export function LiveSpaceModal({
           id: p.id,
           spaceId: p.space_id,
           userId: p.user_id,
-          username: p.profile?.username || 'user',
-          displayName: p.profile?.display_name || 'Anonymous',
-          avatarUrl: p.profile?.avatar_url || null,
+          username: p.is_masked ? (p.masked_persona || 'Masked Voice') : (p.profile?.username || 'user'),
+          displayName: p.is_masked ? (p.masked_persona || 'Masked Voice') : (p.profile?.display_name || 'Anonymous'),
+          avatarUrl: p.is_masked ? null : (p.profile?.avatar_url || null),
           role: p.role as SpaceRole,
           handRaised: p.hand_raised,
           isMuted: p.is_muted,
+          isMasked: p.is_masked,
+          maskedPersona: p.masked_persona,
+          voiceFilter: p.voice_filter,
           joinedAt: p.joined_at,
         }))
 
@@ -213,13 +220,30 @@ export function LiveSpaceModal({
       const isHost = spaceData?.host_id === currentUserId
       const initialRole: SpaceRole = isHost ? 'host' : 'listener'
 
+      // Check if participant already has a saved persona/mask
+      const { data: existingParticipant } = await supabase
+        .from('space_participants')
+        .select('*')
+        .eq('space_id', spaceId)
+        .eq('user_id', currentUserId)
+        .maybeSingle()
+
+      if (existingParticipant) {
+        setIsMasked(existingParticipant.is_masked ?? false)
+        if (existingParticipant.masked_persona) setMaskedPersona(existingParticipant.masked_persona)
+        if (existingParticipant.voice_filter) setSelectedVoiceFilter(existingParticipant.voice_filter as VoiceFilterType)
+      }
+
       await supabase.from('space_participants').upsert(
         {
           space_id: spaceId,
           user_id: currentUserId,
-          role: initialRole,
-          hand_raised: false,
-          is_muted: isHost ? false : true,
+          role: existingParticipant?.role || initialRole,
+          hand_raised: existingParticipant?.hand_raised ?? false,
+          is_muted: existingParticipant ? existingParticipant.is_muted : (isHost ? false : true),
+          is_masked: existingParticipant?.is_masked ?? false,
+          masked_persona: existingParticipant?.masked_persona ?? null,
+          voice_filter: existingParticipant?.voice_filter ?? 'none',
         },
         { onConflict: 'space_id,user_id' }
       )
@@ -452,6 +476,36 @@ export function LiveSpaceModal({
       .eq('user_id', currentUserId)
   }
 
+  // Toggle Masked Voice Persona & Filter Settings
+  const handleToggleMasked = async (newMaskedState: boolean, persona?: string) => {
+    setIsMasked(newMaskedState)
+    const personaToSave = persona || maskedPersona
+    if (persona) setMaskedPersona(persona)
+
+    await supabase
+      .from('space_participants')
+      .update({
+        is_masked: newMaskedState,
+        masked_persona: newMaskedState ? personaToSave : null,
+      })
+      .eq('space_id', spaceId)
+      .eq('user_id', currentUserId)
+
+    fetchSpaceData()
+  }
+
+  // Update Voice Filter preset
+  const handleSelectVoiceFilter = async (filter: VoiceFilterType) => {
+    setSelectedVoiceFilter(filter)
+    setShowVoiceFilterPicker(false)
+
+    await supabase
+      .from('space_participants')
+      .update({ voice_filter: filter })
+      .eq('space_id', spaceId)
+      .eq('user_id', currentUserId)
+  }
+
   // Host Controls: Promote listener to speaker
   const handlePromoteToSpeaker = async (targetUserId: string) => {
     if (myParticipant?.role !== 'host') return
@@ -680,6 +734,21 @@ export function LiveSpaceModal({
           </div>
         )}
 
+        {/* Pinned Thought Starter / Stage Question */}
+        {space?.pinnedPrompt && (
+          <div className="px-5 py-3 bg-gradient-to-r from-purple-900/60 via-indigo-900/60 to-purple-900/60 border-b border-purple-500/20 text-white flex items-start gap-3">
+            <span className="text-lg flex-shrink-0">💡</span>
+            <div className="min-w-0">
+              <span className="text-[10px] uppercase tracking-wider font-black text-purple-300 block">
+                Pinned Stage Question
+              </span>
+              <p className="text-xs sm:text-sm font-semibold text-purple-100 leading-snug">
+                {space.pinnedPrompt}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Participants Stage */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 relative overflow-x-hidden">
           {/* Floating Emoji Reactions Layer */}
@@ -796,7 +865,19 @@ export function LiveSpaceModal({
                         }`}
                       >
                         <div className="w-full h-full rounded-full bg-gradient-to-tr from-purple-700 to-indigo-600 flex items-center justify-center font-bold text-lg text-white overflow-hidden shadow-md">
-                          {speaker.avatarUrl ? (
+                          {speaker.isMasked ? (
+                            <span className="text-2xl select-none">
+                              {speaker.maskedPersona?.includes('Owl')
+                                ? '🦉'
+                                : speaker.maskedPersona?.includes('Thinker')
+                                ? '🌙'
+                                : speaker.maskedPersona?.includes('Fox')
+                                ? '🦊'
+                                : speaker.maskedPersona?.includes('Breeze')
+                                ? '🍃'
+                                : '🎭'}
+                            </span>
+                          ) : speaker.avatarUrl ? (
                             <Image
                               src={speaker.avatarUrl}
                               alt={speaker.displayName}
@@ -810,9 +891,15 @@ export function LiveSpaceModal({
                         </div>
                       </div>
 
-                      {/* Role Badge */}
+                      {/* Role or Mask Badge */}
                       <span className="absolute -top-1 -right-1 bg-gradient-to-r from-amber-500 to-orange-500 text-gray-950 p-1 rounded-full text-[10px] font-black shadow-sm">
-                        {isUserHost ? <Shield size={12} /> : <Award size={12} />}
+                        {speaker.isMasked ? (
+                          <Sparkles size={12} className="text-white" />
+                        ) : isUserHost ? (
+                          <Shield size={12} />
+                        ) : (
+                          <Award size={12} />
+                        )}
                       </span>
 
                       {/* Mic Status */}
@@ -825,11 +912,17 @@ export function LiveSpaceModal({
                       </span>
                     </div>
 
-                    <span className="text-xs font-bold text-white mt-2 truncate w-full max-w-[90px]">
-                      {speaker.displayName}
+                    <span className="text-xs font-bold text-white mt-2 truncate w-full max-w-[90px] flex items-center justify-center gap-1">
+                      {speaker.isMasked && <span>🎭</span>}
+                      <span className="truncate">{speaker.displayName}</span>
                     </span>
-                    <span className="text-[10px] text-gray-400 truncate w-full max-w-[90px]">
-                      {isUserHost ? 'Host' : 'Speaker'}
+                    <span className="text-[10px] text-gray-400 truncate w-full max-w-[90px] flex items-center justify-center gap-1">
+                      <span>{isUserHost ? 'Host' : 'Speaker'}</span>
+                      {speaker.voiceFilter && speaker.voiceFilter !== 'none' && (
+                        <span className="text-[9px] bg-purple-500/20 text-purple-300 px-1 py-0.2 rounded border border-purple-500/30">
+                          {speaker.voiceFilter}
+                        </span>
+                      )}
                     </span>
 
                     {/* Host action menu on speakers */}
@@ -944,6 +1037,39 @@ export function LiveSpaceModal({
                 </div>
               )}
             </div>
+
+            {/* Masked Persona Switcher (if allowed in space) */}
+            {space?.isMaskedAllowed && (
+              <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-xl px-2 py-1.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => handleToggleMasked(!isMasked)}
+                  className={`flex items-center gap-1 font-bold px-2 py-1 rounded-lg transition-colors ${
+                    isMasked
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                  title={isMasked ? 'Speaking pseudonymously' : 'Enable Masked Voice'}
+                >
+                  <span>🎭</span>
+                  <span className="hidden sm:inline">{isMasked ? 'Masked' : 'Reveal'}</span>
+                </button>
+
+                {isMasked && (
+                  <select
+                    value={maskedPersona}
+                    onChange={(e) => handleToggleMasked(true, e.target.value)}
+                    className="bg-transparent text-purple-300 font-semibold focus:outline-none cursor-pointer text-xs pr-1"
+                  >
+                    <option value="Thoughtful Owl" className="bg-gray-900 text-white">🦉 Owl</option>
+                    <option value="Quiet Thinker" className="bg-gray-900 text-white">🌙 Thinker</option>
+                    <option value="Curious Fox" className="bg-gray-900 text-white">🦊 Fox</option>
+                    <option value="Gentle Breeze" className="bg-gray-900 text-white">🍃 Breeze</option>
+                    <option value="Masked Voice" className="bg-gray-900 text-white">🎭 Masked</option>
+                  </select>
+                )}
+              </div>
+            )}
 
             {/* Host/Speaker Quick Poll Creator Button */}
             {isSpeaker && (

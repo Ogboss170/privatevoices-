@@ -29,6 +29,8 @@ export default function SpacesPage(): React.JSX.Element {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [newTitle, setNewTitle] = useState('')
   const [newTopic, setNewTopic] = useState('')
+  const [pinnedPrompt, setPinnedPrompt] = useState('')
+  const [isMaskedAllowed, setIsMaskedAllowed] = useState(true)
   const [creating, setCreating] = useState(false)
 
   useEffect(() => {
@@ -56,6 +58,8 @@ export default function SpacesPage(): React.JSX.Element {
           id: s.id,
           title: s.title,
           topic: s.topic,
+          pinnedPrompt: s.pinned_prompt,
+          isMaskedAllowed: s.is_masked_allowed ?? true,
           hostId: s.host_id,
           host: s.host ? {
             id: s.host.id,
@@ -108,6 +112,8 @@ export default function SpacesPage(): React.JSX.Element {
         .insert({
           title: newTitle.trim(),
           topic: newTopic.trim() || null,
+          pinned_prompt: pinnedPrompt.trim() || null,
+          is_masked_allowed: isMaskedAllowed,
           host_id: currentUserId,
           status: 'live',
           speaker_count: 1,
@@ -120,6 +126,8 @@ export default function SpacesPage(): React.JSX.Element {
         setShowCreateModal(false)
         setNewTitle('')
         setNewTopic('')
+        setPinnedPrompt('')
+        setIsMaskedAllowed(true)
         setActiveSpaceId(data.id)
         fetchSpaces()
       }
@@ -218,10 +226,24 @@ export default function SpacesPage(): React.JSX.Element {
                     {space.title}
                   </h3>
 
+                  {space.pinnedPrompt && (
+                    <div className="bg-purple-50/70 border border-purple-200/60 rounded-xl p-2.5 text-xs text-purple-900 font-medium flex items-start gap-2">
+                      <span className="text-base">💡</span>
+                      <p className="line-clamp-2 leading-relaxed">{space.pinnedPrompt}</p>
+                    </div>
+                  )}
+
                   {space.topic && (
                     <p className="text-xs text-gray-500 line-clamp-2">
                       {space.topic}
                     </p>
+                  )}
+
+                  {space.isMaskedAllowed && (
+                    <div className="flex items-center gap-1.5 text-[11px] text-purple-600 font-semibold">
+                      <span>🎭</span>
+                      <span>Masked Voices & Voice Modifiers Supported</span>
+                    </div>
                   )}
                 </div>
 
@@ -309,6 +331,40 @@ export default function SpacesPage(): React.JSX.Element {
                   value={newTopic}
                   onChange={(e) => setNewTopic(e.target.value)}
                   className="w-full px-3.5 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Pinned Thought Starter / Topic Question (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. What is one life decision you made that nobody agreed with?"
+                  value={pinnedPrompt}
+                  onChange={(e) => setPinnedPrompt(e.target.value)}
+                  className="w-full px-3.5 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  This question will be pinned prominently on the stage for speakers and listeners.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-purple-50/60 rounded-xl border border-purple-100">
+                <div className="space-y-0.5 pr-2">
+                  <div className="text-xs font-bold text-purple-950 flex items-center gap-1.5">
+                    <span>🎭</span>
+                    <span>Allow Masked Voices & DSP Filters</span>
+                  </div>
+                  <p className="text-[11px] text-purple-800/80">
+                    Participants can choose to speak under anonymous personas with live voice pitch shifting.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={isMaskedAllowed}
+                  onChange={(e) => setIsMaskedAllowed(e.target.checked)}
+                  className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 cursor-pointer"
                 />
               </div>
 
