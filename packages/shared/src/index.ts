@@ -859,3 +859,42 @@ export function getOptimizedImageUrl(
     return originalUrl;
   }
 }
+
+// ─── Thought of the Day & Conversations ────────────────────────────────────────
+
+export interface DailyThoughtPrompt {
+  id: string;
+  tag: string;
+  prompt: string;
+  icon: string;
+  activeDate?: string;
+  isActive: boolean;
+  createdBy?: string | null;
+  createdAt?: string;
+  reactionCount?: number;
+  isReactedByMe?: boolean;
+  saveCount?: number;
+  isSavedByMe?: boolean;
+  reshareCount?: number;
+  isResharedByMe?: boolean;
+  commentCount?: number;
+}
+
+export interface PromptComment {
+  id: string;
+  promptId: string;
+  authorId: string;
+  content: string;
+  isMasked: boolean;
+  maskedPersona: string | null;
+  createdAt: string;
+  updatedAt: string;
+  author?: {
+    id: string;
+    username: string;
+    displayName: string;
+    avatarUrl: string | null;
+  };
+  likeCount?: number;
+  isLikedByMe?: boolean;
+}
