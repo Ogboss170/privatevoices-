@@ -20,9 +20,21 @@ const TABS = [
   { id: 'community', label: 'Community' },
 ]
 
+export type ThoughtDiscoveryFilter = 'all' | 'reflections' | 'advice' | 'masked' | 'voice_only' | 'nearby'
+
+const THOUGHT_FILTERS: { id: ThoughtDiscoveryFilter; label: string; icon: string }[] = [
+  { id: 'all', label: 'All Thoughts', icon: '✨' },
+  { id: 'reflections', label: 'Reflections', icon: '💭' },
+  { id: 'advice', label: 'Questions & Advice', icon: '💡' },
+  { id: 'masked', label: 'Masked Musings', icon: '🎭' },
+  { id: 'voice_only', label: 'Voice Whispers', icon: '🎙️' },
+  { id: 'nearby', label: 'Tagged Places', icon: '📍' },
+]
+
 export default function FeedPage() {
   const supabase = createSupabaseBrowserClient()
   const [activeTab, setActiveTab] = useState<FeedMode>('for-you')
+  const [activeMoodFilter, setActiveMoodFilter] = useState<ThoughtDiscoveryFilter>('all')
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [currentUserId, setCurrentUserId] = useState<string | undefined>()
@@ -270,6 +282,37 @@ export default function FeedPage() {
     setPosts((prev) => prev.filter((p) => p.id !== deletedId))
   }
 
+  // Filter posts based on the selected Thought Discovery Filter
+  const filteredPosts = posts.filter((post) => {
+    if (activeMoodFilter === 'all') return true
+    if (activeMoodFilter === 'reflections') {
+      return (
+        !post.isMasked &&
+        !post.audioUrl &&
+        post.content &&
+        !post.content.includes('?') &&
+        post.content.length > 35
+      )
+    }
+    if (activeMoodFilter === 'advice') {
+      return (
+        post.content &&
+        (post.content.includes('?') ||
+          /advice|help|opinion|thoughts\?|recommend/i.test(post.content))
+      )
+    }
+    if (activeMoodFilter === 'masked') {
+      return !!post.isMasked
+    }
+    if (activeMoodFilter === 'voice_only') {
+      return !!post.audioUrl
+    }
+    if (activeMoodFilter === 'nearby') {
+      return !!post.locationName
+    }
+    return true
+  })
+
   return (
     <div className="space-y-0 max-w-xl mx-auto pb-12">
       {/* ── 1. Top Header: Home Page Only Natural Scrolling Header ── */}
@@ -357,25 +400,63 @@ export default function FeedPage() {
       {/* ── 4. Daily Thought Starter (Sparking Authentic Perspectives) ── */}
       <DailyThoughtStarter />
 
+      {/* ── 5. Thought Discovery & Mindset Filters ── */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-2 pt-1 scrollbar-none px-1">
+        {THOUGHT_FILTERS.map((filter) => {
+          const isSelected = activeMoodFilter === filter.id
+          return (
+            <button
+              key={filter.id}
+              onClick={() => {
+                setActiveMoodFilter(filter.id)
+                setVisibleCount(25)
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                isSelected
+                  ? 'bg-brand-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 border border-gray-200/80 dark:border-slate-700/80'
+              }`}
+            >
+              <span>{filter.icon}</span>
+              <span>{filter.label}</span>
+            </button>
+          )
+        })}
+      </div>
+
       {/* 4. Feed Content */}
       {loading ? (
         <div className="card p-12 text-center text-gray-400">
           <p className="text-sm">Loading feed...</p>
         </div>
-      ) : posts.length === 0 ? (
+      ) : filteredPosts.length === 0 ? (
         <div className="space-y-4">
-          <div className="card p-12 text-center">
-            <div className="text-5xl mb-4">✨</div>
-            <h2 className="font-semibold text-gray-900 mb-1">No posts yet</h2>
-            <p className="text-sm text-gray-500 max-w-xs mx-auto">
-              Follow more people to fill your feed or discover interesting voices below.
+          <div className="card p-12 text-center bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl">
+            <div className="text-4xl mb-3">
+              {THOUGHT_FILTERS.find((f) => f.id === activeMoodFilter)?.icon || '✨'}
+            </div>
+            <h2 className="font-bold text-gray-900 dark:text-white mb-1 text-sm">
+              No matching {THOUGHT_FILTERS.find((f) => f.id === activeMoodFilter)?.label || 'posts'}
+            </h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 max-w-xs mx-auto">
+              {activeMoodFilter === 'all'
+                ? 'Follow more people to fill your feed or discover interesting voices below.'
+                : 'Try choosing another mindset filter above or post the first thought in this category.'}
             </p>
+            {activeMoodFilter !== 'all' && (
+              <button
+                onClick={() => setActiveMoodFilter('all')}
+                className="mt-3 inline-flex items-center px-3 py-1.5 rounded-xl bg-brand-50 dark:bg-slate-800 text-brand-600 dark:text-brand-400 font-semibold text-xs hover:bg-brand-100 transition-colors"
+              >
+                Clear Filter
+              </button>
+            )}
           </div>
           <PeopleYouMayKnow currentUserId={currentUserId} variant="carousel" />
         </div>
       ) : (
         <div className="space-y-3.5">
-          {posts.slice(0, visibleCount).map((post, idx) => (
+          {filteredPosts.slice(0, visibleCount).map((post, idx) => (
             <React.Fragment key={post.id}>
               <PostCard
                 post={post}
@@ -397,7 +478,7 @@ export default function FeedPage() {
           ))}
 
           {/* ── 'See More' Progressive Batch Loading ── */}
-          {posts.length > visibleCount && (
+          {filteredPosts.length > visibleCount && (
             <div className="pt-2 pb-6 text-center">
               <button
                 type="button"
@@ -406,7 +487,7 @@ export default function FeedPage() {
               >
                 <span>See more posts</span>
                 <span className="text-xs text-gray-400 font-normal">
-                  ({posts.length - visibleCount} more available)
+                  ({filteredPosts.length - visibleCount} more available)
                 </span>
               </button>
             </div>

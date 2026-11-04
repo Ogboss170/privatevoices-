@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { supabase } from '../../lib/supabase'
@@ -29,9 +30,21 @@ const TABS = [
   { id: 'community', label: 'Community' },
 ]
 
+export type ThoughtDiscoveryFilter = 'all' | 'reflections' | 'advice' | 'masked' | 'voice_only' | 'nearby'
+
+const THOUGHT_FILTERS: { id: ThoughtDiscoveryFilter; label: string; icon: string }[] = [
+  { id: 'all', label: 'All Thoughts', icon: '✨' },
+  { id: 'reflections', label: 'Reflections', icon: '💭' },
+  { id: 'advice', label: 'Advice & Questions', icon: '💡' },
+  { id: 'masked', label: 'Masked Musings', icon: '🎭' },
+  { id: 'voice_only', label: 'Voice Whispers', icon: '🎙️' },
+  { id: 'nearby', label: 'Tagged Places', icon: '📍' },
+]
+
 export default function HomeScreen() {
   const { colors: themeColors } = useTheme()
   const [activeTab, setActiveTab] = useState('for-you')
+  const [activeMoodFilter, setActiveMoodFilter] = useState<ThoughtDiscoveryFilter>('all')
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -258,13 +271,79 @@ export default function HomeScreen() {
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* Thought Discovery & Mindset Filters */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 10, gap: 8 }}
+      >
+        {THOUGHT_FILTERS.map((filter) => {
+          const isSelected = activeMoodFilter === filter.id
+          return (
+            <TouchableOpacity
+              key={filter.id}
+              onPress={() => setActiveMoodFilter(filter.id)}
+              style={[
+                styles.moodChip,
+                {
+                  backgroundColor: isSelected ? colors.brand : themeColors.surface,
+                  borderColor: isSelected ? colors.brand : themeColors.surfaceBorder,
+                },
+              ]}
+            >
+              <Text style={{ fontSize: 13 }}>{filter.icon}</Text>
+              <Text
+                style={[
+                  styles.moodChipText,
+                  { color: isSelected ? '#ffffff' : themeColors.textPrimary },
+                ]}
+              >
+                {filter.label}
+              </Text>
+            </TouchableOpacity>
+          )
+        })}
+      </ScrollView>
     </View>
   )
+
+  const filteredPosts = posts.filter((post) => {
+    if (activeMoodFilter === 'all') return true
+    if (activeMoodFilter === 'reflections') {
+      return (
+        !post.isMasked &&
+        post.content &&
+        !post.content.includes('?') &&
+        post.content.length > 35
+      )
+    }
+    if (activeMoodFilter === 'advice') {
+      return (
+        post.content &&
+        (post.content.includes('?') ||
+          /advice|help|opinion|thoughts\?|recommend/i.test(post.content))
+      )
+    }
+    if (activeMoodFilter === 'masked') {
+      return !!post.isMasked
+    }
+    if (activeMoodFilter === 'voice_only') {
+      return (
+        post.content?.includes('🎙️') ||
+        post.content?.includes('Voice Whisper')
+      )
+    }
+    if (activeMoodFilter === 'nearby') {
+      return !!post.locationName
+    }
+    return true
+  })
 
   return (
     <View style={[styles.container, { backgroundColor: themeColors.background }]}>
       <FlatList
-        data={loading ? [] : posts}
+        data={loading ? [] : filteredPosts}
         keyExtractor={(item) => item.id}
         ListHeaderComponent={renderFeedHeader}
         renderItem={({ item }) => (
@@ -344,6 +423,19 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: colors.brand,
     fontWeight: '700',
+  },
+  moodChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  moodChipText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingVertical: 48 },
