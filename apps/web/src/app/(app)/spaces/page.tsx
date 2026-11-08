@@ -15,15 +15,15 @@ import {
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { LiveSpace } from '@private-voices/shared'
-import { LiveSpaceModal } from '@/components/spaces/LiveSpaceModal'
+import { useActiveSpace } from '@/context/ActiveSpaceContext'
 
 export default function SpacesPage(): React.JSX.Element {
   const supabase = createSupabaseBrowserClient()
+  const { joinSpace } = useActiveSpace()
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [spaces, setSpaces] = useState<LiveSpace[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeSpaceId, setActiveSpaceId] = useState<string | null>(null)
 
   // Create Space Modal state
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -128,7 +128,7 @@ export default function SpacesPage(): React.JSX.Element {
         setNewTopic('')
         setPinnedPrompt('')
         setIsMaskedAllowed(true)
-        setActiveSpaceId(data.id)
+        await joinSpace(data.id)
         fetchSpaces()
       }
     } catch (err: any) {
@@ -206,7 +206,7 @@ export default function SpacesPage(): React.JSX.Element {
             {spaces.map((space) => (
               <div
                 key={space.id}
-                onClick={() => setActiveSpaceId(space.id)}
+                onClick={() => joinSpace(space.id)}
                 className="card p-5 hover:border-purple-300 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between space-y-4 relative overflow-hidden"
               >
                 <div className="space-y-2">
@@ -274,7 +274,7 @@ export default function SpacesPage(): React.JSX.Element {
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      setActiveSpaceId(space.id)
+                      joinSpace(space.id)
                     }}
                     className="px-3 py-1.5 rounded-xl bg-purple-50 group-hover:bg-purple-600 text-purple-700 group-hover:text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs"
                   >
@@ -399,18 +399,7 @@ export default function SpacesPage(): React.JSX.Element {
         </div>
       )}
 
-      {/* Live Voice Space Modal */}
-      {activeSpaceId && currentUserId && (
-        <LiveSpaceModal
-          spaceId={activeSpaceId}
-          currentUserId={currentUserId}
-          isOpen={!!activeSpaceId}
-          onClose={() => {
-            setActiveSpaceId(null)
-            fetchSpaces()
-          }}
-        />
-      )}
+      {/* Live Voice Space Modal rendered globally in RootLayout via GlobalLiveSpaceModal */}
     </div>
   )
 }

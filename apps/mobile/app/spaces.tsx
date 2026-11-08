@@ -22,6 +22,9 @@ import {
   Shield,
   Award,
   ChevronLeft,
+  ChevronUp,
+  ChevronDown,
+  LogOut,
   X,
 } from 'lucide-react-native'
 import { supabase } from '../lib/supabase'
@@ -42,6 +45,7 @@ export default function MobileSpacesScreen() {
 
   // Active Space Modal State
   const [activeSpace, setActiveSpace] = useState<LiveSpace | null>(null)
+  const [isMinimized, setIsMinimized] = useState(false)
   const [participants, setParticipants] = useState<SpaceParticipant[]>([])
   const [isMasked, setIsMasked] = useState(false)
   const [maskedPersona, setMaskedPersona] = useState('Thoughtful Owl')
@@ -104,6 +108,7 @@ export default function MobileSpacesScreen() {
   const handleJoinSpace = async (space: LiveSpace) => {
     if (!currentUserId) return
     setActiveSpace(space)
+    setIsMinimized(false)
 
     try {
       // Upsert into space_participants
@@ -164,6 +169,7 @@ export default function MobileSpacesScreen() {
         .eq('user_id', currentUserId)
     }
     setActiveSpace(null)
+    setIsMinimized(false)
     fetchSpaces()
   }
 
@@ -313,12 +319,12 @@ export default function MobileSpacesScreen() {
       )}
 
       {/* Active Space Full Modal Sheet */}
-      {activeSpace ? (
+      {activeSpace && !isMinimized ? (
         <Modal
-          visible={!!activeSpace}
+          visible={!!activeSpace && !isMinimized}
           animationType="slide"
           presentationStyle="pageSheet"
-          onRequestClose={handleLeaveSpace}
+          onRequestClose={() => setIsMinimized(true)}
         >
           <SafeAreaView style={styles.stageModal}>
             <View style={styles.stageHeader}>
@@ -331,9 +337,17 @@ export default function MobileSpacesScreen() {
                   {activeSpace.title}
                 </Text>
               </View>
-              <TouchableOpacity onPress={handleLeaveSpace} style={styles.closeStageBtn}>
-                <X size={20} color="#cbd5e1" />
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <TouchableOpacity
+                  onPress={() => setIsMinimized(true)}
+                  style={styles.closeStageBtn}
+                >
+                  <ChevronDown size={22} color="#cbd5e1" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleLeaveSpace} style={styles.closeStageBtn}>
+                  <X size={20} color="#cbd5e1" />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Pinned Thought Starter on Stage */}
@@ -413,6 +427,61 @@ export default function MobileSpacesScreen() {
             </View>
           </SafeAreaView>
         </Modal>
+      ) : null}
+
+      {/* Floating Space Audio Mini-Player (when minimized) */}
+      {activeSpace && isMinimized ? (
+        <View style={styles.miniPlayerContainer}>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => setIsMinimized(false)}
+            style={styles.miniPlayerContent}
+          >
+            <View style={styles.miniPlayerIcon}>
+              <Radio size={16} color="#ffffff" />
+            </View>
+
+            <View style={styles.miniPlayerInfo}>
+              <View style={styles.miniPlayerLiveRow}>
+                <View style={styles.miniPlayerBadge}>
+                  <Text style={styles.miniPlayerBadgeText}>LIVE</Text>
+                </View>
+                <Text style={styles.miniPlayerHost} numberOfLines={1}>
+                  {activeSpace.host?.displayName || 'Host'}
+                </Text>
+              </View>
+              <Text style={styles.miniPlayerTitle} numberOfLines={1}>
+                {activeSpace.title}
+              </Text>
+            </View>
+
+            <View style={styles.miniPlayerControls}>
+              <TouchableOpacity
+                onPress={handleToggleHand}
+                style={[
+                  styles.miniPlayerCtrlBtn,
+                  handRaised && styles.miniPlayerCtrlBtnRaised,
+                ]}
+              >
+                <Hand size={14} color={handRaised ? '#0f172a' : '#ffffff'} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setIsMinimized(false)}
+                style={styles.miniPlayerCtrlBtn}
+              >
+                <ChevronUp size={16} color="#ffffff" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleLeaveSpace}
+                style={[styles.miniPlayerCtrlBtn, styles.miniPlayerLeaveBtn]}
+              >
+                <LogOut size={14} color="#f87171" />
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </View>
       ) : null}
     </SafeAreaView>
   )
@@ -741,5 +810,89 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 12,
     fontWeight: '700',
+  },
+  miniPlayerContainer: {
+    position: 'absolute',
+    bottom: 20,
+    left: 16,
+    right: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 10,
+    zIndex: 99,
+  },
+  miniPlayerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.96)',
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(124, 58, 237, 0.4)',
+    gap: 10,
+  },
+  miniPlayerIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: '#7c3aed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  miniPlayerInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  miniPlayerLiveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
+  miniPlayerBadge: {
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(239, 68, 68, 0.5)',
+  },
+  miniPlayerBadgeText: {
+    color: '#f87171',
+    fontSize: 8,
+    fontWeight: '900',
+  },
+  miniPlayerHost: {
+    color: '#94a3b8',
+    fontSize: 10,
+    fontWeight: '500',
+    flexShrink: 1,
+  },
+  miniPlayerTitle: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  miniPlayerControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  miniPlayerCtrlBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  miniPlayerCtrlBtnRaised: {
+    backgroundColor: '#f59e0b',
+  },
+  miniPlayerLeaveBtn: {
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
   },
 })

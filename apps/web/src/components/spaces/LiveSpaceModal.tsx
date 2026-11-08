@@ -36,6 +36,7 @@ import {
   VOICE_FILTERS,
   applyVoiceFilterToStream,
 } from '@/lib/audio/voiceModifiers'
+import { useActiveSpace } from '@/context/ActiveSpaceContext'
 
 interface LiveSpaceModalProps {
   spaceId: string
@@ -51,6 +52,7 @@ export function LiveSpaceModal({
   onClose,
 }: LiveSpaceModalProps): React.JSX.Element | null {
   const supabase = createSupabaseBrowserClient()
+  const { minimizeSpace } = useActiveSpace()
 
   const [space, setSpace] = useState<LiveSpace | null>(null)
   const [participants, setParticipants] = useState<SpaceParticipant[]>([])
@@ -710,7 +712,10 @@ export function LiveSpaceModal({
 
           <div className="flex items-center gap-1">
             <button
-              onClick={() => setIsMinimized(true)}
+              onClick={() => {
+                minimizeSpace()
+                setIsMinimized(true)
+              }}
               className="p-2 text-gray-400 hover:text-white rounded-xl hover:bg-white/10 transition-colors"
               title="Minimize Lounge"
             >

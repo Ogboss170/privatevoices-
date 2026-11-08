@@ -2,7 +2,10 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { WebThemeProvider } from '@/context/WebThemeContext'
 import { AudioPlayerProvider } from '@/context/AudioPlayerContext'
+import { ActiveSpaceProvider } from '@/context/ActiveSpaceContext'
 import { GlobalStickyAudioPlayer } from '@/components/common/GlobalStickyAudioPlayer'
+import { GlobalSpaceMiniPlayer } from '@/components/spaces/GlobalSpaceMiniPlayer'
+import { GlobalLiveSpaceModal } from '@/components/spaces/GlobalLiveSpaceModal'
 
 export const metadata: Metadata = {
   title: {
@@ -32,8 +35,12 @@ export default function RootLayout({
       <body>
         <WebThemeProvider>
           <AudioPlayerProvider>
-            {children}
-            <GlobalStickyAudioPlayer />
+            <ActiveSpaceProvider>
+              {children}
+              <GlobalStickyAudioPlayer />
+              <GlobalSpaceMiniPlayer />
+              <GlobalLiveSpaceModal />
+            </ActiveSpaceProvider>
           </AudioPlayerProvider>
         </WebThemeProvider>
       </body>
