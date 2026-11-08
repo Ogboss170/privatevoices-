@@ -16,4 +16,9 @@ config.resolver.nodeModulesPaths = [
   path.resolve(monorepoRoot, 'node_modules'),
 ];
 
+// 3. Block @types from being resolved as JS runtime modules (fixes pnpm @types/react interception)
+config.resolver.blockList = [
+  /@types\/.*/,
+];
+
 module.exports = config;
