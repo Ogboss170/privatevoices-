@@ -18,6 +18,8 @@ import {
   Trash2,
   Lock,
   Repeat,
+  Radio,
+  BookOpen,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import type { AppNotification, NotificationType } from '@private-voices/shared'
@@ -195,8 +197,13 @@ export default function NotificationsPage(): React.JSX.Element {
       case 'story_mention':
         return <AtSign size={18} className="text-amber-500" />
       case 'community':
+      case 'community_activity':
       case 'community_join':
         return <Users size={18} className="text-indigo-600" />
+      case 'space_live':
+        return <Radio size={18} className="text-rose-500 animate-pulse" />
+      case 'thought_comment':
+        return <BookOpen size={18} className="text-amber-500" />
       case 'system':
         return <ShieldAlert size={18} className="text-amber-600" />
       default:

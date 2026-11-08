@@ -21,6 +21,8 @@ import {
   Users,
   Bell,
   Trash2,
+  Radio,
+  BookOpen,
 } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import { supabase } from '../lib/supabase'
@@ -189,7 +191,12 @@ export default function NotificationsScreen() {
       case 'story_mention':
         return <AtSign size={16} color="#f59e0b" />
       case 'community':
+      case 'community_activity':
         return <Users size={16} color="#6366f1" />
+      case 'space_live':
+        return <Radio size={16} color="#ef4444" />
+      case 'thought_comment':
+        return <BookOpen size={16} color="#f59e0b" />
       case 'system':
         return <ShieldAlert size={16} color="#d97706" />
       default:

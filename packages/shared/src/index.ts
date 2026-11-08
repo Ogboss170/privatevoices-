@@ -272,7 +272,10 @@ export type NotificationType =
   | 'message'
   | 'story_mention'
   | 'community'
+  | 'community_activity'
   | 'community_join'
+  | 'thought_comment'
+  | 'space_live'
   | 'system';
 
 export interface NotificationActor {
