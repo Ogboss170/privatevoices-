@@ -17,7 +17,8 @@ import {
   Lock,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import type { FytroMode } from '@private-voices/shared'
+import type { FytroMode, FytroMemory } from '@private-voices/shared'
+import { Brain, Eye, Plus, Check } from 'lucide-react'
 
 interface Message {
   id: string
@@ -70,11 +71,83 @@ export default function FytroPage(): React.JSX.Element {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
+  // Memory Vault State
+  const [showVault, setShowVault] = useState(false)
+  const [memories, setMemories] = useState<FytroMemory[]>([])
+  const [vaultLoading, setVaultLoading] = useState(false)
+  const [newMemoryText, setNewMemoryText] = useState('')
+  const [newMemoryCategory, setNewMemoryCategory] = useState<'perspective' | 'value' | 'dilemma' | 'goal' | 'context'>('perspective')
+  const [savingMemory, setSavingMemory] = useState(false)
+
+  // Load memories
+  const loadMemories = async () => {
+    setVaultLoading(true)
+    try {
+      const res = await fetch('/api/fytro/memories')
+      const data = await res.json()
+      if (data.memories) {
+        setMemories(data.memories)
+      }
+    } catch (err) {
+      console.error('Failed to load memories:', err)
+    } finally {
+      setVaultLoading(false)
+    }
+  }
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user) setCurrentUserId(data.user.id)
+      if (data.user) {
+        setCurrentUserId(data.user.id)
+        loadMemories()
+      }
     })
   }, [supabase])
+
+  const handleAddMemory = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newMemoryText.trim() || savingMemory) return
+
+    setSavingMemory(true)
+    try {
+      const res = await fetch('/api/fytro/memories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          memoryText: newMemoryText.trim(),
+          category: newMemoryCategory,
+        }),
+      })
+      const data = await res.json()
+      if (data.memory) {
+        setMemories((prev) => [data.memory, ...prev])
+        setNewMemoryText('')
+      }
+    } catch (err) {
+      console.error('Failed to add memory:', err)
+    } finally {
+      setSavingMemory(false)
+    }
+  }
+
+  const handleDeleteMemory = async (id: string) => {
+    try {
+      await fetch(`/api/fytro/memories?id=${id}`, { method: 'DELETE' })
+      setMemories((prev) => prev.filter((m) => m.id !== id))
+    } catch (err) {
+      console.error('Failed to delete memory:', err)
+    }
+  }
+
+  const handleBurnMemories = async () => {
+    if (!confirm('Burn Memory Vault? Fytro will forget everything stored about your perspective.')) return
+    try {
+      await fetch('/api/fytro/memories?burnAll=true', { method: 'DELETE' })
+      setMemories([])
+    } catch (err) {
+      console.error('Failed to burn memories:', err)
+    }
+  }
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -111,6 +184,10 @@ export default function FytroPage(): React.JSX.Element {
             content: m.content,
           })),
           mode: activeMode,
+          memories: memories.map((m) => ({
+            category: m.category,
+            memoryText: m.memoryText,
+          })),
         }),
       })
 
@@ -204,7 +281,7 @@ export default function FytroPage(): React.JSX.Element {
           </div>
         </div>
 
-        {/* Mode Selector Chips & Burn */}
+        {/* Mode Selector Chips, Memory Vault & Burn */}
         <div className="flex items-center gap-1.5 sm:gap-2">
           <div className="hidden sm:flex items-center bg-gray-100 dark:bg-slate-800/80 p-0.5 rounded-full border border-gray-200/60 dark:border-slate-700/60 text-[11px]">
             <button
@@ -240,6 +317,19 @@ export default function FytroPage(): React.JSX.Element {
           </div>
 
           <button
+            onClick={() => setShowVault(!showVault)}
+            title="Memory Vault (User-Governed Memory)"
+            className={`p-2 rounded-full transition-all text-xs flex items-center gap-1 font-semibold ${
+              showVault
+                ? 'bg-purple-600 text-white shadow-xs'
+                : 'text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/40'
+            }`}
+          >
+            <Brain size={16} />
+            <span className="hidden sm:inline">Vault ({memories.length})</span>
+          </button>
+
+          <button
             onClick={handleClear}
             title="Burn Session (Instant Wipe)"
             className="p-2 text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-full transition-all text-xs flex items-center gap-1 font-semibold"
@@ -250,8 +340,107 @@ export default function FytroPage(): React.JSX.Element {
         </div>
       </div>
 
-      {/* Messages Scroll Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      {/* Messages or Memory Vault View */}
+      {showVault ? (
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-3">
+            <div>
+              <h2 className="text-base font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
+                <Brain size={18} className="text-purple-600" />
+                <span>Self-Sovereign Memory Vault</span>
+              </h2>
+              <p className="text-xs text-gray-500">
+                You control everything Fytro remembers about you. Review, add, or delete individual memories at any time.
+              </p>
+            </div>
+            {memories.length > 0 && (
+              <button
+                onClick={handleBurnMemories}
+                className="text-xs font-bold text-rose-500 hover:text-rose-600 px-3 py-1.5 rounded-xl border border-rose-200 dark:border-rose-900/40 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+              >
+                Burn All Memories
+              </button>
+            )}
+          </div>
+
+          {/* Add New Memory Card */}
+          <form onSubmit={handleAddMemory} className="p-3.5 rounded-2xl bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-800/40 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
+                <Plus size={14} />
+                <span>Add Knowledge to Fytro</span>
+              </span>
+              <select
+                value={newMemoryCategory}
+                onChange={(e) => setNewMemoryCategory(e.target.value as any)}
+                className="text-[11px] bg-white dark:bg-slate-900 border border-purple-200 dark:border-purple-800 rounded-lg px-2 py-1 text-gray-700 dark:text-gray-200 focus:outline-none"
+              >
+                <option value="perspective">Worldview / Perspective</option>
+                <option value="value">Core Value</option>
+                <option value="dilemma">Current Dilemma</option>
+                <option value="goal">Life Goal</option>
+                <option value="context">Personal Context</option>
+              </select>
+            </div>
+            <textarea
+              rows={2}
+              value={newMemoryText}
+              onChange={(e) => setNewMemoryText(e.target.value)}
+              placeholder="e.g. I value candid feedback over polite encouragement. I am skeptical of fast solutions..."
+              className="w-full text-xs p-2.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+            />
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={!newMemoryText.trim() || savingMemory}
+                className="btn-primary text-xs py-1.5 px-3 rounded-xl disabled:opacity-50"
+              >
+                {savingMemory ? 'Memorizing...' : 'Save to Vault'}
+              </button>
+            </div>
+          </form>
+
+          {/* Memories List */}
+          {vaultLoading ? (
+            <div className="py-8 text-center text-xs text-gray-400">Loading memory vault...</div>
+          ) : memories.length === 0 ? (
+            <div className="py-12 text-center space-y-2 border-2 border-dashed border-gray-100 dark:border-slate-800 rounded-2xl">
+              <p className="text-2xl">🧠</p>
+              <h4 className="text-xs font-bold text-gray-800 dark:text-gray-200">Memory Vault is completely empty</h4>
+              <p className="text-[11px] text-gray-400 max-w-xs mx-auto">
+                Fytro currently remembers nothing between sessions. You have total privacy.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {memories.map((m) => (
+                <div
+                  key={m.id}
+                  className="p-3 rounded-2xl border border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-start justify-between gap-3 group shadow-xs"
+                >
+                  <div className="space-y-1 min-w-0">
+                    <span className="inline-block text-[9px] font-black uppercase tracking-wider text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded-full border border-purple-200/50 dark:border-purple-800/50">
+                      {m.category}
+                    </span>
+                    <p className="text-xs text-gray-800 dark:text-gray-200 leading-relaxed">
+                      {m.memoryText}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteMemory(m.id)}
+                    title="Forget this memory"
+                    className="p-1.5 text-gray-400 hover:text-rose-500 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors flex-shrink-0"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Messages Scroll Area */
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {/* Privacy Assurance Pill */}
         <div className="bg-purple-50/60 dark:bg-purple-950/30 border border-purple-200/60 dark:border-purple-800/40 rounded-2xl p-3 flex items-center gap-2.5 text-xs text-purple-900 dark:text-purple-200">
           <Lock size={16} className="text-purple-600 flex-shrink-0" />
@@ -324,6 +513,7 @@ export default function FytroPage(): React.JSX.Element {
         )}
         <div ref={messagesEndRef} />
       </div>
+      )}
 
       {/* Input Tray */}
       <div className="p-3 border-t border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900">

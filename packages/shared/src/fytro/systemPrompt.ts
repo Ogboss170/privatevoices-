@@ -50,3 +50,16 @@ Help the user brainstorm original concepts, refine prose, explore metaphors, and
   shield: `\n[Active Mode: Anonymity Shield (De-anonymization Review)]
 Scrutinize the input for identifying details, personal markers, and contextual leaks. Provide clear, constructive suggestions to protect anonymity.`,
 };
+
+export type FytroMemoryCategory = 'perspective' | 'value' | 'dilemma' | 'goal' | 'context';
+
+export interface FytroMemory {
+  id: string;
+  userId: string;
+  category: FytroMemoryCategory;
+  memoryText: string;
+  importance: number;
+  createdAt: string;
+  updatedAt: string;
+}
+

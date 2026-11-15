@@ -13,10 +13,27 @@ interface ChatMessage {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { messages = [], mode = 'sanctuary' }: { messages: ChatMessage[]; mode: FytroMode } = body
+    const {
+      messages = [],
+      mode = 'sanctuary',
+      memories = [],
+    }: {
+      messages: ChatMessage[]
+      mode: FytroMode
+      memories?: Array<{ category: string; memoryText: string }>
+    } = body
+
+    let memoryContextPrompt = ''
+    if (memories && memories.length > 0) {
+      memoryContextPrompt =
+        '\n\n[USER-GOVERNED MEMORY VAULT]\n' +
+        'The user has granted you access to remember the following persistent aspects of their worldview and context:\n' +
+        memories.map((m) => `• [${m.category}]: ${m.memoryText}`).join('\n') +
+        '\nUse these memories to maintain organic continuity, but never make assumptions or feel restricted by them.'
+    }
 
     const activeModeGuidance = FYTRO_MODE_INSTRUCTIONS[mode] || FYTRO_MODE_INSTRUCTIONS.sanctuary
-    const completeSystemInstruction = `${FYTRO_SYSTEM_PROMPT}\n${activeModeGuidance}`
+    const completeSystemInstruction = `${FYTRO_SYSTEM_PROMPT}\n${activeModeGuidance}${memoryContextPrompt}`
 
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.OPENAI_API_KEY
 
