@@ -21,31 +21,36 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import type { DailyThoughtPrompt, PromptComment } from '@private-voices/shared'
 
 const FALLBACK_PROMPTS: Array<Omit<DailyThoughtPrompt, 'id' | 'isActive'>> = [
-  {
-    tag: 'Daily Reflection',
-    prompt: 'What is an opinion or perspective you hold that you rarely share out loud?',
-    icon: '💭',
-  },
-  {
-    tag: 'Curiosity',
-    prompt: 'What was a hard lesson you had to learn on your own without anyone warning you?',
-    icon: '🌱',
-  },
-  {
-    tag: 'Unfiltered Thought',
-    prompt: 'If you had zero fear of judgment from friends or colleagues, what would you create or say today?',
-    icon: '🎭',
-  },
-  {
-    tag: 'Deep Question',
-    prompt: 'What is something simple that genuinely brought you peace of mind this week?',
-    icon: '✨',
-  },
-  {
-    tag: 'Life Reflection',
-    prompt: 'What is a piece of common advice that you think is completely wrong or misleading?',
-    icon: '🔍',
-  },
+  { tag: 'Daily Reflection', prompt: 'What is an opinion or perspective you hold that you rarely share out loud?', icon: '💭' },
+  { tag: 'Curiosity', prompt: 'What was a hard lesson you had to learn on your own without anyone warning you?', icon: '🌱' },
+  { tag: 'Unfiltered Thought', prompt: 'If you had zero fear of judgment from friends or colleagues, what would you create or say today?', icon: '🎭' },
+  { tag: 'Deep Question', prompt: 'What is something simple that genuinely brought you peace of mind this week?', icon: '✨' },
+  { tag: 'Life Reflection', prompt: 'What is a piece of common advice that you think is completely wrong or misleading?', icon: '🔍' },
+  { tag: 'Vulnerability', prompt: 'What is something you pretend to understand just to avoid feeling foolish?', icon: '🌊' },
+  { tag: 'Inner Peace', prompt: 'When was the last time you felt truly present and disconnected from technology?', icon: '🍃' },
+  { tag: 'Growth', prompt: 'What version of yourself did you have to let go of to become who you are now?', icon: '🪴' },
+  { tag: 'Honesty', prompt: 'If you could send a one-sentence message to your younger self, what would it say?', icon: '✉️' },
+  { tag: 'Connection', prompt: 'What is a compliment someone gave you years ago that you still remember today?', icon: '🫂' },
+  { tag: 'Courage', prompt: 'What is a boundary you set that was terrifying at the time, but saved your sanity?', icon: '🛡️' },
+  { tag: 'Authenticity', prompt: 'What part of your personality only comes out when you are completely alone?', icon: '🔮' },
+  { tag: 'Gratitude', prompt: 'Who is an unsung person in your life whose presence makes hard days lighter?', icon: '☀️' },
+  { tag: 'Curiosity', prompt: 'What is a question you wish someone would ask you right now?', icon: '❓' },
+  { tag: 'Wisdom', prompt: 'What is a mistake you made that ended up opening the most important door in your life?', icon: '🗝️' },
+  { tag: 'Self-Discovery', prompt: 'What are you tolerating right now that you know you shouldn\'t be?', icon: '⏳' },
+  { tag: 'Mind Space', prompt: 'What thought keeps knocking on the door of your mind when you try to sleep?', icon: '🌙' },
+  { tag: 'Perspective', prompt: 'What would change about your life if you stopped worrying about other people\'s timelines?', icon: '🧭' },
+  { tag: 'Emotional Truth', prompt: 'What is a grief or disappointment you never allowed yourself to fully process?', icon: '🌧️' },
+  { tag: 'Simplicity', prompt: 'What is a small ritual in your day that makes you feel human again?', icon: '☕' },
+  { tag: 'Unspoken', prompt: 'What is a secret dream you don\'t speak aloud because you fear sounding unrealistic?', icon: '🚀' },
+  { tag: 'Clarity', prompt: 'If you had to describe your current season of life in three honest words, what would they be?', icon: '🍂' },
+  { tag: 'Compassion', prompt: 'What is something you need to forgive yourself for this week?', icon: '🕊️' },
+  { tag: 'Creativity', prompt: 'What were you obsessed with doing as a child that you haven\'t touched in years?', icon: '🎨' },
+  { tag: 'Quiet Truth', prompt: 'What is the biggest difference between how people perceive you and how you feel inside?', icon: '🪞' },
+  { tag: 'Ambition', prompt: 'Are you currently chasing what you genuinely desire, or what you were told to achieve?', icon: '🏔️' },
+  { tag: 'Resilience', prompt: 'What gave you strength during the hardest month you ever endured?', icon: '⚡' },
+  { tag: 'Serenity', prompt: 'What noise in your life do you need to turn down right now?', icon: '🤫' },
+  { tag: 'Reflection', prompt: 'What is something you used to judge people for, until life taught you better?', icon: '⚖️' },
+  { tag: 'Hope', prompt: 'What is one thing you are quietly looking forward to in the coming weeks?', icon: '🌅' }
 ]
 
 export default function DailyThoughtStarter(): React.JSX.Element | null {
@@ -94,9 +99,27 @@ export default function DailyThoughtStarter(): React.JSX.Element | null {
 
     async function fetchTodayPrompt() {
       try {
+        // 1. First, call the automatic daily refresher RPC if available
+        const { data: rpcData, error: rpcError } = await supabase
+          .rpc('get_or_create_daily_thought')
+
+        const rpcPrompt = Array.isArray(rpcData) ? rpcData[0] : (rpcData as any)
+
+        if (!rpcError && rpcPrompt && rpcPrompt.id) {
+          setCurrentPrompt({
+            id: rpcPrompt.id,
+            tag: rpcPrompt.tag,
+            prompt: rpcPrompt.prompt,
+            icon: rpcPrompt.icon,
+            activeDate: rpcPrompt.active_date,
+            isActive: rpcPrompt.is_active,
+          })
+          return
+        }
+
         const todayStr = new Date().toISOString().split('T')[0]
 
-        // 1. Check for prompt scheduled for today
+        // 2. Check for prompt scheduled for today
         const { data: dbPrompt } = await supabase
           .from('daily_thought_prompts')
           .select('id, tag, prompt, icon, active_date, is_active')
@@ -117,32 +140,11 @@ export default function DailyThoughtStarter(): React.JSX.Element | null {
           })
           return
         }
-
-        // 2. Check for latest active prompt
-        const { data: latestPrompt } = await supabase
-          .from('daily_thought_prompts')
-          .select('id, tag, prompt, icon, active_date, is_active')
-          .eq('is_active', true)
-          .order('active_date', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-
-        if (latestPrompt) {
-          setCurrentPrompt({
-            id: latestPrompt.id,
-            tag: latestPrompt.tag,
-            prompt: latestPrompt.prompt,
-            icon: latestPrompt.icon,
-            activeDate: latestPrompt.active_date,
-            isActive: latestPrompt.is_active,
-          })
-          return
-        }
       } catch {
         // Fall back to local rotation if database query fails or table not yet migrated
       }
 
-      // 3. Fallback based on day of year
+      // 3. Fallback based on day of year (rotates cleanly across all 30 days)
       const now = new Date()
       const dayOfYear = Math.floor(
         (now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24)
