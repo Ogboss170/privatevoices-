@@ -340,7 +340,7 @@ export default function FeedPage() {
             </Link>
           </div>
 
-          {/* Right: Notifications bell & Spaces icon */}
+          {/* Right: Notifications → Spaces → Fytro */}
           <div className="flex items-center gap-1 sm:gap-1.5 z-10">
             <Link
               href="/notifications"
@@ -357,10 +357,19 @@ export default function FeedPage() {
             <Link
               href="/spaces"
               aria-label="Spaces"
-              title="Spaces"
+              title="Live Voice Spaces"
               className="p-2 rounded-full text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/40 active:scale-95 transition-transform flex items-center justify-center"
             >
               <Radio size={21} strokeWidth={2.2} />
+            </Link>
+
+            <Link
+              href="/fytro"
+              aria-label="Fytro"
+              title="Fytro • Your Mind Space"
+              className="p-2 rounded-full text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 active:scale-95 transition-transform flex items-center justify-center relative group"
+            >
+              <Sparkles size={21} strokeWidth={2.2} className="group-hover:rotate-12 transition-transform" />
             </Link>
           </div>
         </div>

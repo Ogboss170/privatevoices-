@@ -7,7 +7,7 @@ import {
   Animated as RNAnimated,
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { Plus, Bell, Radio, BookOpen } from 'lucide-react-native'
+import { Plus, Bell, Radio, BookOpen, Sparkles } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../lib/supabase'
 import { useTheme } from '../context/ThemeContext'
@@ -111,17 +111,22 @@ export function HomeHeader({ currentUserId }: HomeHeaderProps) {
             </TouchableOpacity>
           </RNAnimated.View>
 
-          {/* Right: 📖 Journal, 🎙️ Spaces & 🔔 Notifications */}
+          {/* Right: Notifications → Spaces → Fytro */}
           <View style={styles.headerRightSlot}>
             <TouchableOpacity
               style={styles.headerRightBtn}
-              onPress={() => router.push('/journal' as any)}
+              onPress={() => router.push('/notifications' as any)}
               activeOpacity={0.7}
               accessible
               accessibilityRole="button"
-              accessibilityLabel="Reflections Journal"
+              accessibilityLabel={unreadCount > 0 ? `${unreadCount} unread notifications` : 'Notifications'}
             >
-              <BookOpen color={themeColors.textPrimary} size={20} strokeWidth={2} />
+              <Bell color={themeColors.textPrimary} size={22} strokeWidth={2} />
+              {unreadCount > 0 && (
+                <RNAnimated.View style={[styles.badge, { transform: [{ scale: bellScale }] }]}>
+                  <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+                </RNAnimated.View>
+              )}
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -137,18 +142,13 @@ export function HomeHeader({ currentUserId }: HomeHeaderProps) {
 
             <TouchableOpacity
               style={styles.headerRightBtn}
-              onPress={() => router.push('/notifications' as any)}
+              onPress={() => router.push('/fytro' as any)}
               activeOpacity={0.7}
               accessible
               accessibilityRole="button"
-              accessibilityLabel={unreadCount > 0 ? `${unreadCount} unread notifications` : 'Notifications'}
+              accessibilityLabel="Fytro Mind Space"
             >
-              <Bell color={themeColors.textPrimary} size={22} strokeWidth={2} />
-              {unreadCount > 0 && (
-                <RNAnimated.View style={[styles.badge, { transform: [{ scale: bellScale }] }]}>
-                  <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
-                </RNAnimated.View>
-              )}
+              <Sparkles color="#6366f1" size={20} strokeWidth={2.2} />
             </TouchableOpacity>
           </View>
         </View>
