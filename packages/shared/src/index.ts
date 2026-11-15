@@ -901,3 +901,7 @@ export interface PromptComment {
   likeCount?: number;
   isLikedByMe?: boolean;
 }
+
+// ─── Fytro AI Assistant ───────────────────────────────────────────────────────
+export * from './fytro/systemPrompt';
+

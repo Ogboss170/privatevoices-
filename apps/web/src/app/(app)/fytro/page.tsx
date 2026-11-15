@@ -17,6 +17,7 @@ import {
   Lock,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import type { FytroMode } from '@private-voices/shared'
 
 interface Message {
   id: string
@@ -64,6 +65,7 @@ export default function FytroPage(): React.JSX.Element {
     },
   ])
   const [input, setInput] = useState('')
+  const [activeMode, setActiveMode] = useState<FytroMode>('sanctuary')
   const [thinking, setThinking] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -89,48 +91,75 @@ export default function FytroPage(): React.JSX.Element {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     }
 
-    setMessages((prev) => [...prev, userMsg])
+    const updatedMessages = [...messages, userMsg]
+    setMessages(updatedMessages)
     if (!textToSend) setInput('')
     setThinking(true)
 
-    // Simulating Fytro empathetic response engine
-    setTimeout(() => {
-      let reply = ''
-      const lower = text.toLowerCase()
+    // Prepare assistant message placeholder for live streaming
+    const botMsgId = `b-${Date.now()}`
+    const botTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    let accumulatedContent = ''
 
-      if (lower.includes('identif') || lower.includes('anonym') || lower.includes('leak') || lower.includes('draft')) {
-        reply =
-          "🛡️ **Fytro Anonymity Shield**: I analyzed your text for identifying markers.\n\n" +
-          "• **Names & Organizations**: None detected.\n" +
-          "• **Geographic Clues**: If you mention specific streets, neighborhoods, or dates, consider generalizing to 'a local cafe' or 'a few months ago'.\n" +
-          "• **Emotional Resonance**: Your voice sounds authentic and grounded. You can safely share this under a Masked Persona on Private Voices without fear of being recognized."
-      } else if (lower.includes('decision') || lower.includes('dilemma') || lower.includes('choice')) {
-        reply =
-          "Making decisions when emotions and stakes are tangled is exhausting. Let's step back and look at this together:\n\n" +
-          "1. What is the fear driving each option?\n" +
-          "2. If no one in your life had an opinion about this, which path would bring your future self the most peace?\n\n" +
-          "Tell me a bit more about what option A feels like versus option B."
-      } else if (lower.includes('question') || lower.includes('philosoph') || lower.includes('think about')) {
-        reply =
-          "Here is a question for your Mind Space today:\n\n" +
-          "*\"What is something you pretend to care about to keep the peace, and what is something you truly care about that you hide from others?\"*\n\n" +
-          "Take a breath. When you're ready, tell me what came to mind first."
-      } else {
-        reply =
-          "I hear you. When things feel heavy or confusing, naming them is the first step toward clarity.\n\n" +
-          "You are in a completely private space right now. There's no performance here and no expectations. What does this situation make you feel most deeply right now?"
+    try {
+      const res = await fetch('/api/fytro/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: updatedMessages.map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+          mode: activeMode,
+        }),
+      })
+
+      if (!res.ok || !res.body) {
+        throw new Error('Inference connection failed')
       }
 
-      const botMsg: Message = {
-        id: `b-${Date.now()}`,
-        role: 'assistant',
-        content: reply,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      }
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
 
-      setMessages((prev) => [...prev, botMsg])
+      // Add initial empty bot message
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: botMsgId,
+          role: 'assistant',
+          content: '',
+          timestamp: botTimestamp,
+        },
+      ])
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value, { stream: true })
+        accumulatedContent += chunk
+
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === botMsgId ? { ...msg, content: accumulatedContent } : msg
+          )
+        )
+      }
+    } catch (err) {
+      console.error('Error during streaming Fytro response:', err)
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: botMsgId,
+          role: 'assistant',
+          content:
+            "I'm here with you. Something momentarily disrupted my response stream, but your mind space is safe. What were you thinking?",
+          timestamp: botTimestamp,
+        },
+      ])
+    } finally {
       setThinking(false)
-    }, 700)
+    }
   }
 
   const handleClear = () => {
@@ -175,7 +204,41 @@ export default function FytroPage(): React.JSX.Element {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Mode Selector Chips & Burn */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="hidden sm:flex items-center bg-gray-100 dark:bg-slate-800/80 p-0.5 rounded-full border border-gray-200/60 dark:border-slate-700/60 text-[11px]">
+            <button
+              onClick={() => setActiveMode('sanctuary')}
+              className={`px-2.5 py-1 rounded-full font-bold transition-all ${
+                activeMode === 'sanctuary'
+                  ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-300 shadow-xs'
+                  : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
+              }`}
+            >
+              Sanctuary
+            </button>
+            <button
+              onClick={() => setActiveMode('challenger')}
+              className={`px-2.5 py-1 rounded-full font-bold transition-all ${
+                activeMode === 'challenger'
+                  ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-300 shadow-xs'
+                  : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
+              }`}
+            >
+              Challenger
+            </button>
+            <button
+              onClick={() => setActiveMode('shield')}
+              className={`px-2.5 py-1 rounded-full font-bold transition-all ${
+                activeMode === 'shield'
+                  ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-300 shadow-xs'
+                  : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
+              }`}
+            >
+              Shield
+            </button>
+          </div>
+
           <button
             onClick={handleClear}
             title="Burn Session (Instant Wipe)"
