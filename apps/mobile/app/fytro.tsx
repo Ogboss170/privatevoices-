@@ -9,6 +9,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ActivityIndicator,
+  Modal,
+  ScrollView,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, Stack } from 'expo-router'
@@ -18,8 +21,19 @@ import {
   Send,
   Flame,
   Lock,
+  Brain,
+  History,
+  X,
+  Plus,
+  Trash2,
+  Check,
+  MessageSquare,
+  Mic,
+  Volume2,
 } from 'lucide-react-native'
 import { useTheme } from '../context/ThemeContext'
+import { FytroService, FytroMobileSession } from '../lib/fytroService'
+import type { FytroMode, FytroMemory } from '@private-voices/shared'
 
 interface Message {
   id: string
@@ -57,28 +71,161 @@ const FYTRO_PROMPTS = [
 
 export default function FytroScreen() {
   const router = useRouter()
-  const { colors: themeColors } = useTheme()
+  const { colors: themeColors, isDark } = useTheme()
 
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
       role: 'assistant',
       content:
-        "Welcome to your Mind Space. I'm Fytro.\n\nHere, you can think freely, untangle difficult feelings, or review confidential thoughts before sharing them. Everything stays private.",
+        "Welcome to your Mind Space. I'm Fytro.\n\nHere, you can think freely, untangle difficult feelings, or review confidential thoughts before sharing them. Powered by fast intelligence and self-sovereign memory.",
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ])
   const [input, setInput] = useState('')
+  const [activeMode, setActiveMode] = useState<FytroMode>('sanctuary')
   const [thinking, setThinking] = useState(false)
   const flatListRef = useRef<FlatList>(null)
+
+  // Memory Vault Modal State
+  const [showVaultModal, setShowVaultModal] = useState(false)
+  const [memories, setMemories] = useState<FytroMemory[]>([])
+  const [newMemoryText, setNewMemoryText] = useState('')
+  const [newMemoryCategory, setNewMemoryCategory] = useState<string>('perspective')
+  const [loadingMemories, setLoadingMemories] = useState(false)
+
+  // Sessions History Modal State
+  const [showSessionsModal, setShowSessionsModal] = useState(false)
+  const [sessions, setSessions] = useState<FytroMobileSession[]>([])
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    const [fetchedMemories, fetchedSessions] = await Promise.all([
+      FytroService.getMemories(),
+      FytroService.getSessions(),
+    ])
+    setMemories(fetchedMemories)
+    setSessions(fetchedSessions)
+  }
 
   useEffect(() => {
     flatListRef.current?.scrollToEnd({ animated: true })
   }, [messages])
 
-  const handleSend = (textToSend?: string) => {
+  // Switch or open a session
+  const handleSelectSession = async (session: FytroMobileSession) => {
+    setCurrentSessionId(session.id)
+    setActiveMode(session.mode)
+    setShowSessionsModal(false)
+
+    const sessionMsgs = await FytroService.getMessages(session.id)
+    if (sessionMsgs.length > 0) {
+      setMessages(
+        sessionMsgs.map((m) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          timestamp: m.timestamp,
+        }))
+      )
+    } else {
+      setMessages([
+        {
+          id: 'welcome-session',
+          role: 'assistant',
+          content: `Resumed exploration: "${session.title}". What would you like to think about?`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      ])
+    }
+  }
+
+  const handleCreateNewSession = async () => {
+    const newSession = await FytroService.createSession('New Exploration', activeMode)
+    if (newSession) {
+      setSessions((prev) => [newSession, ...prev])
+      setCurrentSessionId(newSession.id)
+      setMessages([
+        {
+          id: 'welcome-fresh',
+          role: 'assistant',
+          content: 'Started fresh Mind Space exploration. Speak freely.',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      ])
+      setShowSessionsModal(false)
+    }
+  }
+
+  const handleDeleteSession = async (id: string) => {
+    Alert.alert('Delete Session', 'Are you sure you want to delete this chat exploration?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          await FytroService.deleteSession(id)
+          setSessions((prev) => prev.filter((s) => s.id !== id))
+          if (currentSessionId === id) {
+            setCurrentSessionId(null)
+          }
+        },
+      },
+    ])
+  }
+
+  // Memory Vault Handlers
+  const handleAddMemory = async () => {
+    if (!newMemoryText.trim()) return
+    const mem = await FytroService.addMemory(newMemoryCategory, newMemoryText.trim())
+    if (mem) {
+      setMemories((prev) => [mem, ...prev])
+      setNewMemoryText('')
+    }
+  }
+
+  const handleDeleteMemory = async (id: string) => {
+    await FytroService.deleteMemory(id)
+    setMemories((prev) => prev.filter((m) => m.id !== id))
+  }
+
+  const handleBurnAllMemories = () => {
+    Alert.alert(
+      'Burn Memory Vault',
+      'This will erase all persistent memories Fytro has retained about your perspectives.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Burn All',
+          style: 'destructive',
+          onPress: async () => {
+            await FytroService.burnAllMemories()
+            setMemories([])
+          },
+        },
+      ]
+    )
+  }
+
+  const handleSend = async (textToSend?: string) => {
     const text = textToSend || input.trim()
     if (!text || thinking) return
+
+    // Auto-create session if not present
+    let activeSid = currentSessionId
+    if (!activeSid) {
+      const titleSnippet = text.length > 25 ? text.slice(0, 25) + '...' : text
+      const newS = await FytroService.createSession(titleSnippet, activeMode)
+      if (newS) {
+        activeSid = newS.id
+        setCurrentSessionId(activeSid)
+        setSessions((prev) => [newS, ...prev])
+      }
+    }
 
     const userMsg: Message = {
       id: `u-${Date.now()}`,
@@ -87,35 +234,21 @@ export default function FytroScreen() {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     }
 
-    setMessages((prev) => [...prev, userMsg])
+    const updated = [...messages, userMsg]
+    setMessages(updated)
     if (!textToSend) setInput('')
     setThinking(true)
 
-    setTimeout(() => {
-      let reply = ''
-      const lower = text.toLowerCase()
+    if (activeSid) {
+      FytroService.saveMessage(activeSid, 'user', text).catch(console.warn)
+    }
 
-      if (lower.includes('identif') || lower.includes('anonym') || lower.includes('leak') || lower.includes('draft')) {
-        reply =
-          "🛡️ Fytro Anonymity Shield:\n\n" +
-          "• Names & Organizations: Clear.\n" +
-          "• Contextual Markers: Safe. No unique timestamps or narrow addresses detected.\n" +
-          "• You can safely post this under a Masked Persona on Private Voices."
-      } else if (lower.includes('decision') || lower.includes('dilemma') || lower.includes('choice')) {
-        reply =
-          "When paths diverge, look at the root:\n\n" +
-          "1. Which choice protects your peace versus satisfying expectations?\n" +
-          "2. What is the fear behind each path?\n\n" +
-          "Tell me a bit more about what you hesitate on."
-      } else if (lower.includes('question') || lower.includes('philosoph')) {
-        reply =
-          "Here is a thought for your Mind Space today:\n\n" +
-          "\"What is something you pretend to care about just to fit in, and what do you genuinely care about that you hide?\""
-      } else {
-        reply =
-          "I hear you. In this Mind Space, you don't have to filter or perform.\n\n" +
-          "What does this situation make you feel most deeply right now?"
-      }
+    try {
+      const reply = await FytroService.queryFytro({
+        messages: updated.map((m) => ({ role: m.role, content: m.content })),
+        mode: activeMode,
+        memories,
+      })
 
       const botMsg: Message = {
         id: `b-${Date.now()}`,
@@ -125,8 +258,15 @@ export default function FytroScreen() {
       }
 
       setMessages((prev) => [...prev, botMsg])
+
+      if (activeSid) {
+        FytroService.saveMessage(activeSid, 'assistant', reply).catch(console.warn)
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
       setThinking(false)
-    }, 600)
+    }
   }
 
   const handleBurn = () => {
@@ -147,6 +287,7 @@ export default function FytroScreen() {
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
               },
             ])
+            setCurrentSessionId(null)
           },
         },
       ]
@@ -179,10 +320,59 @@ export default function FytroScreen() {
           </View>
         </View>
 
-        <TouchableOpacity onPress={handleBurn} style={styles.burnBtn}>
-          <Flame size={18} color="#ef4444" />
-          <Text style={styles.burnText}>Burn</Text>
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          {/* Sessions Drawer Button */}
+          <TouchableOpacity
+            onPress={() => setShowSessionsModal(true)}
+            style={styles.iconBtn}
+            accessibilityLabel="Chat Sessions"
+          >
+            <History size={18} color={themeColors.textSecondary} />
+          </TouchableOpacity>
+
+          {/* Memory Vault Button */}
+          <TouchableOpacity
+            onPress={() => setShowVaultModal(true)}
+            style={styles.iconBtn}
+            accessibilityLabel="Memory Vault"
+          >
+            <Brain size={18} color="#7c3aed" />
+          </TouchableOpacity>
+
+          {/* Burn Button */}
+          <TouchableOpacity onPress={handleBurn} style={styles.burnBtn}>
+            <Flame size={17} color="#ef4444" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Mode Switcher Chips */}
+      <View style={[styles.modeRow, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.surfaceBorder }]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modeScroll}>
+          {(['sanctuary', 'challenger', 'creative', 'shield'] as FytroMode[]).map((mode) => (
+            <TouchableOpacity
+              key={mode}
+              onPress={() => setActiveMode(mode)}
+              style={[
+                styles.modeChip,
+                activeMode === mode && styles.modeChipActive,
+                { borderColor: activeMode === mode ? '#7c3aed' : themeColors.surfaceBorder },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.modeChipText,
+                  activeMode === mode ? styles.modeChipTextActive : { color: themeColors.textSecondary },
+                ]}
+              >
+                {mode === 'sanctuary' && '🌿 Sanctuary'}
+                {mode === 'challenger' && '⚔️ Challenger'}
+                {mode === 'creative' && '✨ Creative'}
+                {mode === 'shield' && '🛡️ Shield'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
       <KeyboardAvoidingView
@@ -196,9 +386,9 @@ export default function FytroScreen() {
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={
             <View style={styles.privacyBanner}>
-              <Lock size={15} color="#7c3aed" />
+              <Lock size={14} color="#7c3aed" />
               <Text style={styles.privacyBannerText}>
-                Zero-Judgment Zone: Ephemeral thoughts shielded by Private Voices.
+                Fytro conversations are strictly private and never used to train public models.
               </Text>
             </View>
           }
@@ -207,78 +397,224 @@ export default function FytroScreen() {
             return (
               <View style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowBot]}>
                 {!isUser && (
-                  <View style={styles.botIcon}>
+                  <View style={styles.botIconSmall}>
                     <Sparkles size={12} color="#ffffff" />
                   </View>
                 )}
                 <View
                   style={[
-                    styles.bubble,
+                    styles.msgBubble,
                     isUser
-                      ? styles.bubbleUser
-                      : [styles.bubbleBot, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }],
+                      ? styles.userBubble
+                      : [styles.botBubble, { backgroundColor: isDark ? '#1e293b' : '#f1f5f9', borderColor: themeColors.surfaceBorder }],
                   ]}
                 >
-                  <Text style={[styles.msgText, isUser ? styles.msgTextUser : { color: themeColors.textPrimary }]}>
+                  <Text
+                    style={[
+                      styles.msgText,
+                      isUser ? styles.userMsgText : { color: themeColors.textPrimary },
+                    ]}
+                  >
                     {item.content}
                   </Text>
-                  <Text style={[styles.msgTime, isUser ? styles.msgTimeUser : { color: themeColors.textSecondary }]}>
+                  <Text
+                    style={[
+                      styles.timestamp,
+                      isUser ? styles.userTimestamp : { color: themeColors.textSecondary },
+                    ]}
+                  >
                     {item.timestamp}
                   </Text>
                 </View>
               </View>
             )
           }}
+          ListFooterComponent={
+            thinking ? (
+              <View style={styles.thinkingRow}>
+                <ActivityIndicator size="small" color="#7c3aed" />
+                <Text style={[styles.thinkingText, { color: themeColors.textSecondary }]}>
+                  Fytro is reflecting via Groq...
+                </Text>
+              </View>
+            ) : null
+          }
         />
 
-        {thinking && (
-          <View style={styles.thinkingWrap}>
-            <Text style={styles.thinkingText}>Fytro is reflecting...</Text>
-          </View>
+        {/* Quick prompt cards when starting out */}
+        {messages.length <= 1 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.promptScroll}
+          >
+            {FYTRO_PROMPTS.map((p, i) => (
+              <TouchableOpacity
+                key={i}
+                onPress={() => handleSend(p.starter)}
+                style={[styles.promptCard, { backgroundColor: isDark ? '#1e1b4b' : '#f5f3ff', borderColor: '#ddd6fe' }]}
+              >
+                <Text style={styles.promptIcon}>{p.icon}</Text>
+                <Text style={styles.promptTitle}>{p.title}</Text>
+                <Text style={styles.promptDesc} numberOfLines={2}>{p.desc}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         )}
 
         {/* Input Bar */}
-        <SafeAreaView edges={['bottom']} style={[styles.inputBar, { backgroundColor: themeColors.surface, borderTopColor: themeColors.surfaceBorder }]}>
+        <View style={[styles.inputBar, { backgroundColor: themeColors.surface, borderTopColor: themeColors.surfaceBorder }]}>
           <TextInput
+            style={[styles.input, { color: themeColors.textPrimary, backgroundColor: isDark ? '#0f172a' : '#f8fafc', borderColor: themeColors.surfaceBorder }]}
             value={input}
             onChangeText={setInput}
             placeholder="Tell Fytro what's on your mind..."
             placeholderTextColor={themeColors.textSecondary}
-            style={[styles.input, { color: themeColors.textPrimary, backgroundColor: themeColors.background }]}
+            multiline
+            maxLength={1000}
           />
           <TouchableOpacity
+            style={[styles.sendBtn, (!input.trim() || thinking) && styles.sendBtnDisabled]}
             onPress={() => handleSend()}
             disabled={!input.trim() || thinking}
-            style={[styles.sendBtn, (!input.trim() || thinking) && { opacity: 0.5 }]}
           >
             <Send size={16} color="#ffffff" />
           </TouchableOpacity>
-        </SafeAreaView>
+        </View>
       </KeyboardAvoidingView>
+
+      {/* ── Modal: Self-Sovereign Memory Vault ── */}
+      <Modal visible={showVaultModal} animationType="slide" transparent>
+        <SafeAreaView style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: themeColors.surface }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Brain size={20} color="#7c3aed" />
+                <Text style={[styles.modalTitle, { color: themeColors.textPrimary }]}>Memory Vault</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowVaultModal(false)}>
+                <X size={20} color={themeColors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.modalSubtitle, { color: themeColors.textSecondary }]}>
+              Control everything Fytro retains across sessions. Delete or burn anytime.
+            </Text>
+
+            {/* Add memory field */}
+            <View style={styles.addMemoryBox}>
+              <TextInput
+                style={[styles.memoryInput, { color: themeColors.textPrimary, borderColor: themeColors.surfaceBorder }]}
+                value={newMemoryText}
+                onChangeText={setNewMemoryText}
+                placeholder="Teach Fytro a core perspective (e.g., 'I prefer direct feedback')..."
+                placeholderTextColor={themeColors.textSecondary}
+              />
+              <TouchableOpacity style={styles.addMemoryBtn} onPress={handleAddMemory}>
+                <Plus size={16} color="#fff" />
+                <Text style={styles.addMemoryBtnText}>Remember</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ flex: 1 }}>
+              {memories.length === 0 ? (
+                <Text style={[styles.emptyText, { color: themeColors.textSecondary }]}>
+                  Vault is empty. Fytro currently holds zero persistent profile memories.
+                </Text>
+              ) : (
+                memories.map((m) => (
+                  <View key={m.id} style={[styles.memoryCard, { borderColor: themeColors.surfaceBorder }]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.memoryCategory}>[{m.category}]</Text>
+                      <Text style={[styles.memoryText, { color: themeColors.textPrimary }]}>{m.memoryText}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => handleDeleteMemory(m.id)}>
+                      <Trash2 size={16} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+
+            {memories.length > 0 && (
+              <TouchableOpacity style={styles.burnAllBtn} onPress={handleBurnAllMemories}>
+                <Flame size={16} color="#ef4444" />
+                <Text style={styles.burnAllBtnText}>Burn All Vault Memories</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* ── Modal: Chat Sessions History ── */}
+      <Modal visible={showSessionsModal} animationType="slide" transparent>
+        <SafeAreaView style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: themeColors.surface }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <History size={20} color="#7c3aed" />
+                <Text style={[styles.modalTitle, { color: themeColors.textPrimary }]}>Explorations</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowSessionsModal(false)}>
+                <X size={20} color={themeColors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity style={styles.newSessionBtn} onPress={handleCreateNewSession}>
+              <Plus size={16} color="#fff" />
+              <Text style={styles.newSessionBtnText}>Start Fresh Exploration</Text>
+            </TouchableOpacity>
+
+            <ScrollView style={{ flex: 1, marginTop: 12 }}>
+              {sessions.length === 0 ? (
+                <Text style={[styles.emptyText, { color: themeColors.textSecondary }]}>
+                  No past sessions yet. Start chatting to build your thought history.
+                </Text>
+              ) : (
+                sessions.map((s) => (
+                  <TouchableOpacity
+                    key={s.id}
+                    onPress={() => handleSelectSession(s)}
+                    style={[
+                      styles.sessionCard,
+                      currentSessionId === s.id && styles.sessionCardActive,
+                      { borderColor: themeColors.surfaceBorder },
+                    ]}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                      <MessageSquare size={16} color="#7c3aed" />
+                      <Text style={[styles.sessionTitle, { color: themeColors.textPrimary }]} numberOfLines={1}>
+                        {s.title}
+                      </Text>
+                    </View>
+                    <TouchableOpacity onPress={() => handleDeleteSession(s.id)}>
+                      <Trash2 size={15} color="#9ca3af" />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 1,
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  backBtn: {
-    padding: 4,
-  },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  backBtn: { padding: 4 },
+  iconBtn: { padding: 7, borderRadius: 20 },
   avatarWrap: {
     width: 32,
     height: 32,
@@ -287,142 +623,189 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  title: {
-    fontSize: 15,
-    fontWeight: '800',
-  },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  title: { fontSize: 16, fontWeight: '700' },
   pill: {
-    backgroundColor: 'rgba(124, 58, 237, 0.15)',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
+    backgroundColor: '#ede9fe',
     borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
-  pillText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#7c3aed',
-  },
-  subtitle: {
-    fontSize: 10,
-    marginTop: 1,
-  },
+  pillText: { fontSize: 10, fontWeight: '700', color: '#7c3aed' },
+  subtitle: { fontSize: 11 },
   burnBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    padding: 7,
+    borderRadius: 20,
+    backgroundColor: '#fef2f2',
   },
-  burnText: {
-    color: '#ef4444',
-    fontSize: 11,
-    fontWeight: '700',
+  modeRow: {
+    borderBottomWidth: 1,
+    paddingVertical: 8,
   },
+  modeScroll: { paddingHorizontal: 16, gap: 8 },
+  modeChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  modeChipActive: {
+    backgroundColor: '#7c3aed',
+  },
+  modeChipText: { fontSize: 12, fontWeight: '600' },
+  modeChipTextActive: { color: '#ffffff' },
+  listContent: { padding: 16, paddingBottom: 24 },
   privacyBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(124, 58, 237, 0.08)',
-    borderRadius: 14,
-    padding: 10,
-    marginBottom: 12,
-  },
-  privacyBannerText: {
-    fontSize: 11,
-    color: '#7c3aed',
-    flex: 1,
-    fontWeight: '500',
-  },
-  listContent: {
-    padding: 16,
-    paddingBottom: 24,
-  },
-  msgRow: {
-    flexDirection: 'row',
-    marginVertical: 6,
-  },
-  msgRowUser: {
-    justifyContent: 'flex-end',
-  },
-  msgRowBot: {
-    justifyContent: 'flex-start',
     gap: 8,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: '#f5f3ff',
+    marginBottom: 16,
   },
-  botIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  privacyBannerText: { fontSize: 11, color: '#6d28d9', flex: 1 },
+  msgRow: { flexDirection: 'row', marginBottom: 12, alignItems: 'flex-end' },
+  msgRowUser: { justifyContent: 'flex-end' },
+  msgRowBot: { justifyContent: 'flex-start' },
+  botIconSmall: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: '#7c3aed',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
+    marginRight: 6,
+    marginBottom: 4,
   },
-  bubble: {
+  msgBubble: {
     maxWidth: '82%',
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 18,
   },
-  bubbleUser: {
+  userBubble: {
     backgroundColor: '#7c3aed',
-    borderTopRightRadius: 2,
+    borderBottomRightRadius: 4,
   },
-  bubbleBot: {
-    borderTopLeftRadius: 2,
-    borderWidth: StyleSheet.hairlineWidth,
+  botBubble: {
+    borderBottomLeftRadius: 4,
+    borderWidth: 1,
   },
-  msgText: {
-    fontSize: 13,
-    lineHeight: 18,
+  msgText: { fontSize: 14, lineHeight: 20 },
+  userMsgText: { color: '#ffffff' },
+  timestamp: { fontSize: 9, marginTop: 4, textAlign: 'right' },
+  userTimestamp: { color: '#ddd6fe' },
+  thinkingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, marginLeft: 28 },
+  thinkingText: { fontSize: 12, fontStyle: 'italic' },
+  promptScroll: { paddingHorizontal: 16, gap: 10, paddingBottom: 10 },
+  promptCard: {
+    width: 170,
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
   },
-  msgTextUser: {
-    color: '#ffffff',
-  },
-  msgTime: {
-    fontSize: 9,
-    marginTop: 4,
-    textAlign: 'right',
-  },
-  msgTimeUser: {
-    color: 'rgba(255, 255, 255, 0.7)',
-  },
-  thinkingWrap: {
-    paddingHorizontal: 20,
-    paddingVertical: 6,
-  },
-  thinkingText: {
-    fontSize: 11,
-    color: '#a855f7',
-    fontStyle: 'italic',
-  },
+  promptIcon: { fontSize: 20, marginBottom: 4 },
+  promptTitle: { fontSize: 12, fontWeight: '700', color: '#5b21b6' },
+  promptDesc: { fontSize: 10, color: '#6b7280', marginTop: 2 },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 8,
+    padding: 12,
+    borderTopWidth: 1,
+    gap: 10,
   },
   input: {
     flex: 1,
-    fontSize: 13,
+    minHeight: 40,
+    maxHeight: 100,
     borderRadius: 20,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 8,
+    borderWidth: 1,
+    fontSize: 14,
   },
   sendBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#7c3aed',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  sendBtnDisabled: { opacity: 0.4 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  modalContent: {
+    height: '75%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+  },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  modalTitle: { fontSize: 18, fontWeight: '700' },
+  modalSubtitle: { fontSize: 12, marginTop: 4, marginBottom: 14 },
+  addMemoryBox: { flexDirection: 'row', gap: 8, marginBottom: 14 },
+  memoryInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 12,
+  },
+  addMemoryBtn: {
+    backgroundColor: '#7c3aed',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  addMemoryBtnText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  memoryCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  memoryCategory: { fontSize: 10, fontWeight: '700', color: '#7c3aed', textTransform: 'uppercase' },
+  memoryText: { fontSize: 12, marginTop: 2 },
+  emptyText: { textAlign: 'center', fontSize: 12, marginTop: 40 },
+  burnAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 10,
+    paddingVertical: 10,
+  },
+  burnAllBtnText: { color: '#ef4444', fontSize: 12, fontWeight: '700' },
+  newSessionBtn: {
+    backgroundColor: '#7c3aed',
+    borderRadius: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 10,
+  },
+  newSessionBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  sessionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  sessionCardActive: {
+    borderColor: '#7c3aed',
+    backgroundColor: 'rgba(124, 58, 237, 0.08)',
+  },
+  sessionTitle: { fontSize: 13, fontWeight: '600' },
 })
