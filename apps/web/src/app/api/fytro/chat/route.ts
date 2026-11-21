@@ -35,9 +35,95 @@ export async function POST(req: NextRequest) {
     const activeModeGuidance = FYTRO_MODE_INSTRUCTIONS[mode] || FYTRO_MODE_INSTRUCTIONS.sanctuary
     const completeSystemInstruction = `${FYTRO_SYSTEM_PROMPT}\n${activeModeGuidance}${memoryContextPrompt}`
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.OPENAI_API_KEY
+    const apiKey =
+      process.env.GROQ_API_KEY ||
+      process.env.GEMINI_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
+      process.env.OPENAI_API_KEY
 
-    // If a live AI key is provided (Gemini / OpenAI), stream from live LLM
+    // ── Tier 1: Groq Engine (Ultra-fast LPUs, Llama 3.3 70B Versatile) ──
+    if (process.env.GROQ_API_KEY) {
+      try {
+        const groqMessages = [
+          { role: 'system', content: completeSystemInstruction },
+          ...messages
+            .filter((m) => m.role === 'user' || m.role === 'assistant')
+            .map((m) => ({ role: m.role, content: m.content })),
+        ]
+
+        const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: 'llama-3.3-70b-versatile',
+            messages: groqMessages,
+            temperature: mode === 'creative' ? 0.9 : mode === 'challenger' ? 0.7 : 0.6,
+            max_tokens: 1500,
+            stream: true,
+          }),
+        })
+
+        if (groqResponse.ok && groqResponse.body) {
+          const encoder = new TextEncoder()
+          const customStream = new ReadableStream({
+            async start(controller) {
+              const reader = groqResponse.body!.getReader()
+              const decoder = new TextDecoder()
+              let buffer = ''
+
+              try {
+                while (true) {
+                  const { done, value } = await reader.read()
+                  if (done) break
+
+                  buffer += decoder.decode(value, { stream: true })
+                  const lines = buffer.split('\n')
+                  buffer = lines.pop() || ''
+
+                  for (const line of lines) {
+                    const trimmed = line.trim()
+                    if (trimmed.startsWith('data: ')) {
+                      const dataPart = trimmed.slice(6)
+                      if (dataPart === '[DONE]') break
+                      try {
+                        const json = JSON.parse(dataPart)
+                        const delta = json.choices?.[0]?.delta?.content || ''
+                        if (delta) {
+                          controller.enqueue(encoder.encode(delta))
+                        }
+                      } catch {
+                        // ignore malformed SSE chunk
+                      }
+                    }
+                  }
+                }
+              } catch (err) {
+                controller.error(err)
+              } finally {
+                controller.close()
+              }
+            },
+          })
+
+          return new Response(customStream, {
+            headers: {
+              'Content-Type': 'text/plain; charset=utf-8',
+              'Transfer-Encoding': 'chunked',
+              'Cache-Control': 'no-cache, no-transform',
+            },
+          })
+        } else {
+          console.error('Groq API returned an error:', groqResponse.status, groqResponse.statusText)
+        }
+      } catch (err) {
+        console.error('Groq connection error, falling back:', err)
+      }
+    }
+
+    // ── Tier 2: Google Gemini (Gemini 1.5 Flash) ──
     if (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY) {
       const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY
       const model = 'gemini-1.5-flash'
