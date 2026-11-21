@@ -4,7 +4,7 @@ import React, { Suspense, useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import { Check, X, Phone, Mail, ShieldCheck, Loader2 } from 'lucide-react'
+import { Check, X, Phone, Mail, ShieldCheck, Loader2, Eye, EyeOff } from 'lucide-react'
 
 function RegisterForm() {
   const router = useRouter()
@@ -37,6 +37,7 @@ function RegisterForm() {
     username: '',
     displayName: '',
   })
+  const [showPassword, setShowPassword] = useState(false)
 
   // Real-time immediate availability check states
   const [usernameStatus, setUsernameStatus] = useState<{
@@ -862,18 +863,28 @@ function RegisterForm() {
           <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1.5">
             Password
           </label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="new-password"
-            required
-            minLength={8}
-            value={form.password}
-            onChange={handleChange}
-            className="input-field"
-            placeholder="At least 8 characters"
-          />
+          <div className="relative">
+            <input
+              id="password"
+              name="password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="new-password"
+              required
+              minLength={8}
+              value={form.password}
+              onChange={handleChange}
+              className="input-field pr-10"
+              placeholder="At least 8 characters"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1.5 rounded-lg transition-colors focus:outline-none"
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
         </div>
 
         {codeFeedback && (
