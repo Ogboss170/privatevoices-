@@ -18,6 +18,8 @@ import {
   Check,
   EyeOff,
   MapPin,
+  ShieldCheck,
+  Sparkles,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { ModerationService } from '@/lib/moderation/moderation.service'
@@ -51,6 +53,16 @@ function CreatePostContent(): React.JSX.Element {
 
   const [isMasked, setIsMasked] = useState(false)
   const [maskedPersona, setMaskedPersona] = useState('Thoughtful Owl')
+
+  // Fytro Anonymity Shield State
+  const [isShieldScanning, setIsShieldScanning] = useState(false)
+  const [shieldResult, setShieldResult] = useState<{
+    safe: boolean
+    riskScore?: number
+    findings?: Array<{ type: string; snippet: string; suggestion: string; severity: string }>
+    sanitizedText?: string
+  } | null>(null)
+  const [showShieldDrawer, setShowShieldDrawer] = useState(false)
 
   // Location Tagging state
   const [selectedLocation, setSelectedLocation] = useState<LocationPlace | null>(null)
@@ -140,6 +152,36 @@ function CreatePostContent(): React.JSX.Element {
   function handleRemovePollOption(index: number) {
     if (pollOptions.length > 2) {
       setPollOptions((prev) => prev.filter((_, i) => i !== index))
+    }
+  }
+
+  async function handleScanWithShield() {
+    if (!content.trim() || isShieldScanning) return
+    setIsShieldScanning(true)
+    setShowShieldDrawer(true)
+    try {
+      const res = await fetch('/api/fytro/shield', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: content }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setShieldResult(data)
+      } else {
+        alert('Could not complete shield scan. Please try again.')
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setIsShieldScanning(false)
+    }
+  }
+
+  function applySanitizedText() {
+    if (shieldResult?.sanitizedText) {
+      setContent(shieldResult.sanitizedText)
+      setShieldResult((prev) => prev ? { ...prev, findings: [], safe: true } : null)
     }
   }
 
@@ -575,6 +617,64 @@ function CreatePostContent(): React.JSX.Element {
             </select>
           </div>
         )}
+
+        {/* Fytro Anonymity Shield Banner/Drawer */}
+        {showShieldDrawer && shieldResult && (
+          <div className="p-4 rounded-2xl bg-white border border-emerald-200 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className={`p-1.5 rounded-lg ${shieldResult.safe ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                  <ShieldCheck size={18} />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-gray-900">
+                    {shieldResult.safe ? 'Fytro Shield: Safe to Publish' : 'Fytro Shield: De-Anonymization Alerts Found'}
+                  </h4>
+                  <p className="text-[11px] text-gray-500">
+                    {shieldResult.safe
+                      ? 'No personal identity markers, timestamps, or location leaks detected.'
+                      : 'We flagged potential clues that could unintentionally reveal your identity.'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowShieldDrawer(false)}
+                className="text-gray-400 hover:text-gray-600 p-1"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {shieldResult.findings && shieldResult.findings.length > 0 && (
+              <div className="space-y-2 pt-1">
+                {shieldResult.findings.map((f, idx) => (
+                  <div key={idx} className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/80 text-xs flex flex-col gap-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-amber-900 uppercase text-[10px] tracking-wider px-1.5 py-0.5 rounded bg-amber-200/60">
+                        {f.type} leak
+                      </span>
+                      <span className="text-[10px] text-amber-700 font-mono">Severity: {f.severity}</span>
+                    </div>
+                    <p className="text-amber-950 font-medium">Flagged: <span className="font-bold underline decoration-amber-400">"{f.snippet}"</span></p>
+                    <p className="text-amber-800 text-[11px]">Suggestion: {f.suggestion}</p>
+                  </div>
+                ))}
+
+                {shieldResult.sanitizedText && shieldResult.sanitizedText !== content && (
+                  <button
+                    type="button"
+                    onClick={applySanitizedText}
+                    className="w-full mt-2 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-xs"
+                  >
+                    <Sparkles size={14} />
+                    <span>Auto-Sanitize & Protect Anonymity</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </main>
 
       {/* ── Attachment Toolbar (Sticky Bottom) ── */}
@@ -652,6 +752,22 @@ function CreatePostContent(): React.JSX.Element {
             >
               <EyeOff size={16} />
               <span>{isMasked ? 'Masked' : 'Mask'}</span>
+            </button>
+
+            {/* Fytro Anonymity Shield Scanner Button */}
+            <button
+              type="button"
+              onClick={handleScanWithShield}
+              disabled={!content.trim() || isShieldScanning}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                shieldResult && !shieldResult.safe
+                  ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                  : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+              } disabled:opacity-40 disabled:cursor-not-allowed`}
+              title="Fytro Anonymity Shield: Scan draft for accidental personal leaks"
+            >
+              <ShieldCheck size={16} className={isShieldScanning ? 'animate-spin' : ''} />
+              <span>{isShieldScanning ? 'Scanning...' : 'Fytro Shield'}</span>
             </button>
           </div>
 
