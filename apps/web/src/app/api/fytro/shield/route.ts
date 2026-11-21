@@ -54,7 +54,7 @@ Do not wrap your response in markdown code blocks. Output raw JSON only.`
           Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
         },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
+          model: 'qwen/qwen3.8-27b',
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: `Please scan this draft post for identity leaks:\n\n"""\n${text}\n"""` },

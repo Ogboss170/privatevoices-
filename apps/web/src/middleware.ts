@@ -37,8 +37,9 @@ export async function middleware(request: NextRequest) {
   // Profile routes are public (/@username) and public invite landing pages (/join/..., /invite/...)
   const isProfileRoute = pathname.startsWith('/@')
   const isPublicInviteRoute = pathname.startsWith('/invite/') || pathname.startsWith('/join/')
+  const isApiRoute = pathname.startsWith('/api/')
 
-  if (!user && !isPublicRoute && !isProfileRoute && !isPublicInviteRoute) {
+  if (!user && !isPublicRoute && !isProfileRoute && !isPublicInviteRoute && !isApiRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)

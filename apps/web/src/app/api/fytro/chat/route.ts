@@ -51,6 +51,9 @@ export async function POST(req: NextRequest) {
             .map((m) => ({ role: m.role, content: m.content })),
         ]
 
+        // Active models available on this Groq account
+        const groqModel = 'qwen/qwen3.8-27b'
+
         const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
           headers: {
@@ -58,7 +61,7 @@ export async function POST(req: NextRequest) {
             Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
           },
           body: JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
+            model: groqModel,
             messages: groqMessages,
             temperature: mode === 'creative' ? 0.9 : mode === 'challenger' ? 0.7 : 0.6,
             max_tokens: 1500,
