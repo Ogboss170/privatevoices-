@@ -434,7 +434,7 @@ export default function FytroScreen() {
               <View style={styles.thinkingRow}>
                 <ActivityIndicator size="small" color="#7c3aed" />
                 <Text style={[styles.thinkingText, { color: themeColors.textSecondary }]}>
-                  Fytro is reflecting via Groq...
+                  Thinking...
                 </Text>
               </View>
             ) : null

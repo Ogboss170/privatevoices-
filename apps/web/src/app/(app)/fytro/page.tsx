@@ -841,7 +841,7 @@ export default function FytroPage(): React.JSX.Element {
           {thinking && (
             <div className="flex gap-2.5 items-center text-gray-400 text-xs pl-9">
               <span className="w-2 h-2 rounded-full bg-purple-500 animate-ping" />
-              <span>Fytro is reflecting via Groq...</span>
+              <span>Thinking...</span>
             </div>
           )}
           <div ref={messagesEndRef} />
