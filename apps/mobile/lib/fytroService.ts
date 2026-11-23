@@ -274,4 +274,117 @@ export class FytroService {
       "What is the quietest, most honest reaction inside you right now?"
     )
   }
+
+  // ── 8. Fytro Feedback & Reactions ──
+  static async submitFeedback({
+    messageId,
+    sessionId,
+    reaction,
+    reasons = [],
+    comment = null,
+  }: {
+    messageId: string
+    sessionId?: string | null
+    reaction: 'like' | 'dislike'
+    reasons?: string[]
+    comment?: string | null
+  }): Promise<boolean> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return false
+
+      const { error } = await supabase
+        .from('fytro_feedback')
+        .upsert(
+          {
+            message_id: messageId,
+            session_id: sessionId || null,
+            user_id: user.id,
+            reaction,
+            reasons,
+            comment,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id,message_id' }
+        )
+
+      return !error
+    } catch (e) {
+      console.warn('submitFeedback failed:', e)
+      return false
+    }
+  }
+
+  static async removeFeedback(messageId: string): Promise<boolean> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return false
+
+      const { error } = await supabase
+        .from('fytro_feedback')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('message_id', messageId)
+
+      return !error
+    } catch {
+      return false
+    }
+  }
+
+  static async getFeedbackForSession(sessionId: string): Promise<Record<string, 'like' | 'dislike'>> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return {}
+
+      const { data, error } = await supabase
+        .from('fytro_feedback')
+        .select('message_id, reaction')
+        .eq('user_id', user.id)
+        .eq('session_id', sessionId)
+
+      if (error || !data) return {}
+
+      const map: Record<string, 'like' | 'dislike'> = {}
+      for (const row of data) {
+        map[row.message_id] = row.reaction as 'like' | 'dislike'
+      }
+      return map
+    } catch {
+      return {}
+    }
+  }
+
+  // ── 9. Submit Report on AI response ──
+  static async submitReport({
+    messageId,
+    sessionId,
+    reason,
+    details = null,
+  }: {
+    messageId: string
+    sessionId?: string | null
+    reason: string
+    details?: string | null
+  }): Promise<boolean> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return false
+
+      const { error } = await supabase
+        .from('fytro_reports')
+        .insert({
+          message_id: messageId,
+          session_id: sessionId || null,
+          user_id: user.id,
+          reason,
+          details,
+        })
+
+      return !error
+    } catch (e) {
+      console.warn('submitReport failed:', e)
+      return false
+    }
+  }
 }

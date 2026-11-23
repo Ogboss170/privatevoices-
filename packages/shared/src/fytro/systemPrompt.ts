@@ -63,3 +63,37 @@ export interface FytroMemory {
   updatedAt: string;
 }
 
+export type FytroReaction = 'like' | 'dislike';
+
+export type FytroFeedbackReason =
+  | 'inaccurate'
+  | 'not_helpful'
+  | 'repetitive'
+  | 'hallucination'
+  | 'harmful_or_unsafe'
+  | 'out_of_character'
+  | 'other';
+
+export interface FytroFeedback {
+  id: string;
+  messageId: string;
+  sessionId?: string | null;
+  userId: string;
+  reaction: FytroReaction;
+  reasons?: FytroFeedbackReason[];
+  comment?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FytroReport {
+  id: string;
+  messageId: string;
+  sessionId?: string | null;
+  userId: string;
+  reason: string;
+  details?: string | null;
+  createdAt: string;
+}
+
+

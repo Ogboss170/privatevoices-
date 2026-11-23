@@ -29,7 +29,8 @@ import {
   VolumeX,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import type { FytroMode, FytroMemory } from '@private-voices/shared'
+import type { FytroMode, FytroMemory, FytroReaction } from '@private-voices/shared'
+import { FytroResponseActionBar } from '@/components/fytro/FytroResponseActionBar'
 
 interface Message {
   id: string
@@ -104,6 +105,9 @@ export default function FytroPage(): React.JSX.Element {
   const [newMemoryText, setNewMemoryText] = useState('')
   const [newMemoryCategory, setNewMemoryCategory] = useState<'perspective' | 'value' | 'dilemma' | 'goal' | 'context'>('perspective')
   const [savingMemory, setSavingMemory] = useState(false)
+
+  // Message feedback map: messageId -> reaction
+  const [feedbackMap, setFeedbackMap] = useState<Record<string, FytroReaction>>({})
 
   // Voice Interaction State (Speech Recognition & TTS)
   const [isListening, setIsListening] = useState(false)
@@ -245,6 +249,20 @@ export default function FytroPage(): React.JSX.Element {
       } else {
         setMessages([DEFAULT_WELCOME_MSG])
       }
+
+      // Also fetch user feedback for this session
+      fetch(`/api/fytro/feedback?sessionId=${session.id}`)
+        .then((r) => r.json())
+        .then((fbData) => {
+          if (fbData.feedback) {
+            const map: Record<string, FytroReaction> = {}
+            for (const fb of fbData.feedback) {
+              map[fb.message_id] = fb.reaction
+            }
+            setFeedbackMap(map)
+          }
+        })
+        .catch(console.warn)
     } catch (e) {
       console.error(e)
     }
@@ -513,7 +531,32 @@ export default function FytroPage(): React.JSX.Element {
         },
       ])
       setCurrentSessionId(null)
+      setFeedbackMap({})
     }
+  }
+
+  // Regenerate last assistant response
+  const handleRegenerate = async (botMsgId: string) => {
+    if (thinking) return
+    // Find index of bot message
+    const botIdx = messages.findIndex((m) => m.id === botMsgId)
+    if (botIdx === -1) return
+
+    // Find preceding user message
+    let precedingUserText = ''
+    for (let i = botIdx - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') {
+        precedingUserText = messages[i].content
+        break
+      }
+    }
+
+    if (!precedingUserText) return
+
+    // Filter messages up to the user message
+    const truncated = messages.slice(0, botIdx)
+    setMessages(truncated)
+    handleSend(precedingUserText)
   }
 
   return (
@@ -835,21 +878,34 @@ export default function FytroPage(): React.JSX.Element {
                       isUser ? 'text-purple-200' : 'text-gray-400'
                     }`}
                   >
-                    {!isUser && m.content.trim().length > 0 ? (
-                      <button
-                        type="button"
-                        onClick={() => speakText(m.content)}
-                        className="hover:text-purple-600 dark:hover:text-purple-400 p-0.5 rounded transition-colors flex items-center gap-1"
-                        title="Read aloud"
-                      >
-                        <Volume2 size={12} />
-                        <span className="text-[9px]">Listen</span>
-                      </button>
-                    ) : (
-                      <span />
-                    )}
+                    <span />
                     <span>{m.timestamp}</span>
                   </div>
+
+                  {/* Clean, responsive Fytro response action bar */}
+                  {!isUser && (
+                    <FytroResponseActionBar
+                      messageId={m.id}
+                      sessionId={currentSessionId}
+                      content={m.content}
+                      isStreaming={thinking && messages[messages.length - 1]?.id === m.id}
+                      isSpeaking={isSpeaking}
+                      currentReaction={feedbackMap[m.id] || null}
+                      onRegenerate={() => handleRegenerate(m.id)}
+                      onToggleSpeech={speakText}
+                      onReactionChange={(reaction) => {
+                        setFeedbackMap((prev) => {
+                          const updated = { ...prev }
+                          if (reaction) {
+                            updated[m.id] = reaction
+                          } else {
+                            delete updated[m.id]
+                          }
+                          return updated
+                        })
+                      }}
+                    />
+                  )}
                 </div>
               </div>
             )

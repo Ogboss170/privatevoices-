@@ -33,7 +33,8 @@ import {
 } from 'lucide-react-native'
 import { useTheme } from '../context/ThemeContext'
 import { FytroService, FytroMobileSession } from '../lib/fytroService'
-import type { FytroMode, FytroMemory } from '@private-voices/shared'
+import type { FytroMode, FytroMemory, FytroReaction } from '@private-voices/shared'
+import { MobileFytroActionBar } from '../components/MobileFytroActionBar'
 
 interface Message {
   id: string
@@ -98,6 +99,7 @@ export default function FytroScreen() {
   const [showSessionsModal, setShowSessionsModal] = useState(false)
   const [sessions, setSessions] = useState<FytroMobileSession[]>([])
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+  const [feedbackMap, setFeedbackMap] = useState<Record<string, FytroReaction>>({})
 
   useEffect(() => {
     loadData()
@@ -142,6 +144,11 @@ export default function FytroScreen() {
         },
       ])
     }
+
+    // Load feedback reactions for this session
+    FytroService.getFeedbackForSession(session.id).then((map) => {
+      setFeedbackMap(map as Record<string, FytroReaction>)
+    }).catch(console.warn)
   }
 
   const handleCreateNewSession = async () => {
@@ -288,10 +295,31 @@ export default function FytroScreen() {
               },
             ])
             setCurrentSessionId(null)
+            setFeedbackMap({})
           },
         },
       ]
     )
+  }
+
+  // Regenerate last response
+  const handleRegenerate = (botMsgId: string) => {
+    if (thinking) return
+    const botIdx = messages.findIndex((m) => m.id === botMsgId)
+    if (botIdx === -1) return
+
+    let precedingUserText = ''
+    for (let i = botIdx - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') {
+        precedingUserText = messages[i].content
+        break
+      }
+    }
+
+    if (!precedingUserText) return
+    const truncated = messages.slice(0, botIdx)
+    setMessages(truncated)
+    handleSend(precedingUserText)
   }
 
   return (
@@ -425,6 +453,29 @@ export default function FytroScreen() {
                   >
                     {item.timestamp}
                   </Text>
+
+                  {/* Clean, responsive Fytro response action bar */}
+                  {!isUser && (
+                    <MobileFytroActionBar
+                      messageId={item.id}
+                      sessionId={currentSessionId}
+                      content={item.content}
+                      isStreaming={thinking && messages[messages.length - 1]?.id === item.id}
+                      currentReaction={feedbackMap[item.id] || null}
+                      onRegenerate={() => handleRegenerate(item.id)}
+                      onReactionChange={(reaction) => {
+                        setFeedbackMap((prev) => {
+                          const updated = { ...prev }
+                          if (reaction) {
+                            updated[item.id] = reaction
+                          } else {
+                            delete updated[item.id]
+                          }
+                          return updated
+                        })
+                      }}
+                    />
+                  )}
                 </View>
               </View>
             )
