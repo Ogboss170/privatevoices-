@@ -23,6 +23,10 @@ import {
   MessageSquare,
   Pin,
   X,
+  Mic,
+  MicOff,
+  Volume2,
+  VolumeX,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import type { FytroMode, FytroMemory } from '@private-voices/shared'
@@ -100,6 +104,93 @@ export default function FytroPage(): React.JSX.Element {
   const [newMemoryText, setNewMemoryText] = useState('')
   const [newMemoryCategory, setNewMemoryCategory] = useState<'perspective' | 'value' | 'dilemma' | 'goal' | 'context'>('perspective')
   const [savingMemory, setSavingMemory] = useState(false)
+
+  // Voice Interaction State (Speech Recognition & TTS)
+  const [isListening, setIsListening] = useState(false)
+  const [isSpeaking, setIsSpeaking] = useState(false)
+  const [speechSupported, setSpeechSupported] = useState(false)
+  const recognitionRef = useRef<any>(null)
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition =
+        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+      if (SpeechRecognition) {
+        setSpeechSupported(true)
+        const reco = new SpeechRecognition()
+        reco.continuous = false
+        reco.interimResults = true
+        reco.lang = 'en-US'
+
+        reco.onresult = (event: any) => {
+          const transcript = Array.from(event.results)
+            .map((res: any) => res[0].transcript)
+            .join('')
+          setInput(transcript)
+        }
+
+        reco.onerror = (e: any) => {
+          console.warn('Speech recognition error:', e)
+          setIsListening(false)
+        }
+
+        reco.onend = () => {
+          setIsListening(false)
+        }
+
+        recognitionRef.current = reco
+      }
+    }
+  }, [])
+
+  const toggleListening = () => {
+    if (!recognitionRef.current) {
+      alert('Speech-to-text is not supported by your current browser. Please try Chrome, Edge, or Safari.')
+      return
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop()
+      setIsListening(false)
+    } else {
+      try {
+        recognitionRef.current.start()
+        setIsListening(true)
+      } catch (err) {
+        console.warn('Recognition start error:', err)
+      }
+    }
+  }
+
+  const speakText = (text: string) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      alert('Text-to-speech is not supported by your browser.')
+      return
+    }
+
+    if (isSpeaking) {
+      window.speechSynthesis.cancel()
+      setIsSpeaking(false)
+      return
+    }
+
+    window.speechSynthesis.cancel() // clear queue
+    const cleanText = text.replace(/[#*`_~[\]()]/g, '').trim()
+    const utterance = new SpeechSynthesisUtterance(cleanText)
+    utterance.rate = 1.0
+    utterance.pitch = 1.0
+
+    // Try finding an articulate English voice
+    const voices = window.speechSynthesis.getVoices()
+    const preferredVoice = voices.find((v) => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Samantha')))
+    if (preferredVoice) utterance.voice = preferredVoice
+
+    utterance.onstart = () => setIsSpeaking(true)
+    utterance.onend = () => setIsSpeaking(false)
+    utterance.onerror = () => setIsSpeaking(false)
+
+    window.speechSynthesis.speak(utterance)
+  }
 
   // Load memories
   const loadMemories = async () => {
@@ -723,11 +814,24 @@ export default function FytroPage(): React.JSX.Element {
                 >
                   <div className="whitespace-pre-wrap">{m.content}</div>
                   <div
-                    className={`text-[9px] mt-1 text-right ${
+                    className={`text-[9px] mt-1.5 flex items-center justify-between ${
                       isUser ? 'text-purple-200' : 'text-gray-400'
                     }`}
                   >
-                    {m.timestamp}
+                    {!isUser && m.content.trim().length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => speakText(m.content)}
+                        className="hover:text-purple-600 dark:hover:text-purple-400 p-0.5 rounded transition-colors flex items-center gap-1"
+                        title="Read aloud"
+                      >
+                        <Volume2 size={12} />
+                        <span className="text-[9px]">Listen</span>
+                      </button>
+                    ) : (
+                      <span />
+                    )}
+                    <span>{m.timestamp}</span>
                   </div>
                 </div>
               </div>
@@ -757,9 +861,23 @@ export default function FytroPage(): React.JSX.Element {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Tell Fytro what's on your mind..."
+            placeholder={isListening ? 'Listening to your voice...' : "Tell Fytro what's on your mind..."}
             className="flex-1 bg-transparent py-2 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none"
           />
+          {speechSupported && (
+            <button
+              type="button"
+              onClick={toggleListening}
+              className={`p-2 rounded-xl transition-all flex items-center justify-center ${
+                isListening
+                  ? 'bg-rose-500 text-white animate-pulse shadow-sm'
+                  : 'text-gray-400 hover:text-purple-600 dark:hover:text-purple-400'
+              }`}
+              title={isListening ? 'Stop listening' : 'Speak to Fytro'}
+            >
+              {isListening ? <MicOff size={16} /> : <Mic size={16} />}
+            </button>
+          )}
           <button
             type="submit"
             disabled={!input.trim() || thinking}
