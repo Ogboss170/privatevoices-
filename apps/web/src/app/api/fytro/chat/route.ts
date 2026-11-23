@@ -41,88 +41,96 @@ export async function POST(req: NextRequest) {
       process.env.GOOGLE_API_KEY ||
       process.env.OPENAI_API_KEY
 
-    // ── Tier 1: Groq Engine (Ultra-fast LPUs, Llama 3.3 70B Versatile) ──
+    // ── Tier 1: Groq Engine (Ultra-fast LPUs, Qwen / Llama models) ──
     if (process.env.GROQ_API_KEY) {
-      try {
-        const groqMessages = [
-          { role: 'system', content: completeSystemInstruction },
-          ...messages
-            .filter((m) => m.role === 'user' || m.role === 'assistant')
-            .map((m) => ({ role: m.role, content: m.content })),
-        ]
+      const groqModels = ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b']
+      const groqMessages = [
+        { role: 'system', content: completeSystemInstruction },
+        ...messages
+          .filter((m) => m.role === 'user' || m.role === 'assistant')
+          .map((m) => ({ role: m.role, content: m.content })),
+      ]
 
-        // Active models available on this Groq account
-        const groqModel = 'qwen/qwen3.8-27b'
+      for (const groqModel of groqModels) {
+        try {
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 25000)
 
-        const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model: groqModel,
-            messages: groqMessages,
-            temperature: mode === 'creative' ? 0.9 : mode === 'challenger' ? 0.7 : 0.6,
-            max_tokens: 1500,
-            stream: true,
-          }),
-        })
+          const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            signal: controller.signal,
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+            },
+            body: JSON.stringify({
+              model: groqModel,
+              messages: groqMessages,
+              temperature: mode === 'creative' ? 0.9 : mode === 'challenger' ? 0.7 : 0.6,
+              max_tokens: 1500,
+              stream: true,
+            }),
+          })
 
-        if (groqResponse.ok && groqResponse.body) {
-          const encoder = new TextEncoder()
-          const customStream = new ReadableStream({
-            async start(controller) {
-              const reader = groqResponse.body!.getReader()
-              const decoder = new TextDecoder()
-              let buffer = ''
+          clearTimeout(timeoutId)
 
-              try {
-                while (true) {
-                  const { done, value } = await reader.read()
-                  if (done) break
+          if (groqResponse.ok && groqResponse.body) {
+            const encoder = new TextEncoder()
+            const customStream = new ReadableStream({
+              async start(streamController) {
+                const reader = groqResponse.body!.getReader()
+                const decoder = new TextDecoder()
+                let buffer = ''
 
-                  buffer += decoder.decode(value, { stream: true })
-                  const lines = buffer.split('\n')
-                  buffer = lines.pop() || ''
+                try {
+                  while (true) {
+                    const { done, value } = await reader.read()
+                    if (done) break
 
-                  for (const line of lines) {
-                    const trimmed = line.trim()
-                    if (trimmed.startsWith('data: ')) {
-                      const dataPart = trimmed.slice(6)
-                      if (dataPart === '[DONE]') break
-                      try {
-                        const json = JSON.parse(dataPart)
-                        const delta = json.choices?.[0]?.delta?.content || ''
-                        if (delta) {
-                          controller.enqueue(encoder.encode(delta))
+                    buffer += decoder.decode(value, { stream: true })
+                    const lines = buffer.split('\n')
+                    buffer = lines.pop() || ''
+
+                    for (const line of lines) {
+                      const trimmed = line.trim()
+                      if (trimmed.startsWith('data: ')) {
+                        const dataPart = trimmed.slice(6)
+                        if (dataPart === '[DONE]') break
+                        try {
+                          const json = JSON.parse(dataPart)
+                          const delta = json.choices?.[0]?.delta?.content || ''
+                          if (delta) {
+                            streamController.enqueue(encoder.encode(delta))
+                          }
+                        } catch {
+                          // ignore malformed SSE chunk
                         }
-                      } catch {
-                        // ignore malformed SSE chunk
                       }
                     }
                   }
+                } catch (err) {
+                  streamController.error(err)
+                } finally {
+                  streamController.close()
                 }
-              } catch (err) {
-                controller.error(err)
-              } finally {
-                controller.close()
-              }
-            },
-          })
+              },
+            })
 
-          return new Response(customStream, {
-            headers: {
-              'Content-Type': 'text/plain; charset=utf-8',
-              'Transfer-Encoding': 'chunked',
-              'Cache-Control': 'no-cache, no-transform',
-            },
-          })
-        } else {
-          console.error('Groq API returned an error:', groqResponse.status, groqResponse.statusText)
+            return new Response(customStream, {
+              headers: {
+                'Content-Type': 'text/plain; charset=utf-8',
+                'Transfer-Encoding': 'chunked',
+                'Cache-Control': 'no-cache, no-transform',
+              },
+            })
+          } else {
+            console.error(`Groq API returned an error with model ${groqModel}:`, groqResponse.status, groqResponse.statusText)
+            // Try next model if 404 or 400
+            continue
+          }
+        } catch (err) {
+          console.error(`Groq connection error with model ${groqModel}, trying next:`, err)
         }
-      } catch (err) {
-        console.error('Groq connection error, falling back:', err)
       }
     }
 
@@ -264,35 +272,43 @@ function generateSocraticResponse(userText: string, mode: FytroMode): string {
 
   if (mode === 'challenger' || lower.includes('argue') || lower.includes('debate') || lower.includes('critique')) {
     return (
-      "Let's test this perspective by looking at the strongest counter-argument:\n\n" +
-      "1. **The Counter-Premise**: If someone held the exact opposite view in good faith, what core truth or lived experience might be driving them?\n" +
-      "2. **The Unseen Risk**: What is the potential blind spot in your current framing?\n\n" +
-      "Steel-manning the opposite position isn't about abandoning your conviction—it's about making sure your thoughts belong to you, rather than just absorbing consensus. Where does your intuition push back?"
+      `Let's examine that perspective: "${userText.slice(0, 80)}${userText.length > 80 ? '...' : ''}"\n\n` +
+      "1. **The Counter-Premise**: If someone held an opposing view in complete good faith, what core lived experience or truth would lead them there?\n" +
+      "2. **The Unseen Risk**: What potential blind spot might exist in this current framing?\n\n" +
+      "Testing your premises isn't about second-guessing yourself—it's about making sure your ideas belong genuinely to you. What part of that feels hardest to defend?"
     )
   }
 
   if (mode === 'creative' || lower.includes('brainstorm') || lower.includes('write') || lower.includes('idea')) {
     return (
-      "Let's unpack this idea from a fresh vantage point:\n\n" +
-      "• **The Core Resonance**: What is the single emotional anchor you want someone to feel when reading or hearing this?\n" +
-      "• **A Contrasting Angle**: What if we start right in the middle of the tension rather than explaining the backstory?\n\n" +
-      "Tell me the most striking detail or feeling that started this train of thought for you."
+      `Exploring your thought: "${userText.slice(0, 80)}${userText.length > 80 ? '...' : ''}"\n\n` +
+      "• **The Emotional Core**: What is the single feeling you want someone to carry away after experiencing this?\n" +
+      "• **The Subversion**: What if you flip the standard premise upside down—what becomes unexpected?\n\n" +
+      "Where does your imagination want to take this next?"
     )
   }
 
   if (lower.includes('decision') || lower.includes('dilemma') || lower.includes('choice') || lower.includes('stuck')) {
     return (
-      "Difficult decisions usually aren't about choosing between good and bad—they're about choosing which kind of discomfort you are willing to bear.\n\n" +
-      "Let's peel back the layers:\n" +
-      "• If you made this choice purely for your own peace of mind, without needing to justify it to anyone in your life, what does your gut tell you?\n" +
-      "• Which path makes you feel more like the person you respect?\n\n" +
-      "Take your time. What is the hesitation you haven't said out loud yet?"
+      "Difficult choices are rarely between simple right and wrong—they are usually about deciding which form of discomfort or growth you are willing to bear.\n\n" +
+      "• If you made this choice purely for your own integrity, without explaining or justifying it to anyone else, what would your immediate instinct say?\n" +
+      "• Looking back a year from now, which direction makes you feel more proud of who you chose to be?\n\n" +
+      "What is the nuance that feels most difficult to say out loud?"
+    )
+  }
+
+  // Meaningful, tailored responses referencing user text
+  const cleanSnippet = userText.trim().replace(/\n+/g, ' ')
+  if (cleanSnippet.length > 0) {
+    return (
+      `Reflecting on what you shared: "${cleanSnippet.slice(0, 100)}${cleanSnippet.length > 100 ? '...' : ''}"\n\n` +
+      "In this space, you can say whatever is genuine without polishing or qualifying it.\n\n" +
+      "What is the most honest thought or feeling behind this right now?"
     )
   }
 
   return (
-    "I hear you. In your Mind Space, you don't have to defend or perform anything.\n\n" +
-    "When you strip away what you're *supposed* to feel about this, what is the quietest, most honest reaction inside you right now?\n\n" +
-    "Let's explore it together."
+    "I'm here with you in your Mind Space. You can explore whatever is on your mind freely and securely.\n\n" +
+    "What would you like to reflect on or untangle today?"
   )
 }

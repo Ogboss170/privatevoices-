@@ -470,16 +470,33 @@ export default function FytroPage(): React.JSX.Element {
       }
     } catch (err) {
       console.error('Error during streaming Fytro response:', err)
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: botMsgId,
-          role: 'assistant',
-          content:
-            "I'm here with you. Something momentarily disrupted my response stream, but your mind space is safe. What were you thinking?",
-          timestamp: botTimestamp,
-        },
-      ])
+      // Only set error message if nothing was streamed yet
+      if (!accumulatedContent.trim()) {
+        setMessages((prev) => {
+          const exists = prev.some((msg) => msg.id === botMsgId)
+          if (exists) {
+            return prev.map((msg) =>
+              msg.id === botMsgId
+                ? {
+                    ...msg,
+                    content:
+                      "I'm here with you. Something momentarily disrupted my response stream, but your mind space is safe. What were you thinking?",
+                  }
+                : msg
+            )
+          }
+          return [
+            ...prev,
+            {
+              id: botMsgId,
+              role: 'assistant',
+              content:
+                "I'm here with you. Something momentarily disrupted my response stream, but your mind space is safe. What were you thinking?",
+              timestamp: botTimestamp,
+            },
+          ]
+        })
+      }
     } finally {
       setThinking(false)
     }

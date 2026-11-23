@@ -245,24 +245,33 @@ export class FytroService {
 
     if (mode === 'challenger') {
       return (
-        "Let's test this perspective:\n\n" +
-        "1. What is the strongest argument an intelligent critic would make against your position?\n" +
-        "2. What core assumption are you taking for granted that might actually be fragile?\n\n" +
+        `Let's test this perspective:\n\n` +
+        `1. What is the strongest argument an intelligent critic would make against: "${lastUserMsg.slice(0, 70)}"?\n` +
+        `2. What core assumption are you taking for granted that might actually be fragile?\n\n` +
         "Where does that leave your conviction?"
       )
     }
 
     if (mode === 'creative') {
       return (
-        "Here is a creative angle to explore:\n\n" +
+        `Here is a creative angle to explore on "${lastUserMsg.slice(0, 60)}":\n\n` +
         "Try framing this thought as a contrast — what does the world think this is, versus what you actually experienced?\n\n" +
         "How would you express that in one evocative sentence?"
       )
     }
 
+    const cleanSnippet = lastUserMsg.trim().replace(/\n+/g, ' ')
+    if (cleanSnippet.length > 0) {
+      return (
+        `Reflecting on what you shared: "${cleanSnippet.slice(0, 90)}${cleanSnippet.length > 90 ? '...' : ''}"\n\n` +
+        "In your Mind Space, you don't have to defend or perform anything.\n\n" +
+        "What is the most honest, unfiltered reaction inside you right now?"
+      )
+    }
+
     return (
-      "I hear you. In your Mind Space, you don't have to defend or perform anything.\n\n" +
-      "When you strip away what you're supposed to feel, what is the quietest, most honest reaction inside you right now?"
+      "I'm here with you in your Mind Space. You don't have to perform or defend anything.\n\n" +
+      "What is the quietest, most honest reaction inside you right now?"
     )
   }
 }
