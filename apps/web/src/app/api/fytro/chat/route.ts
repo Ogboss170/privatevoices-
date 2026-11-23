@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import https from 'node:https'
 import {
   FYTRO_SYSTEM_PROMPT,
   FYTRO_MODE_INSTRUCTIONS,
@@ -8,6 +9,34 @@ import {
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
   content: string
+}
+
+// Resilient Node HTTPS streaming client to prevent Undici Windows connect timeouts
+function streamGroqHttps(apiKey: string, payload: any): Promise<import('node:http').IncomingMessage> {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(payload)
+    const req = https.request('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Length': Buffer.byteLength(data),
+        'User-Agent': 'PrivateVoices-Fytro/2.0',
+      },
+      timeout: 30000,
+    }, (res) => {
+      resolve(res)
+    })
+
+    req.on('timeout', () => {
+      req.destroy(new Error('Groq request connection timed out'))
+    })
+    req.on('error', (err) => {
+      reject(err)
+    })
+    req.write(data)
+    req.end()
+  })
 }
 
 export async function POST(req: NextRequest) {
@@ -35,15 +64,10 @@ export async function POST(req: NextRequest) {
     const activeModeGuidance = FYTRO_MODE_INSTRUCTIONS[mode] || FYTRO_MODE_INSTRUCTIONS.sanctuary
     const completeSystemInstruction = `${FYTRO_SYSTEM_PROMPT}\n${activeModeGuidance}${memoryContextPrompt}`
 
-    const apiKey =
-      process.env.GROQ_API_KEY ||
-      process.env.GEMINI_API_KEY ||
-      process.env.GOOGLE_API_KEY ||
-      process.env.OPENAI_API_KEY
-
     // ── Tier 1: Groq Engine (Ultra-fast LPUs, Qwen / Llama models) ──
     if (process.env.GROQ_API_KEY) {
-      const groqModels = ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b']
+      // Prioritize high-accuracy reasoning models
+      const groqModels = ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b', 'openai/gpt-oss-20b']
       const groqMessages = [
         { role: 'system', content: completeSystemInstruction },
         ...messages
@@ -53,66 +77,59 @@ export async function POST(req: NextRequest) {
 
       for (const groqModel of groqModels) {
         try {
-          const controller = new AbortController()
-          const timeoutId = setTimeout(() => controller.abort(), 25000)
+          const payload = {
+            model: groqModel,
+            messages: groqMessages,
+            temperature: mode === 'creative' ? 0.7 : mode === 'challenger' ? 0.4 : 0.3,
+            max_tokens: 2000,
+            stream: true,
+          }
 
-          const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            signal: controller.signal,
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-            },
-            body: JSON.stringify({
-              model: groqModel,
-              messages: groqMessages,
-              temperature: mode === 'creative' ? 0.9 : mode === 'challenger' ? 0.7 : 0.6,
-              max_tokens: 1500,
-              stream: true,
-            }),
-          })
+          const nodeRes = await streamGroqHttps(process.env.GROQ_API_KEY, payload)
 
-          clearTimeout(timeoutId)
-
-          if (groqResponse.ok && groqResponse.body) {
+          if (nodeRes.statusCode && nodeRes.statusCode >= 200 && nodeRes.statusCode < 300) {
             const encoder = new TextEncoder()
             const customStream = new ReadableStream({
-              async start(streamController) {
-                const reader = groqResponse.body!.getReader()
-                const decoder = new TextDecoder()
+              start(streamController) {
                 let buffer = ''
 
-                try {
-                  while (true) {
-                    const { done, value } = await reader.read()
-                    if (done) break
+                nodeRes.on('data', (chunk: Buffer) => {
+                  buffer += chunk.toString('utf8')
+                  const lines = buffer.split('\n')
+                  buffer = lines.pop() || ''
 
-                    buffer += decoder.decode(value, { stream: true })
-                    const lines = buffer.split('\n')
-                    buffer = lines.pop() || ''
-
-                    for (const line of lines) {
-                      const trimmed = line.trim()
-                      if (trimmed.startsWith('data: ')) {
-                        const dataPart = trimmed.slice(6)
-                        if (dataPart === '[DONE]') break
-                        try {
-                          const json = JSON.parse(dataPart)
-                          const delta = json.choices?.[0]?.delta?.content || ''
-                          if (delta) {
-                            streamController.enqueue(encoder.encode(delta))
-                          }
-                        } catch {
-                          // ignore malformed SSE chunk
+                  for (const line of lines) {
+                    const trimmed = line.trim()
+                    if (trimmed.startsWith('data: ')) {
+                      const dataPart = trimmed.slice(6)
+                      if (dataPart === '[DONE]') {
+                        streamController.close()
+                        return
+                      }
+                      try {
+                        const json = JSON.parse(dataPart)
+                        const delta = json.choices?.[0]?.delta?.content || ''
+                        if (delta) {
+                          streamController.enqueue(encoder.encode(delta))
                         }
+                      } catch {
+                        // ignore malformed SSE chunk
                       }
                     }
                   }
-                } catch (err) {
-                  streamController.error(err)
-                } finally {
-                  streamController.close()
-                }
+                })
+
+                nodeRes.on('end', () => {
+                  try {
+                    streamController.close()
+                  } catch {}
+                })
+
+                nodeRes.on('error', (err) => {
+                  try {
+                    streamController.error(err)
+                  } catch {}
+                })
               },
             })
 
@@ -124,8 +141,7 @@ export async function POST(req: NextRequest) {
               },
             })
           } else {
-            console.error(`Groq API returned an error with model ${groqModel}:`, groqResponse.status, groqResponse.statusText)
-            // Try next model if 404 or 400
+            console.error(`Groq API returned an error with model ${groqModel}:`, nodeRes.statusCode, nodeRes.statusMessage)
             continue
           }
         } catch (err) {
