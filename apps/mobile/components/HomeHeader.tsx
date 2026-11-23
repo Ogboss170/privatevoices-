@@ -5,9 +5,12 @@ import {
   TouchableOpacity,
   StyleSheet,
   Animated as RNAnimated,
+  Modal,
+  TouchableWithoutFeedback,
+  Platform,
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { Plus, Bell, Radio, BookOpen, Sparkles } from 'lucide-react-native'
+import { Plus, Bell, Users, Sparkles, Menu } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../lib/supabase'
 import { useTheme } from '../context/ThemeContext'
@@ -22,12 +25,14 @@ interface HomeHeaderProps {
 export function HomeHeader({ currentUserId }: HomeHeaderProps) {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { colors: themeColors } = useTheme()
+  const { colors: themeColors, isDark } = useTheme()
 
   const [unreadCount, setUnreadCount] = useState(0)
   const [createVisible, setCreateVisible] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const createBtnScale = useRef(new RNAnimated.Value(1)).current
   const bellScale = useRef(new RNAnimated.Value(1)).current
+  const menuAnim = useRef(new RNAnimated.Value(0)).current
   const prevCount = useRef(0)
 
   // Fetch unread notifications
@@ -77,6 +82,43 @@ export function HomeHeader({ currentUserId }: HomeHeaderProps) {
     ]).start(() => setCreateVisible(true))
   }
 
+  const openMenu = () => {
+    setMenuOpen(true)
+    RNAnimated.spring(menuAnim, {
+      toValue: 1,
+      tension: 65,
+      friction: 9,
+      useNativeDriver: true,
+    }).start()
+  }
+
+  const closeMenu = (callback?: () => void) => {
+    RNAnimated.timing(menuAnim, {
+      toValue: 0,
+      duration: 160,
+      useNativeDriver: true,
+    }).start(() => {
+      setMenuOpen(false)
+      if (callback) callback()
+    })
+  }
+
+  const handleSelectOption = (route: string) => {
+    closeMenu(() => {
+      router.push(route as any)
+    })
+  }
+
+  const menuScale = menuAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.9, 1],
+  })
+
+  const menuOpacity = menuAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  })
+
   return (
     <>
       <View
@@ -111,48 +153,108 @@ export function HomeHeader({ currentUserId }: HomeHeaderProps) {
             </TouchableOpacity>
           </RNAnimated.View>
 
-          {/* Right: Notifications → Spaces → Fytro */}
+          {/* Right: Unified Menu Button */}
           <View style={styles.headerRightSlot}>
             <TouchableOpacity
-              style={styles.headerRightBtn}
-              onPress={() => router.push('/notifications' as any)}
+              style={styles.menuTriggerBtn}
+              onPress={openMenu}
               activeOpacity={0.7}
               accessible
               accessibilityRole="button"
-              accessibilityLabel={unreadCount > 0 ? `${unreadCount} unread notifications` : 'Notifications'}
+              accessibilityLabel={unreadCount > 0 ? `Menu, ${unreadCount} unread notifications` : 'Menu'}
             >
-              <Bell color={themeColors.textPrimary} size={22} strokeWidth={2} />
+              <Menu color={themeColors.textPrimary} size={22} strokeWidth={2.2} />
               {unreadCount > 0 && (
                 <RNAnimated.View style={[styles.badge, { transform: [{ scale: bellScale }] }]}>
                   <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
                 </RNAnimated.View>
               )}
             </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.headerRightBtn}
-              onPress={() => router.push('/spaces' as any)}
-              activeOpacity={0.7}
-              accessible
-              accessibilityRole="button"
-              accessibilityLabel="Live Voice Spaces"
-            >
-              <Radio color={ACCENT} size={20} strokeWidth={2.2} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.headerRightBtn}
-              onPress={() => router.push('/fytro' as any)}
-              activeOpacity={0.7}
-              accessible
-              accessibilityRole="button"
-              accessibilityLabel="Fytro Mind Space"
-            >
-              <Sparkles color="#6366f1" size={20} strokeWidth={2.2} />
-            </TouchableOpacity>
           </View>
         </View>
       </View>
+
+      {/* Unified Header Menu Modal Dropdown */}
+      <Modal
+        visible={menuOpen}
+        transparent
+        animationType="none"
+        onRequestClose={() => closeMenu()}
+      >
+        <TouchableWithoutFeedback onPress={() => closeMenu()}>
+          <View style={styles.modalBackdrop}>
+            <TouchableWithoutFeedback>
+              <RNAnimated.View
+                style={[
+                  styles.dropdownMenu,
+                  {
+                    top: insets.top + 48,
+                    backgroundColor: themeColors.surface,
+                    borderColor: themeColors.surfaceBorder,
+                    opacity: menuOpacity,
+                    transform: [{ scale: menuScale }],
+                    ...Platform.select({
+                      ios: {
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 8 },
+                        shadowOpacity: isDark ? 0.45 : 0.15,
+                        shadowRadius: 18,
+                      },
+                      android: {
+                        elevation: 10,
+                      },
+                    }),
+                  },
+                ]}
+              >
+                {/* 1. Notifications (bell icon) */}
+                <TouchableOpacity
+                  style={[styles.menuItem, { borderBottomColor: themeColors.surfaceBorder }]}
+                  onPress={() => handleSelectOption('/notifications')}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.menuIconCircle, { backgroundColor: isDark ? 'rgba(124, 58, 237, 0.2)' : '#ede9fe' }]}>
+                    <Bell size={18} color={ACCENT} strokeWidth={2.2} />
+                  </View>
+                  <Text style={[styles.menuItemText, { color: themeColors.textPrimary }]}>Notifications</Text>
+                  {unreadCount > 0 && (
+                    <View style={styles.itemBadge}>
+                      <Text style={styles.itemBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+
+                {/* 2. Spaces (users icon) */}
+                <TouchableOpacity
+                  style={[styles.menuItem, { borderBottomColor: themeColors.surfaceBorder }]}
+                  onPress={() => handleSelectOption('/spaces')}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.menuIconCircle, { backgroundColor: isDark ? 'rgba(168, 85, 247, 0.2)' : '#f3e8ff' }]}>
+                    <Users size={18} color="#9333ea" strokeWidth={2.2} />
+                  </View>
+                  <Text style={[styles.menuItemText, { color: themeColors.textPrimary }]}>Spaces</Text>
+                </TouchableOpacity>
+
+                {/* 3. Fytro (sparkles icon) */}
+                <TouchableOpacity
+                  style={[styles.menuItem, styles.menuItemLast]}
+                  onPress={() => handleSelectOption('/fytro')}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.menuIconCircle, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : '#e0e7ff' }]}>
+                    <Sparkles size={18} color="#4f46e5" strokeWidth={2.2} />
+                  </View>
+                  <Text style={[styles.menuItemText, { color: themeColors.textPrimary }]}>Fytro</Text>
+                  <View style={styles.fytroTag}>
+                    <Text style={styles.fytroTagText}>AI</Text>
+                  </View>
+                </TouchableOpacity>
+              </RNAnimated.View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
 
       {/* Creation Modal sheet */}
       <CreateModal visible={createVisible} onClose={() => setCreateVisible(false)} />
@@ -190,14 +292,16 @@ const styles = StyleSheet.create({
   headerRightSlot: {
     marginLeft: 'auto',
   },
-  headerRightBtn: {
-    padding: 4,
+  menuTriggerBtn: {
+    padding: 8,
     position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   badge: {
     position: 'absolute',
-    top: 0,
-    right: 0,
+    top: 4,
+    right: 4,
     minWidth: 16,
     height: 16,
     borderRadius: 8,
@@ -212,5 +316,65 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 9,
     fontWeight: '700',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    right: 12,
+    width: 220,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 6,
+    overflow: 'hidden',
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  menuItemLast: {
+    borderBottomWidth: 0,
+  },
+  menuIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  menuItemText: {
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 1,
+  },
+  itemBadge: {
+    backgroundColor: '#7c3aed',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 8,
+  },
+  itemBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  fytroTag: {
+    backgroundColor: '#e0e7ff',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  fytroTagText: {
+    color: '#4338ca',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
 })

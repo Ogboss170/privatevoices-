@@ -1,8 +1,8 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
-import { Bell, Sparkles, SlidersHorizontal, Plus, Radio } from 'lucide-react'
+import { Bell, Sparkles, SlidersHorizontal, Plus, Users, Menu, X } from 'lucide-react'
 import PostCard from '@/components/feed/PostCard'
 import StoriesTray from '@/components/stories/StoriesTray'
 import PeopleYouMayKnow from '@/components/social/PeopleYouMayKnow'
@@ -40,6 +40,22 @@ export default function FeedPage() {
   const [currentUserId, setCurrentUserId] = useState<string | undefined>()
   const [visibleCount, setVisibleCount] = useState(25)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    if (menuOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [menuOpen])
 
   useEffect(() => {
     async function loadUserAndNotifs() {
@@ -340,37 +356,80 @@ export default function FeedPage() {
             </Link>
           </div>
 
-          {/* Right: Notifications → Spaces → Fytro */}
-          <div className="flex items-center gap-1 sm:gap-1.5 z-10">
-            <Link
-              href="/notifications"
-              aria-label="Notifications"
-              title="Notifications"
-              className="p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-800 active:scale-95 transition-transform relative flex items-center justify-center"
+          {/* Right: Unified top-right menu button */}
+          <div className="relative z-10" ref={menuRef}>
+            <button
+              type="button"
+              onClick={() => setMenuOpen((prev) => !prev)}
+              aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={menuOpen}
+              title="Menu"
+              className="p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-800 active:scale-95 transition-all relative flex items-center justify-center"
             >
-              <Bell size={21} strokeWidth={2} />
+              <Menu size={22} strokeWidth={2.2} />
               {unreadNotifications > 0 && (
-                <span className="absolute top-1.5 right-1.5 min-w-[8px] h-2 px-0.5 bg-brand-600 rounded-full ring-2 ring-white dark:ring-slate-900" />
+                <span className="absolute top-1.5 right-1.5 min-w-[9px] h-[9px] px-0.5 bg-brand-600 rounded-full ring-2 ring-white dark:ring-slate-900 animate-pulse" />
               )}
-            </Link>
+            </button>
 
-            <Link
-              href="/spaces"
-              aria-label="Spaces"
-              title="Live Voice Spaces"
-              className="p-2 rounded-full text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/40 active:scale-95 transition-transform flex items-center justify-center"
-            >
-              <Radio size={21} strokeWidth={2.2} />
-            </Link>
+            {/* Dropdown menu */}
+            {menuOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 mt-2 w-56 rounded-2xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 shadow-xl py-2 z-50 animate-in fade-in zoom-in-95 duration-150 origin-top-right focus:outline-none"
+              >
+                {/* 1. Notifications (bell icon) */}
+                <Link
+                  href="/notifications"
+                  role="menuitem"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center justify-between px-3.5 py-2.5 mx-1.5 rounded-xl text-xs sm:text-sm font-semibold text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-slate-800/70 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-brand-50 dark:bg-brand-950/40 text-brand-600 dark:text-brand-400 flex items-center justify-center shrink-0">
+                      <Bell size={17} strokeWidth={2.2} />
+                    </div>
+                    <span>Notifications</span>
+                  </div>
+                  {unreadNotifications > 0 && (
+                    <span className="px-2 py-0.5 text-[10px] font-bold text-white bg-brand-600 rounded-full">
+                      {unreadNotifications > 99 ? '99+' : unreadNotifications}
+                    </span>
+                  )}
+                </Link>
 
-            <Link
-              href="/fytro"
-              aria-label="Fytro"
-              title="Fytro • Your Mind Space"
-              className="p-2 rounded-full text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 active:scale-95 transition-transform flex items-center justify-center relative group"
-            >
-              <Sparkles size={21} strokeWidth={2.2} className="group-hover:rotate-12 transition-transform" />
-            </Link>
+                {/* 2. Spaces (users icon) */}
+                <Link
+                  href="/spaces"
+                  role="menuitem"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-3 px-3.5 py-2.5 mx-1.5 rounded-xl text-xs sm:text-sm font-semibold text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-slate-800/70 transition-colors"
+                >
+                  <div className="w-8 h-8 rounded-full bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                    <Users size={17} strokeWidth={2.2} />
+                  </div>
+                  <span>Spaces</span>
+                </Link>
+
+                {/* 3. Fytro (sparkles icon) */}
+                <Link
+                  href="/fytro"
+                  role="menuitem"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center justify-between px-3.5 py-2.5 mx-1.5 rounded-xl text-xs sm:text-sm font-semibold text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-slate-800/70 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                      <Sparkles size={17} strokeWidth={2.2} />
+                    </div>
+                    <span>Fytro</span>
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300">
+                    AI
+                  </span>
+                </Link>
+              </div>
+            )}
           </div>
         </div>
 
