@@ -960,7 +960,7 @@ export default function FytroPage(): React.JSX.Element {
           </button>
         </form>
         <p className="text-[10px] text-center text-gray-400 mt-1.5">
-          Fytro by Private Voices • Powered by Groq • Think freely. Explore deeply. Discover more.
+          Think freely. Discover more.
         </p>
       </div>
     </div>
