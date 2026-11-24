@@ -33,7 +33,13 @@ import {
   Zap,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import type { FytroMode, FytroMemory, FytroReaction } from '@private-voices/shared'
+import type {
+  FytroMode,
+  FytroMemory,
+  FytroReaction,
+  FytroVoiceId,
+} from '@private-voices/shared'
+import { FYTRO_VOICE_OPTIONS } from '@private-voices/shared'
 import { FytroResponseActionBar } from '@/components/fytro/FytroResponseActionBar'
 
 interface Message {
@@ -118,10 +124,12 @@ export default function FytroPage(): React.JSX.Element {
   // Message feedback map: messageId -> reaction
   const [feedbackMap, setFeedbackMap] = useState<Record<string, FytroReaction>>({})
 
-  // Voice Interaction State (Speech Recognition & TTS)
+  // Voice Interaction State (Speech Recognition & Multi-Voice TTS)
   const [isListening, setIsListening] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [speechSupported, setSpeechSupported] = useState(false)
+  const [selectedVoice, setSelectedVoice] = useState<FytroVoiceId>('serene')
+  const [showVoiceMenu, setShowVoiceMenu] = useState(false)
   const recognitionRef = useRef<any>(null)
 
   useEffect(() => {
@@ -175,6 +183,24 @@ export default function FytroPage(): React.JSX.Element {
     }
   }
 
+  // Initialize voice from localStorage if available
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedVoice = localStorage.getItem('fytro_selected_voice') as FytroVoiceId
+      if (savedVoice && FYTRO_VOICE_OPTIONS.some((v) => v.id === savedVoice)) {
+        setSelectedVoice(savedVoice)
+      }
+    }
+  }, [])
+
+  const handleSelectVoice = (voiceId: FytroVoiceId) => {
+    setSelectedVoice(voiceId)
+    setShowVoiceMenu(false)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('fytro_selected_voice', voiceId)
+    }
+  }
+
   const speakText = (text: string) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
       alert('Text-to-speech is not supported by your browser.')
@@ -190,13 +216,39 @@ export default function FytroPage(): React.JSX.Element {
     window.speechSynthesis.cancel() // clear queue
     const cleanText = text.replace(/[#*`_~[\]()]/g, '').trim()
     const utterance = new SpeechSynthesisUtterance(cleanText)
-    utterance.rate = 1.0
-    utterance.pitch = 1.0
 
-    // Try finding an articulate English voice
-    const voices = window.speechSynthesis.getVoices()
-    const preferredVoice = voices.find((v) => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Samantha')))
-    if (preferredVoice) utterance.voice = preferredVoice
+    // Lookup chosen voice profile
+    const voiceProfile = FYTRO_VOICE_OPTIONS.find((v) => v.id === selectedVoice) || FYTRO_VOICE_OPTIONS[0]
+    utterance.rate = voiceProfile.rate
+    utterance.pitch = voiceProfile.pitch
+
+    // Find browser matching voice from preferred candidates
+    const availableVoices = window.speechSynthesis.getVoices()
+    let matchedVoice: SpeechSynthesisVoice | undefined
+
+    for (const pref of voiceProfile.preferredVoices) {
+      matchedVoice = availableVoices.find(
+        (v) => v.name.toLowerCase().includes(pref.toLowerCase()) || v.voiceURI.toLowerCase().includes(pref.toLowerCase())
+      )
+      if (matchedVoice) break
+    }
+
+    // Fallback: match by language and gender preference
+    if (!matchedVoice) {
+      if (voiceProfile.gender === 'male') {
+        matchedVoice = availableVoices.find(
+          (v) => v.lang.startsWith('en') && (v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('david') || v.name.toLowerCase().includes('george'))
+        )
+      } else if (voiceProfile.gender === 'female') {
+        matchedVoice = availableVoices.find(
+          (v) => v.lang.startsWith('en') && (v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('zira') || v.name.toLowerCase().includes('susan'))
+        )
+      }
+    }
+
+    if (matchedVoice) {
+      utterance.voice = matchedVoice
+    }
 
     utterance.onstart = () => setIsSpeaking(true)
     utterance.onend = () => setIsSpeaking(false)
@@ -650,6 +702,82 @@ export default function FytroPage(): React.JSX.Element {
             >
               Creative
             </button>
+          </div>
+
+          {/* Multi-Voice Selector Dropdown Button */}
+          <div className="relative">
+            <button
+              onClick={() => {
+                setShowVoiceMenu(!showVoiceMenu)
+                setShowVault(false)
+                setShowHistoryDrawer(false)
+              }}
+              title="Voice Selection"
+              className={`p-2 rounded-full transition-all text-xs flex items-center gap-1 font-semibold ${
+                showVoiceMenu
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Volume2 size={16} />
+              <span className="hidden sm:inline capitalize">
+                {FYTRO_VOICE_OPTIONS.find((v) => v.id === selectedVoice)?.name.split(' ')[0] || 'Voice'}
+              </span>
+            </button>
+
+            {/* Voice Menu Popover */}
+            {showVoiceMenu && (
+              <div className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-gray-200/80 dark:border-slate-800 p-2 z-40">
+                <div className="px-3 py-2 border-b border-gray-100 dark:border-slate-800 mb-1">
+                  <p className="text-xs font-bold text-gray-900 dark:text-white flex items-center justify-between">
+                    <span>Fytro Voice Persona</span>
+                    <span className="text-[10px] text-purple-600 dark:text-purple-400 font-semibold uppercase tracking-wider">
+                      5 Voices
+                    </span>
+                  </p>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                    Select the vocal tone for reading answers aloud.
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  {FYTRO_VOICE_OPTIONS.map((v) => {
+                    const isSelected = selectedVoice === v.id
+                    return (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => handleSelectVoice(v.id)}
+                        className={`w-full text-left p-2 rounded-xl transition-all flex items-start justify-between gap-2 ${
+                          isSelected
+                            ? 'bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60'
+                            : 'hover:bg-gray-50 dark:hover:bg-slate-800/70'
+                        }`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold text-gray-900 dark:text-white">
+                              {v.name}
+                            </span>
+                            <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 capitalize">
+                              {v.gender}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-purple-600 dark:text-purple-400 font-medium truncate mt-0.5">
+                            {v.tone}
+                          </p>
+                          <p className="text-[10px] text-gray-400 dark:text-gray-500 line-clamp-1 mt-0.5">
+                            {v.description}
+                          </p>
+                        </div>
+                        {isSelected && (
+                          <Check size={14} className="text-purple-600 dark:text-purple-400 shrink-0 mt-1" />
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           <button

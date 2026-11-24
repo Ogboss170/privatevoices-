@@ -30,6 +30,7 @@ import {
   MessageSquare,
   Mic,
   Volume2,
+  VolumeX,
   Feather,
   Scale,
   Shield,
@@ -37,7 +38,13 @@ import {
 } from 'lucide-react-native'
 import { useTheme } from '../context/ThemeContext'
 import { FytroService, FytroMobileSession } from '../lib/fytroService'
-import type { FytroMode, FytroMemory, FytroReaction } from '@private-voices/shared'
+import type {
+  FytroMode,
+  FytroMemory,
+  FytroReaction,
+  FytroVoiceId,
+} from '@private-voices/shared'
+import { FYTRO_VOICE_OPTIONS } from '@private-voices/shared'
 import { MobileFytroActionBar } from '../components/MobileFytroActionBar'
 
 interface Message {
@@ -100,6 +107,11 @@ export default function FytroScreen() {
   const [sessions, setSessions] = useState<FytroMobileSession[]>([])
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [feedbackMap, setFeedbackMap] = useState<Record<string, FytroReaction>>({})
+
+  // Multi-Voice Selector State
+  const [showVoiceModal, setShowVoiceModal] = useState(false)
+  const [selectedVoice, setSelectedVoice] = useState<FytroVoiceId>('serene')
+  const [isSpeaking, setIsSpeaking] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -328,6 +340,15 @@ export default function FytroScreen() {
         </View>
 
         <View style={styles.headerRight}>
+          {/* Voice Selector Button */}
+          <TouchableOpacity
+            onPress={() => setShowVoiceModal(true)}
+            style={styles.iconBtn}
+            accessibilityLabel="Voice Options"
+          >
+            <Volume2 size={18} color={showVoiceModal ? '#7c3aed' : themeColors.textSecondary} />
+          </TouchableOpacity>
+
           {/* Sessions Drawer Button */}
           <TouchableOpacity
             onPress={() => setShowSessionsModal(true)}
@@ -544,8 +565,17 @@ export default function FytroScreen() {
                         sessionId={currentSessionId}
                         content={item.content}
                         isStreaming={thinking && messages[messages.length - 1]?.id === item.id}
+                        isSpeaking={isSpeaking}
                         currentReaction={feedbackMap[item.id] || null}
                         onRegenerate={() => handleRegenerate(item.id)}
+                        onToggleSpeech={(txt) => {
+                          setIsSpeaking((prev) => !prev)
+                          Alert.alert(
+                            `Speaking with "${FYTRO_VOICE_OPTIONS.find((v) => v.id === selectedVoice)?.name}"`,
+                            txt.slice(0, 150) + (txt.length > 150 ? '...' : ''),
+                            [{ text: 'Stop', onPress: () => setIsSpeaking(false) }]
+                          )
+                        }}
                         onReactionChange={(reaction) => {
                           setFeedbackMap((prev) => {
                             const updated = { ...prev }
@@ -707,6 +737,69 @@ export default function FytroScreen() {
                   </TouchableOpacity>
                 ))
               )}
+            </ScrollView>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Multi-Voice Selection Modal */}
+      <Modal
+        visible={showVoiceModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowVoiceModal(false)}
+      >
+        <SafeAreaView style={[styles.modalOverlay, { justifyContent: 'flex-end' }]}>
+          <View style={[styles.modalContent, { backgroundColor: themeColors.surface, borderTopColor: themeColors.surfaceBorder, maxHeight: '75%' }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Volume2 size={20} color="#7c3aed" />
+                <View>
+                  <Text style={[styles.modalTitle, { color: themeColors.textPrimary }]}>Fytro Voice Persona</Text>
+                  <Text style={{ fontSize: 11, color: themeColors.textSecondary }}>Choose from 5 distinct vocal tones</Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setShowVoiceModal(false)} style={styles.closeBtn}>
+                <X size={18} color={themeColors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }}>
+              {FYTRO_VOICE_OPTIONS.map((v) => {
+                const isSelected = selectedVoice === v.id
+                return (
+                  <TouchableOpacity
+                    key={v.id}
+                    onPress={() => {
+                      setSelectedVoice(v.id)
+                      setShowVoiceModal(false)
+                    }}
+                    style={[
+                      styles.sessionCard,
+                      isSelected && { borderColor: '#7c3aed', backgroundColor: isDark ? '#2E1065' : '#F5F3FF' },
+                      { padding: 14 }
+                    ]}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                        <Text style={[styles.sessionTitle, { color: themeColors.textPrimary, fontWeight: '700' }]}>
+                          {v.name}
+                        </Text>
+                        <View style={[styles.pill, { backgroundColor: isDark ? '#334155' : '#E2E8F0' }]}>
+                          <Text style={[styles.pillText, { color: themeColors.textSecondary }]}>{v.gender}</Text>
+                        </View>
+                      </View>
+                      <Text style={{ fontSize: 12, color: '#7c3aed', fontWeight: '600', marginBottom: 2 }}>
+                        {v.tone}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: themeColors.textSecondary }}>
+                        {v.description}
+                      </Text>
+                    </View>
+                    {isSelected && <Check size={18} color="#7c3aed" />}
+                  </TouchableOpacity>
+                )
+              })}
             </ScrollView>
           </View>
         </SafeAreaView>

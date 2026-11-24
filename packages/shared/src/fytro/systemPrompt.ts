@@ -92,4 +92,71 @@ export interface FytroReport {
   createdAt: string;
 }
 
+export type FytroVoiceId = 'serene' | 'nova' | 'echo' | 'onyx' | 'aura';
+
+export interface FytroVoiceOption {
+  id: FytroVoiceId;
+  name: string;
+  gender: 'female' | 'male' | 'neutral';
+  tone: string;
+  description: string;
+  rate: number;
+  pitch: number;
+  preferredVoices: string[];
+}
+
+export const FYTRO_VOICE_OPTIONS: FytroVoiceOption[] = [
+  {
+    id: 'serene',
+    name: 'Serene (Default)',
+    gender: 'female',
+    tone: 'Calm, gentle & reflective',
+    description: 'A soothing, warm, articulate voice ideal for sanctuary & reflection.',
+    rate: 0.95,
+    pitch: 1.0,
+    preferredVoices: ['Samantha', 'Google US English', 'Natural', 'Karen', 'Victoria'],
+  },
+  {
+    id: 'nova',
+    name: 'Nova',
+    gender: 'female',
+    tone: 'Dynamic, clear & confident',
+    description: 'A sharp, forward-leaning tone well-suited for brainstorming & quick insights.',
+    rate: 1.05,
+    pitch: 1.15,
+    preferredVoices: ['Zira', 'Microsoft Zira', 'Google UK English Female', 'Tessa', 'Moira'],
+  },
+  {
+    id: 'echo',
+    name: 'Echo',
+    gender: 'male',
+    tone: 'Deep, steady & grounded',
+    description: 'A resonant, measured voice for intellectual challenge and philosophical inquiry.',
+    rate: 0.92,
+    pitch: 0.85,
+    preferredVoices: ['Daniel', 'Microsoft David', 'Google UK English Male', 'Oliver', 'Arthur'],
+  },
+  {
+    id: 'onyx',
+    name: 'Onyx',
+    gender: 'male',
+    tone: 'Crisp, articulate & direct',
+    description: 'A direct, analytical, focused delivery for facts, logic, and rapid answers.',
+    rate: 1.0,
+    pitch: 0.95,
+    preferredVoices: ['Alex', 'Microsoft Mark', 'Tom', 'Fred', 'Aaron'],
+  },
+  {
+    id: 'aura',
+    name: 'Aura',
+    gender: 'neutral',
+    tone: 'Ethereal, rhythmic & mindful',
+    description: 'A spacious, neutral presence for deep contemplation and unhurried thoughts.',
+    rate: 0.88,
+    pitch: 1.05,
+    preferredVoices: ['Fiona', 'Veena', 'Google English', 'Serena'],
+  },
+];
+
+
 
