@@ -27,6 +27,10 @@ import {
   MicOff,
   Volume2,
   VolumeX,
+  Feather,
+  Scale,
+  Shield,
+  Zap,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import type { FytroMode, FytroMemory, FytroReaction } from '@private-voices/shared'
@@ -50,28 +54,32 @@ interface FytroSession {
 
 const FYTRO_PROMPTS = [
   {
-    icon: '💭',
-    title: 'Safe Venting Room',
-    desc: 'Speak without holding back. No judgment, total privacy.',
-    starter: "I've been holding something inside and need a safe place to untangle my thoughts without anyone judging me...",
+    icon: <Feather size={16} className="text-purple-500" />,
+    badge: 'Sanctuary',
+    title: 'Untangle raw feelings',
+    desc: 'Speak honestly without judgment or performance.',
+    starter: "I've been carrying something heavy today and need a safe place to untangle what I really feel...",
   },
   {
-    icon: '🛡️',
-    title: 'Anonymity Shield Check',
-    desc: 'Paste a draft confession to see if it accidentally leaks your identity.',
-    starter: 'Here is a draft thought I want to post anonymously. Please check if I accidentally revealed identifying details: ',
+    icon: <Shield size={16} className="text-emerald-500" />,
+    badge: 'Anonymity Shield',
+    title: 'Audit draft for leaks',
+    desc: 'Ensure no identifiable employers, names, or markers leak.',
+    starter: 'Review this draft confession to verify that no identifying details, timestamps, or locations could expose who I am: ',
   },
   {
-    icon: '🧭',
-    title: 'Moral or Life Dilemma',
-    desc: 'Explore different angles of a tough decision you are facing.',
-    starter: "I have a difficult personal decision to make and nobody I know can give me unbiased perspective. Here is what's happening: ",
+    icon: <Scale size={16} className="text-amber-500" />,
+    badge: 'Challenger',
+    title: 'Stress-test my viewpoint',
+    desc: 'Steel-man opposing counter-arguments to find blind spots.',
+    starter: "Here is a perspective I hold strongly. Give me the strongest, good-faith counter-arguments against it: ",
   },
   {
-    icon: '💡',
-    title: 'Philosophy of the Day',
-    desc: 'Deep questions about purpose, emotion, and human connection.',
-    starter: 'Give me one introspective, deep question to think about today, and help me reflect on my answer.',
+    icon: <Compass size={16} className="text-sky-500" />,
+    badge: 'Life Dilemma',
+    title: 'Explore difficult choices',
+    desc: 'Unbiased Socratic clarity on personal or ethical decisions.',
+    starter: "I have a difficult personal dilemma with conflicting values. Help me analyze the tradeoffs clearly: ",
   },
 ]
 
@@ -85,11 +93,12 @@ const DEFAULT_WELCOME_MSG: Message = {
 
 export default function FytroPage(): React.JSX.Element {
   const supabase = createSupabaseBrowserClient()
-  const [messages, setMessages] = useState<Message[]>([DEFAULT_WELCOME_MSG])
+  const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [activeMode, setActiveMode] = useState<FytroMode>('sanctuary')
   const [thinking, setThinking] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [userName, setUserName] = useState<string>('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Multi-Session Chat History State
@@ -247,7 +256,7 @@ export default function FytroPage(): React.JSX.Element {
           }))
         )
       } else {
-        setMessages([DEFAULT_WELCOME_MSG])
+        setMessages([])
       }
 
       // Also fetch user feedback for this session
@@ -283,7 +292,7 @@ export default function FytroPage(): React.JSX.Element {
       if (data.session) {
         setSessions((prev) => [data.session, ...prev])
         setCurrentSessionId(data.session.id)
-        setMessages([DEFAULT_WELCOME_MSG])
+        setMessages([])
         setShowHistoryDrawer(false)
         setShowVault(false)
       }
@@ -301,7 +310,7 @@ export default function FytroPage(): React.JSX.Element {
       setSessions((prev) => prev.filter((s) => s.id !== id))
       if (currentSessionId === id) {
         setCurrentSessionId(null)
-        setMessages([DEFAULT_WELCOME_MSG])
+        setMessages([])
       }
     } catch (err) {
       console.error(err)
@@ -312,6 +321,16 @@ export default function FytroPage(): React.JSX.Element {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) {
         setCurrentUserId(data.user.id)
+        const name =
+          data.user.user_metadata?.full_name ||
+          data.user.user_metadata?.display_name ||
+          data.user.user_metadata?.username ||
+          data.user.email?.split('@')[0] ||
+          ''
+        if (name) {
+          // Capitalize first letter
+          setUserName(name.charAt(0).toUpperCase() + name.slice(1))
+        }
         loadMemories()
         loadSessions()
       }
@@ -522,14 +541,7 @@ export default function FytroPage(): React.JSX.Element {
 
   const handleClear = () => {
     if (confirm('Burn this view? All messages will be cleared from your screen.')) {
-      setMessages([
-        {
-          id: 'welcome-fresh',
-          role: 'assistant',
-          content: 'Session cleared cleanly. Your Mind Space is fresh and unburdened.',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        },
-      ])
+      setMessages([])
       setCurrentSessionId(null)
       setFeedbackMap({})
     }
@@ -830,30 +842,109 @@ export default function FytroPage(): React.JSX.Element {
           </div>
         </div>
       ) : (
-        /* Conversation Stream */
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {/* Quick thought starter cards */}
-          {messages.length <= 1 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 my-3">
-              {FYTRO_PROMPTS.map((prompt, i) => (
-                <button
-                  key={i}
-                  onClick={() => handleSend(prompt.starter)}
-                  className="text-left p-3 rounded-2xl border border-purple-100 dark:border-slate-800 bg-purple-50/40 dark:bg-slate-900/40 hover:bg-purple-50 dark:hover:bg-slate-800/60 transition-all hover:scale-[1.01] shadow-2xs group"
-                >
-                  <div className="text-lg mb-1">{prompt.icon}</div>
-                  <div className="text-xs font-bold text-gray-900 dark:text-white group-hover:text-purple-600 transition-colors">
-                    {prompt.title}
-                  </div>
-                  <div className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2 mt-0.5">
-                    {prompt.desc}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
+        /* Conversation Stream / Front Entry */
+        <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col justify-between">
+          {messages.length === 0 ? (
+            /* Modern Gemini-inspired Entry Landing Screen */
+            <div className="my-auto py-4 sm:py-8 max-w-xl mx-auto w-full space-y-6 sm:space-y-8 animate-in fade-in duration-300">
+              {/* Hero Greeting */}
+              <div className="space-y-2 text-center sm:text-left">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-50 dark:bg-purple-950/40 border border-purple-200/60 dark:border-purple-800/60 text-xs font-semibold text-purple-700 dark:text-purple-300 shadow-2xs">
+                  <Sparkles size={13} className="text-purple-500 animate-pulse" />
+                  <span>Cognitive Sanctuary & Autonomous Mind Space</span>
+                </div>
 
-          {messages.map((m) => {
+                <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
+                  <span className="bg-gradient-to-r from-purple-600 via-indigo-600 to-rose-500 bg-clip-text text-transparent">
+                    {userName ? `Hello, ${userName}.` : 'Hello.'}
+                  </span>
+                  <br />
+                  <span className="text-gray-900 dark:text-white">
+                    What would you like to explore?
+                  </span>
+                </h1>
+
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 max-w-lg leading-relaxed">
+                  Your private, sovereign space to test ideas, untangle complex dilemmas, review confidential drafts for leaks, or reflect freely without surveillance.
+                </p>
+              </div>
+
+              {/* Mode Quick Switcher Pills */}
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mr-1">
+                  Active Mode:
+                </span>
+                {(
+                  [
+                    { id: 'sanctuary', label: 'Sanctuary', icon: <Feather size={12} /> },
+                    { id: 'challenger', label: 'Challenger', icon: <Scale size={12} /> },
+                    { id: 'creative', label: 'Creative', icon: <Sparkles size={12} /> },
+                    { id: 'shield', label: 'Anonymity Shield', icon: <Shield size={12} /> },
+                  ] as const
+                ).map((m) => {
+                  const isActive = activeMode === m.id
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setActiveMode(m.id)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                        isActive
+                          ? 'bg-purple-600 text-white shadow-xs scale-[1.02]'
+                          : 'bg-gray-100 dark:bg-slate-800/80 hover:bg-gray-200/80 dark:hover:bg-slate-700/80 text-gray-700 dark:text-gray-300'
+                      }`}
+                    >
+                      {m.icon}
+                      <span>{m.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Capability Cards / Thought Starters */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {FYTRO_PROMPTS.map((prompt, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleSend(prompt.starter)}
+                    className="text-left p-3.5 rounded-2xl border border-gray-200/70 dark:border-slate-800/80 bg-white/60 dark:bg-slate-900/40 hover:bg-purple-50/50 dark:hover:bg-purple-950/20 hover:border-purple-300 dark:hover:border-purple-800/60 transition-all hover:scale-[1.01] shadow-2xs group flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="p-1.5 rounded-lg bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700/60 shadow-2xs group-hover:scale-110 transition-transform">
+                          {prompt.icon}
+                        </div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded-full border border-purple-200/60 dark:border-purple-800/60">
+                          {prompt.badge}
+                        </span>
+                      </div>
+                      <div className="text-xs font-bold text-gray-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                        {prompt.title}
+                      </div>
+                      <div className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2 mt-1 leading-relaxed">
+                        {prompt.desc}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {/* Security & Memory Trust Footer */}
+              <div className="flex items-center justify-between text-[11px] text-gray-400 pt-2 border-t border-gray-100 dark:border-slate-800/80">
+                <div className="flex items-center gap-1.5">
+                  <Lock size={12} className="text-emerald-500" />
+                  <span>Confidential session • Never shared with public training models</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Brain size={12} className="text-purple-500" />
+                  <span>{memories.length} vault {memories.length === 1 ? 'memory' : 'memories'}</span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Active Message Flow */
+            <div className="space-y-4">
+              {messages.map((m) => {
             const isUser = m.role === 'user'
             return (
               <div
@@ -918,6 +1009,8 @@ export default function FytroPage(): React.JSX.Element {
             </div>
           )}
           <div ref={messagesEndRef} />
+            </div>
+          )}
         </div>
       )}
 
@@ -928,14 +1021,17 @@ export default function FytroPage(): React.JSX.Element {
             e.preventDefault()
             handleSend()
           }}
-          className="flex items-center gap-2 bg-gray-50 dark:bg-slate-800/80 rounded-2xl px-3.5 py-1.5 border border-gray-200/80 dark:border-slate-700/80 focus-within:ring-2 focus-within:ring-purple-500/50 focus-within:border-purple-500 transition-all"
+          className="flex items-center gap-2 bg-gray-50/90 dark:bg-slate-800/90 rounded-2xl px-4 py-2 border border-gray-200/80 dark:border-slate-700/80 focus-within:ring-2 focus-within:ring-purple-500/40 focus-within:border-purple-500/80 shadow-xs transition-all"
         >
+          <div className="p-1.5 rounded-lg bg-gradient-to-tr from-purple-500/20 to-indigo-500/20 text-purple-600 dark:text-purple-400 shrink-0">
+            <Sparkles size={16} />
+          </div>
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={isListening ? 'Listening to your voice...' : "Tell Fytro what's on your mind..."}
-            className="flex-1 bg-transparent py-2 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none"
+            placeholder={isListening ? 'Listening to your voice...' : "Ask Fytro, test an idea, or untangle a dilemma..."}
+            className="flex-1 bg-transparent py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none"
           />
           {speechSupported && (
             <button
@@ -944,7 +1040,7 @@ export default function FytroPage(): React.JSX.Element {
               className={`p-2 rounded-xl transition-all flex items-center justify-center ${
                 isListening
                   ? 'bg-rose-500 text-white animate-pulse shadow-sm'
-                  : 'text-gray-400 hover:text-purple-600 dark:hover:text-purple-400'
+                  : 'text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-gray-100 dark:hover:bg-slate-700/50'
               }`}
               title={isListening ? 'Stop listening' : 'Speak to Fytro'}
             >
@@ -954,7 +1050,7 @@ export default function FytroPage(): React.JSX.Element {
           <button
             type="submit"
             disabled={!input.trim() || thinking}
-            className="p-2 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white transition-all shadow-xs flex items-center justify-center"
+            className="p-2 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white transition-all shadow-xs flex items-center justify-center hover:scale-105 active:scale-95"
           >
             <Send size={15} />
           </button>

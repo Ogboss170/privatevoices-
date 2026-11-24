@@ -30,6 +30,10 @@ import {
   MessageSquare,
   Mic,
   Volume2,
+  Feather,
+  Scale,
+  Shield,
+  Compass,
 } from 'lucide-react-native'
 import { useTheme } from '../context/ThemeContext'
 import { FytroService, FytroMobileSession } from '../lib/fytroService'
@@ -45,28 +49,32 @@ interface Message {
 
 const FYTRO_PROMPTS = [
   {
-    icon: '💭',
-    title: 'Safe Venting Room',
-    desc: 'Speak without holding back.',
-    starter: "I've been holding something inside and need a safe place to untangle my thoughts...",
+    icon: 'feather',
+    badge: 'Sanctuary',
+    title: 'Untangle raw feelings',
+    desc: 'Speak honestly without judgment or pressure.',
+    starter: "I've been carrying something heavy today and need a safe place to untangle what I really feel...",
   },
   {
-    icon: '🛡️',
-    title: 'Anonymity Shield Check',
-    desc: 'Check if a draft leaks your identity.',
-    starter: 'Here is a draft thought I want to post. Please check if I accidentally revealed identifying details: ',
+    icon: 'shield',
+    badge: 'Anonymity Shield',
+    title: 'Audit draft for leaks',
+    desc: 'Ensure no names, locations, or markers leak.',
+    starter: 'Review this draft confession to verify that no identifying details, timestamps, or locations could expose who I am: ',
   },
   {
-    icon: '🧭',
-    title: 'Life Dilemma',
-    desc: 'Explore different angles of a tough choice.',
-    starter: "I have a difficult personal decision to make: ",
+    icon: 'scale',
+    badge: 'Challenger',
+    title: 'Stress-test my viewpoint',
+    desc: 'Steel-man opposing counter-arguments.',
+    starter: "Here is a perspective I hold strongly. Give me the strongest, good-faith counter-arguments against it: ",
   },
   {
-    icon: '💡',
-    title: 'Deep Thought of the Hour',
-    desc: 'Philosophical inquiry on human nature.',
-    starter: 'Give me one introspective, deep question to think about today.',
+    icon: 'compass',
+    badge: 'Life Dilemma',
+    title: 'Explore difficult choices',
+    desc: 'Unbiased Socratic clarity on tough decisions.',
+    starter: "I have a difficult personal dilemma with conflicting values. Help me analyze the tradeoffs clearly: ",
   },
 ]
 
@@ -74,15 +82,7 @@ export default function FytroScreen() {
   const router = useRouter()
   const { colors: themeColors, isDark } = useTheme()
 
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content:
-        "Welcome to your Mind Space. I'm Fytro.\n\nHere, you can think freely, untangle difficult feelings, or review confidential thoughts before sharing them. Powered by fast intelligence and self-sovereign memory.",
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    },
-  ])
+  const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [activeMode, setActiveMode] = useState<FytroMode>('sanctuary')
   const [thinking, setThinking] = useState(false)
@@ -135,14 +135,7 @@ export default function FytroScreen() {
         }))
       )
     } else {
-      setMessages([
-        {
-          id: 'welcome-session',
-          role: 'assistant',
-          content: `Resumed exploration: "${session.title}". What would you like to think about?`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        },
-      ])
+      setMessages([])
     }
 
     // Load feedback reactions for this session
@@ -156,14 +149,7 @@ export default function FytroScreen() {
     if (newSession) {
       setSessions((prev) => [newSession, ...prev])
       setCurrentSessionId(newSession.id)
-      setMessages([
-        {
-          id: 'welcome-fresh',
-          role: 'assistant',
-          content: 'Started fresh Mind Space exploration. Speak freely.',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        },
-      ])
+      setMessages([])
       setShowSessionsModal(false)
     }
   }
@@ -286,14 +272,7 @@ export default function FytroScreen() {
           text: 'Burn',
           style: 'destructive',
           onPress: () => {
-            setMessages([
-              {
-                id: 'welcome-clean',
-                role: 'assistant',
-                content: 'Session burned cleanly. Your Mind Space is fresh and clear.',
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              },
-            ])
+            setMessages([])
             setCurrentSessionId(null)
             setFeedbackMap({})
           },
@@ -407,110 +386,194 @@ export default function FytroScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          ListHeaderComponent={
-            <View style={styles.privacyBanner}>
-              <Lock size={14} color="#7c3aed" />
-              <Text style={styles.privacyBannerText}>
-                Fytro conversations are strictly private and never used to train public models.
+        {/* Messages or Modern Front Landing View */}
+        {messages.length === 0 ? (
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={styles.landingContainer}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Hero Greeting */}
+            <View style={styles.landingHero}>
+              <View style={[styles.landingBadge, { backgroundColor: isDark ? '#2E1065' : '#F5F3FF', borderColor: isDark ? '#4C1D95' : '#DDD6FE' }]}>
+                <Sparkles size={12} color="#8B5CF6" />
+                <Text style={styles.landingBadgeText}>Mind Space & Autonomous Companion</Text>
+              </View>
+
+              <Text style={[styles.landingTitle, { color: themeColors.textPrimary }]}>
+                Hello.{'\n'}
+                <Text style={{ color: '#8B5CF6' }}>What's on your mind?</Text>
+              </Text>
+
+              <Text style={[styles.landingSubtitle, { color: themeColors.textSecondary }]}>
+                A private, judgment-free space to explore thoughts, audit draft confessions, or untangle tough life dilemmas.
               </Text>
             </View>
-          }
-          renderItem={({ item }) => {
-            const isUser = item.role === 'user'
-            return (
-              <View style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowBot]}>
-                {!isUser && (
-                  <View style={styles.botIconSmall}>
-                    <Sparkles size={12} color="#ffffff" />
-                  </View>
-                )}
-                <View
+
+            {/* Mode Selector Chips */}
+            <View style={styles.modeChipsRow}>
+              {(
+                [
+                  { id: 'sanctuary', label: 'Sanctuary' },
+                  { id: 'challenger', label: 'Challenger' },
+                  { id: 'creative', label: 'Creative' },
+                  { id: 'shield', label: 'Anonymity Shield' },
+                ] as const
+              ).map((m) => {
+                const isActive = activeMode === m.id
+                return (
+                  <TouchableOpacity
+                    key={m.id}
+                    onPress={() => setActiveMode(m.id)}
+                    style={[
+                      styles.modeChip,
+                      isActive
+                        ? { backgroundColor: '#7c3aed', borderColor: '#7c3aed' }
+                        : { backgroundColor: isDark ? '#1e293b' : '#f1f5f9', borderColor: themeColors.surfaceBorder },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.modeChipText,
+                        { color: isActive ? '#ffffff' : themeColors.textPrimary },
+                      ]}
+                    >
+                      {m.label}
+                    </Text>
+                  </TouchableOpacity>
+                )
+              })}
+            </View>
+
+            {/* Prompt Cards Grid */}
+            <View style={styles.promptGrid}>
+              {FYTRO_PROMPTS.map((p, i) => (
+                <TouchableOpacity
+                  key={i}
+                  onPress={() => handleSend(p.starter)}
                   style={[
-                    styles.msgBubble,
-                    isUser
-                      ? styles.userBubble
-                      : [styles.botBubble, { backgroundColor: isDark ? '#1e293b' : '#f1f5f9', borderColor: themeColors.surfaceBorder }],
+                    styles.modernPromptCard,
+                    {
+                      backgroundColor: isDark ? '#1e293b50' : '#f8fafc',
+                      borderColor: isDark ? '#334155' : '#e2e8f0',
+                    },
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.msgText,
-                      isUser ? styles.userMsgText : { color: themeColors.textPrimary },
-                    ]}
-                  >
-                    {item.content}
+                  <View style={styles.cardHeader}>
+                    <View style={[styles.iconWrapper, { backgroundColor: isDark ? '#2e1065' : '#f3e8ff' }]}>
+                      {p.icon === 'feather' ? (
+                        <Feather size={14} color="#8b5cf6" />
+                      ) : p.icon === 'shield' ? (
+                        <Shield size={14} color="#10b981" />
+                      ) : p.icon === 'scale' ? (
+                        <Scale size={14} color="#f59e0b" />
+                      ) : (
+                        <Compass size={14} color="#0284c7" />
+                      )}
+                    </View>
+                    <Text style={styles.cardBadge}>{p.badge}</Text>
+                  </View>
+                  <Text style={[styles.cardTitle, { color: themeColors.textPrimary }]}>{p.title}</Text>
+                  <Text style={[styles.cardDesc, { color: themeColors.textSecondary }]} numberOfLines={2}>
+                    {p.desc}
                   </Text>
-                  <Text
-                    style={[
-                      styles.timestamp,
-                      isUser ? styles.userTimestamp : { color: themeColors.textSecondary },
-                    ]}
-                  >
-                    {item.timestamp}
-                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-                  {/* Clean, responsive Fytro response action bar */}
-                  {!isUser && (
-                    <MobileFytroActionBar
-                      messageId={item.id}
-                      sessionId={currentSessionId}
-                      content={item.content}
-                      isStreaming={thinking && messages[messages.length - 1]?.id === item.id}
-                      currentReaction={feedbackMap[item.id] || null}
-                      onRegenerate={() => handleRegenerate(item.id)}
-                      onReactionChange={(reaction) => {
-                        setFeedbackMap((prev) => {
-                          const updated = { ...prev }
-                          if (reaction) {
-                            updated[item.id] = reaction
-                          } else {
-                            delete updated[item.id]
-                          }
-                          return updated
-                        })
-                      }}
-                    />
-                  )}
-                </View>
-              </View>
-            )
-          }}
-          ListFooterComponent={
-            thinking ? (
-              <View style={styles.thinkingRow}>
-                <ActivityIndicator size="small" color="#7c3aed" />
-                <Text style={[styles.thinkingText, { color: themeColors.textSecondary }]}>
-                  Thinking...
+            {/* Privacy Trust Footer */}
+            <View style={styles.privacyTrustRow}>
+              <Lock size={12} color="#10B981" />
+              <Text style={styles.privacyTrustText}>
+                Confidential session • Never shared with public training models
+              </Text>
+            </View>
+          </ScrollView>
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            ListHeaderComponent={
+              <View style={styles.privacyBanner}>
+                <Lock size={14} color="#7c3aed" />
+                <Text style={styles.privacyBannerText}>
+                  Fytro conversations are strictly private and never used to train public models.
                 </Text>
               </View>
-            ) : null
-          }
-        />
+            }
+            renderItem={({ item }) => {
+              const isUser = item.role === 'user'
+              return (
+                <View style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowBot]}>
+                  {!isUser && (
+                    <View style={styles.botIconSmall}>
+                      <Sparkles size={12} color="#ffffff" />
+                    </View>
+                  )}
+                  <View
+                    style={[
+                      styles.msgBubble,
+                      isUser
+                        ? styles.userBubble
+                        : [styles.botBubble, { backgroundColor: isDark ? '#1e293b' : '#f1f5f9', borderColor: themeColors.surfaceBorder }],
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.msgText,
+                        isUser ? styles.userMsgText : { color: themeColors.textPrimary },
+                      ]}
+                    >
+                      {item.content}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.timestamp,
+                        isUser ? styles.userTimestamp : { color: themeColors.textSecondary },
+                      ]}
+                    >
+                      {item.timestamp}
+                    </Text>
 
-        {/* Quick prompt cards when starting out */}
-        {messages.length <= 1 && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.promptScroll}
-          >
-            {FYTRO_PROMPTS.map((p, i) => (
-              <TouchableOpacity
-                key={i}
-                onPress={() => handleSend(p.starter)}
-                style={[styles.promptCard, { backgroundColor: isDark ? '#1e1b4b' : '#f5f3ff', borderColor: '#ddd6fe' }]}
-              >
-                <Text style={styles.promptIcon}>{p.icon}</Text>
-                <Text style={styles.promptTitle}>{p.title}</Text>
-                <Text style={styles.promptDesc} numberOfLines={2}>{p.desc}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+                    {/* Clean, responsive Fytro response action bar */}
+                    {!isUser && (
+                      <MobileFytroActionBar
+                        messageId={item.id}
+                        sessionId={currentSessionId}
+                        content={item.content}
+                        isStreaming={thinking && messages[messages.length - 1]?.id === item.id}
+                        currentReaction={feedbackMap[item.id] || null}
+                        onRegenerate={() => handleRegenerate(item.id)}
+                        onReactionChange={(reaction) => {
+                          setFeedbackMap((prev) => {
+                            const updated = { ...prev }
+                            if (reaction) {
+                              updated[item.id] = reaction
+                            } else {
+                              delete updated[item.id]
+                            }
+                            return updated
+                          })
+                        }}
+                      />
+                    )}
+                  </View>
+                </View>
+              )
+            }}
+            ListFooterComponent={
+              thinking ? (
+                <View style={styles.thinkingRow}>
+                  <ActivityIndicator size="small" color="#7c3aed" />
+                  <Text style={[styles.thinkingText, { color: themeColors.textSecondary }]}>
+                    Thinking...
+                  </Text>
+                </View>
+              ) : null
+            }
+          />
         )}
 
         {/* Input Bar */}
@@ -859,4 +922,95 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(124, 58, 237, 0.08)',
   },
   sessionTitle: { fontSize: 13, fontWeight: '600' },
+  landingContainer: {
+    padding: 20,
+    paddingTop: 10,
+    paddingBottom: 24,
+  },
+  landingHero: {
+    marginBottom: 20,
+  },
+  landingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignSelf: 'flex-start',
+    marginBottom: 14,
+  },
+  landingBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#8B5CF6',
+  },
+  landingTitle: {
+    fontSize: 28,
+    fontWeight: '900',
+    lineHeight: 34,
+    letterSpacing: -0.5,
+    marginBottom: 8,
+  },
+  landingSubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  modeChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 20,
+  },
+  promptGrid: {
+    gap: 10,
+    marginBottom: 20,
+  },
+  modernPromptCard: {
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  iconWrapper: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardBadge: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#8B5CF6',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  cardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  cardDesc: {
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  privacyTrustRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingTop: 8,
+  },
+  privacyTrustText: {
+    fontSize: 10,
+    color: '#94a3b8',
+    textAlign: 'center',
+  },
 })
