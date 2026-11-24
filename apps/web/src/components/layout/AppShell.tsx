@@ -3,37 +3,47 @@
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Search, PlusSquare, Inbox, Users, User, Bell, Radio, Bookmark, BookOpen, Feather, Sparkles } from 'lucide-react'
+import { Home, Search, PlusSquare, Inbox, Users, User, Bell, Radio, Bookmark, BookOpen, Feather, Sparkles, LogIn, UserPlus } from 'lucide-react'
 import RightSidebar from '@/components/layout/RightSidebar'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { useWebTheme } from '@/context/WebThemeContext'
+import GuestAuthModal from '@/components/auth/GuestAuthModal'
 
-export default function AppShell({ children }: { children: React.ReactNode }): React.JSX.Element {
+export default function AppShell({ 
+  children, 
+  user: initialUser 
+}: { 
+  children: React.ReactNode
+  user?: any 
+}): React.JSX.Element {
   const pathname = usePathname()
   const { t } = useWebTheme()
+  const [currentUser, setCurrentUser] = useState<any>(initialUser)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [unreadMessages, setUnreadMessages] = useState(0)
+  const [guestAuthOpen, setGuestAuthOpen] = useState(false)
+  const [guestModalContext, setGuestModalContext] = useState({ title: '', desc: '' })
 
   const desktopNavItems = [
-    { href: '/feed',          label: t.home,          Icon: Home },
-    { href: '/explore',       label: t.explore,       Icon: Search },
-    { href: '/spaces',        label: 'Spaces',        Icon: Radio },
-    { href: '/fytro',         label: 'Fytro (AI)',    Icon: Sparkles },
-    { href: '/journal',       label: 'Journal',       Icon: BookOpen },
-    { href: '/saved',         label: 'Saved',         Icon: Bookmark },
-    { href: '/create',        label: t.create,        Icon: PlusSquare },
-    { href: '/inbox',         label: t.inbox,         Icon: Inbox },
-    { href: '/communities',   label: t.community,     Icon: Users },
-    { href: '/notifications', label: t.notifications, Icon: Bell },
-    { href: '/profile',       label: t.profile,       Icon: User },
+    { href: '/feed',          label: t.home,          Icon: Home, protected: false },
+    { href: '/explore',       label: t.explore,       Icon: Search, protected: false },
+    { href: '/spaces',        label: 'Spaces',        Icon: Radio, protected: false },
+    { href: '/fytro',         label: 'Fytro (AI)',    Icon: Sparkles, protected: false },
+    { href: '/journal',       label: 'Journal',       Icon: BookOpen, protected: true },
+    { href: '/saved',         label: 'Saved',         Icon: Bookmark, protected: true },
+    { href: '/create',        label: t.create,        Icon: PlusSquare, protected: true },
+    { href: '/inbox',         label: t.inbox,         Icon: Inbox, protected: true },
+    { href: '/communities',   label: t.community,     Icon: Users, protected: false },
+    { href: '/notifications', label: t.notifications, Icon: Bell, protected: true },
+    { href: '/profile',       label: t.profile,       Icon: User, protected: true },
   ]
 
   const mobileBottomNavItems = [
-    { href: '/feed',        label: t.home,      Icon: Home },
-    { href: '/explore',     label: t.explore,   Icon: Search },
-    { href: '/communities', label: t.community, Icon: Users },
-    { href: '/inbox',       label: t.inbox,     Icon: Inbox },
-    { href: '/profile',     label: t.profile,   Icon: User },
+    { href: '/feed',        label: t.home,      Icon: Home, protected: false },
+    { href: '/explore',     label: t.explore,   Icon: Search, protected: false },
+    { href: '/communities', label: t.community, Icon: Users, protected: false },
+    { href: '/inbox',       label: t.inbox,     Icon: Inbox, protected: true },
+    { href: '/profile',     label: t.profile,   Icon: User, protected: true },
   ]
 
   useEffect(() => {
@@ -42,6 +52,7 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
     async function fetchCounts() {
       try {
         const { data: { user } } = await supabase.auth.getUser()
+        setCurrentUser(user)
         if (!user) return
 
         // 1. Unread notifications
@@ -129,10 +140,31 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
 
           {/* Nav links */}
           <nav className="flex-1 space-y-1">
-            {desktopNavItems.map(({ href, label, Icon }) => {
+            {desktopNavItems.map(({ href, label, Icon, protected: isProtected }) => {
               const isActive = pathname === href || pathname.startsWith(href + '/')
               const badgeCount =
                 href === '/notifications' ? unreadNotifications : href === '/inbox' ? unreadMessages : 0
+
+              if (!currentUser && isProtected) {
+                return (
+                  <button
+                    key={href}
+                    onClick={() => {
+                      setGuestModalContext({
+                        title: `Sign in to access ${label}`,
+                        desc: `Create an account or sign in to view your ${label.toLowerCase()} on Private Voices.`,
+                      })
+                      setGuestAuthOpen(true)
+                    }}
+                    className="w-full flex items-center justify-between px-4 py-3 rounded-full text-[15px] font-semibold transition-all text-gray-500 hover:bg-gray-100/70 dark:hover:bg-slate-800/60 hover:text-gray-900 dark:hover:text-white"
+                  >
+                    <div className="flex items-center gap-4">
+                      <Icon size={22} strokeWidth={2} className="opacity-60" />
+                      <span>{label}</span>
+                    </div>
+                  </button>
+                )
+              }
 
               return (
                 <Link
@@ -165,21 +197,40 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
             })}
           </nav>
 
-          {/* Quick Create Post (X Post Button) */}
-          <div className="pt-3 border-t border-gray-100 dark:border-slate-800">
-            <Link
-              href="/create"
-              className="w-full py-3.5 bg-gray-900 hover:bg-black dark:bg-white dark:hover:bg-gray-100 text-white dark:text-gray-950 font-bold rounded-full shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 text-sm"
-            >
-              <Feather size={18} strokeWidth={2.4} />
-              <span>Post</span>
-            </Link>
+          {/* Quick Action / Guest Auth Section in Desktop Sidebar */}
+          <div className="pt-3 border-t border-gray-100 dark:border-slate-800 space-y-2">
+            {currentUser ? (
+              <Link
+                href="/create"
+                className="w-full py-3.5 bg-gray-900 hover:bg-black dark:bg-white dark:hover:bg-gray-100 text-white dark:text-gray-950 font-bold rounded-full shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 text-sm"
+              >
+                <Feather size={18} strokeWidth={2.4} />
+                <span>Post</span>
+              </Link>
+            ) : (
+              <div className="space-y-2">
+                <Link
+                  href="/register"
+                  className="w-full py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-full shadow-md flex items-center justify-center gap-2 text-sm transition-all"
+                >
+                  <UserPlus size={16} />
+                  <span>Create Account</span>
+                </Link>
+                <Link
+                  href="/login"
+                  className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-900 dark:text-white font-semibold rounded-full flex items-center justify-center gap-2 text-sm transition-all"
+                >
+                  <LogIn size={16} />
+                  <span>Log In</span>
+                </Link>
+              </div>
+            )}
           </div>
         </aside>
 
         {/* ── Main Feed Content ── */}
         <div className="flex-1 min-w-0 min-h-screen border-r border-gray-200/60 dark:border-slate-800/60 bg-white/40 dark:bg-slate-900/40">
-          <main className="max-w-2xl w-full mx-auto px-4 py-4 md:py-6 pb-20 md:pb-6">
+          <main className="max-w-2xl w-full mx-auto px-4 py-4 md:py-6 pb-24 md:pb-6">
             {children}
           </main>
         </div>
@@ -188,15 +239,66 @@ export default function AppShell({ children }: { children: React.ReactNode }): R
         <RightSidebar />
       </div>
 
+      {/* ── Guest Sticky Floating Banner (TikTok/X style) ── */}
+      {!currentUser && (
+        <div className="fixed bottom-14 md:bottom-0 inset-x-0 bg-brand-600 text-white py-3 px-4 shadow-xl z-30 flex flex-col sm:flex-row items-center justify-between gap-3 animate-slide-up border-t border-brand-500">
+          <div className="text-center sm:text-left">
+            <p className="text-sm font-bold">Don&apos;t miss what&apos;s happening</p>
+            <p className="text-xs text-brand-100">People on Private Voices are the first to know. Join now to like, comment, and connect.</p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Link
+              href="/login"
+              className="px-4 py-1.5 rounded-full text-xs font-semibold bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-all"
+            >
+              Log in
+            </Link>
+            <Link
+              href="/register"
+              className="px-4 py-1.5 rounded-full text-xs font-bold bg-white text-brand-700 hover:bg-brand-50 shadow-sm transition-all"
+            >
+              Sign up
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Guest Modal */}
+      <GuestAuthModal
+        isOpen={guestAuthOpen}
+        onClose={() => setGuestAuthOpen(false)}
+        actionTitle={guestModalContext.title}
+        actionDescription={guestModalContext.desc}
+      />
+
         {/* ── Bottom tab bar (mobile view: fixed icon dock) ── */}
       <nav
         aria-label="Mobile Navigation"
         className="md:hidden fixed bottom-0 inset-x-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-gray-100 dark:border-slate-800 flex items-center justify-around px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] z-20 transition-colors shadow-lg"
       >
-        {mobileBottomNavItems.map(({ href, label, Icon }) => {
+        {mobileBottomNavItems.map(({ href, label, Icon, protected: isProtected }) => {
           const isActive = pathname === href || pathname.startsWith(href + '/')
           const badgeCount =
             href === '/notifications' ? unreadNotifications : href === '/inbox' ? unreadMessages : 0
+
+          if (!currentUser && isProtected) {
+            return (
+              <button
+                key={href}
+                onClick={() => {
+                  setGuestModalContext({
+                    title: `Sign in to access ${label}`,
+                    desc: `Create an account or sign in to view your ${label.toLowerCase()} on Private Voices.`,
+                  })
+                  setGuestAuthOpen(true)
+                }}
+                aria-label={label}
+                className="p-2.5 rounded-full text-gray-400 active:scale-90"
+              >
+                <Icon size={24} strokeWidth={2} />
+              </button>
+            )
+          }
 
           return (
             <Link

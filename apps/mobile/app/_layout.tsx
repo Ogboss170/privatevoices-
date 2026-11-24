@@ -31,12 +31,13 @@ export default function RootLayout() {
         const inOnboarding = segments[0] === 'onboarding'
         const inResetPassword = (segments as string[]).includes('reset-password') || (segments as string[]).includes('forgot-password')
 
+        // Direct feed access for all users:
+        // First-time users see onboarding if not completed, but after that (or on skip),
+        // guests and authenticated users both land straight into the main tabs/feed
         if (hasCompletedOnboarding !== 'true' && !inOnboarding) {
           router.replace('/onboarding')
         } else if (hasCompletedOnboarding === 'true') {
-          if (!session && !inAuthGroup && !inOnboarding) {
-            router.replace('/(auth)/login')
-          } else if (session && (inAuthGroup || inOnboarding) && !inResetPassword) {
+          if (session && (inAuthGroup || inOnboarding) && !inResetPassword) {
             router.replace('/(tabs)')
           }
         }
@@ -68,8 +69,6 @@ export default function RootLayout() {
         } else if (hasCompletedOnboarding === 'true') {
           if (_event === 'PASSWORD_RECOVERY') {
             router.replace('/(auth)/reset-password' as any)
-          } else if (!session && !inAuthGroup && !inOnboarding) {
-            router.replace('/(auth)/login')
           } else if (session && (inAuthGroup || inOnboarding) && !inResetPassword) {
             router.replace('/(tabs)')
           }

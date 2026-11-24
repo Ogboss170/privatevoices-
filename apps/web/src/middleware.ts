@@ -31,15 +31,23 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
-  // Public routes that don't require authentication
-  const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password', '/auth/callback', '/']
+  // Redirect root path directly to /feed for a seamless feed-first experience (like TikTok, Instagram, X)
+  if (pathname === '/') {
+    const url = request.nextUrl.clone()
+    url.pathname = '/feed'
+    return NextResponse.redirect(url)
+  }
+
+  // Public routes that don't require authentication - allows visitors to browse feed and explore freely
+  const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password', '/auth/callback', '/', '/feed', '/explore']
   const isPublicRoute = publicRoutes.includes(pathname)
-  // Profile routes are public (/@username) and public invite landing pages (/join/..., /invite/...)
+  // Profile routes (/@username), post detail routes (/post/...), and public invite/join landing pages
   const isProfileRoute = pathname.startsWith('/@')
+  const isPostRoute = pathname.startsWith('/post/')
   const isPublicInviteRoute = pathname.startsWith('/invite/') || pathname.startsWith('/join/')
   const isApiRoute = pathname.startsWith('/api/')
 
-  if (!user && !isPublicRoute && !isProfileRoute && !isPublicInviteRoute && !isApiRoute) {
+  if (!user && !isPublicRoute && !isProfileRoute && !isPostRoute && !isPublicInviteRoute && !isApiRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)

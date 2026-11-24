@@ -12,6 +12,7 @@ import InteractivePoll from './InteractivePoll'
 import PostInsightsModal from './PostInsightsModal'
 import { UserBadgesRow, CommunityRoleBadge } from '../common/PlatformBadge'
 import VoiceWaveformPlayer from '../common/VoiceWaveformPlayer'
+import GuestAuthModal from '../auth/GuestAuthModal'
 
 interface PostCardProps {
   post: Post
@@ -33,6 +34,20 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
   const [canModerateCommunity, setCanModerateCommunity] = useState(
     communityRole === 'owner' || communityRole === 'moderator'
   )
+  const [guestAuthOpen, setGuestAuthOpen] = useState(false)
+  const [guestModalContext, setGuestModalContext] = useState({ title: '', desc: '' })
+
+  const requireAuth = (actionName: string, desc?: string): boolean => {
+    if (!currentUserId) {
+      setGuestModalContext({
+        title: `Sign in to ${actionName}`,
+        desc: desc || `Join Private Voices to ${actionName.toLowerCase()} and interact with members.`,
+      })
+      setGuestAuthOpen(true)
+      return false
+    }
+    return true
+  }
 
   useEffect(() => {
     async function loadAuthorBadges() {
@@ -322,8 +337,7 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
 
   async function handleToggleLike() {
     if (likeBusy) return
-    if (!currentUserId) {
-      alert('Please log in to like posts.')
+    if (!requireAuth('like this Voice', 'Sign in or create an account to like posts and show your appreciation.')) {
       return
     }
 
@@ -361,8 +375,7 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
 
   async function handleToggleRepost() {
     if (repostBusy) return
-    if (!currentUserId) {
-      alert('Please log in to repost.')
+    if (!requireAuth('repost this Voice', 'Sign in or create an account to repost and amplify stories you resonate with.')) {
       return
     }
 
@@ -410,6 +423,9 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
   }
 
   async function handleToggleSave() {
+    if (!requireAuth('save this Voice', 'Sign in or create an account to bookmark voices and read them later.')) {
+      return
+    }
     const prevSaved = isSaved
     const nextSaved = !prevSaved
     setIsSaved(nextSaved)
@@ -485,11 +501,11 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
   }
 
   async function handleToggleLikeComment(commentId: string) {
-    const { data: userRes } = await supabase.auth.getUser()
-    if (!userRes?.user) {
-      alert('Please log in to like comments.')
+    if (!requireAuth('like this comment', 'Sign in to like comments and participate in community discussions.')) {
       return
     }
+    const { data: userRes } = await supabase.auth.getUser()
+    if (!userRes?.user) return
 
     const currentComment = comments.find((c) => c.id === commentId)
     if (!currentComment) return
@@ -557,12 +573,14 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
 
   async function handleAddComment(e: React.FormEvent) {
     e.preventDefault()
+    if (!requireAuth('leave a comment', 'Sign in or create an account to join the conversation and share your thoughts.')) {
+      return
+    }
     if (!commentText.trim()) return
     setSubmittingComment(true)
 
     const { data: userRes } = await supabase.auth.getUser()
     if (!userRes.user) {
-      alert('Please log in to leave a comment.')
       setSubmittingComment(false)
       return
     }
@@ -1600,6 +1618,14 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
       {showInsightsModal && (
         <PostInsightsModal post={post} currentUserId={currentUserId} onClose={() => setShowInsightsModal(false)} />
       )}
+
+      {/* Guest Auth Modal for unauthenticated actions */}
+      <GuestAuthModal
+        isOpen={guestAuthOpen}
+        onClose={() => setGuestAuthOpen(false)}
+        actionTitle={guestModalContext.title}
+        actionDescription={guestModalContext.desc}
+      />
     </article>
   )
 }
