@@ -48,6 +48,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/media/imageCompression'
 import PostCard from '@/components/feed/PostCard'
 import { CommunityRoleBadge } from '@/components/common/PlatformBadge'
+import CommunityChannelsChat from '@/components/community/CommunityChannelsChat'
 import type { Post } from '@private-voices/shared'
 
 export default function CommunityDetailPage(): React.JSX.Element {
@@ -57,7 +58,7 @@ export default function CommunityDetailPage(): React.JSX.Element {
   const supabase = createSupabaseBrowserClient()
 
   const [community, setCommunity] = useState<any | null>(null)
-  const [activeTab, setActiveTab] = useState<'posts' | 'about' | 'members' | 'manage'>('posts')
+  const [activeTab, setActiveTab] = useState<'posts' | 'chat' | 'about' | 'members' | 'manage'>('posts')
   const [members, setMembers] = useState<any[]>([])
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
@@ -754,6 +755,15 @@ export default function CommunityDetailPage(): React.JSX.Element {
           Posts
         </button>
         <button
+          onClick={() => setActiveTab('chat')}
+          className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
+            activeTab === 'chat' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'
+          }`}
+        >
+          <MessageSquare size={14} />
+          <span>Chat Rooms</span>
+        </button>
+        <button
           onClick={() => setActiveTab('about')}
           className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${
             activeTab === 'about' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'
@@ -861,6 +871,15 @@ export default function CommunityDetailPage(): React.JSX.Element {
             </div>
           )}
         </div>
+      )}
+
+      {activeTab === 'chat' && (
+        <CommunityChannelsChat
+          communityId={community.id}
+          currentUserId={currentUserId}
+          userRole={userRole}
+          isMember={membershipStatus === 'member'}
+        />
       )}
 
       {activeTab === 'about' && (
