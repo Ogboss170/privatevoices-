@@ -20,6 +20,7 @@ export interface FytroMobileMessage {
 }
 
 const WEB_API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'
+const DIRECT_GROQ_KEY = process.env.EXPO_PUBLIC_GROQ_API_KEY || ''
 
 export class FytroService {
   // ── 1. Fetch user memories from Supabase ──
@@ -210,8 +211,8 @@ export class FytroService {
     mode: FytroMode
     memories: FytroMemory[]
   }): Promise<string> {
+    // 1. Try hitting the web app API endpoint first (with Groq LPUs)
     try {
-      // Try hitting the web app API endpoint first (with Groq LPUs)
       const res = await fetch(`${WEB_API_URL}/api/fytro/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -227,7 +228,51 @@ export class FytroService {
         if (text && text.trim().length > 0) return text
       }
     } catch (e) {
-      console.warn('Could not connect to Web Fytro endpoint, running local Socratic reflection:', e)
+      console.warn('Could not connect to Web Fytro endpoint:', e)
+    }
+
+    // 2. Direct mobile Groq API call if web server is unreachable or native network
+    if (DIRECT_GROQ_KEY) {
+      try {
+        let memoryContextPrompt = ''
+        if (memories && memories.length > 0) {
+          memoryContextPrompt =
+            '\n\n[USER-GOVERNED MEMORY VAULT]\n' +
+            memories.map((m) => `• [${m.category}]: ${m.memoryText}`).join('\n')
+        }
+
+        const activeModeGuidance = FYTRO_MODE_INSTRUCTIONS[mode] || FYTRO_MODE_INSTRUCTIONS.sanctuary
+        const systemPrompt = `${FYTRO_SYSTEM_PROMPT}\n${activeModeGuidance}${memoryContextPrompt}`
+
+        const groqMessages = [
+          { role: 'system', content: systemPrompt },
+          ...messages.map((m) => ({ role: m.role, content: m.content })),
+        ]
+
+        const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${DIRECT_GROQ_KEY}`,
+          },
+          body: JSON.stringify({
+            model: 'openai/gpt-oss-120b',
+            messages: groqMessages,
+            temperature: mode === 'creative' ? 0.7 : 0.3,
+            max_tokens: 1500,
+          }),
+        })
+
+        if (groqRes.ok) {
+          const groqData = await groqRes.json()
+          const answer = groqData.choices?.[0]?.message?.content
+          if (answer && answer.trim().length > 0) {
+            return answer.trim()
+          }
+        }
+      } catch (err) {
+        console.warn('Direct mobile Groq query failed:', err)
+      }
     }
 
     // Local deterministic Socratic fallback for mobile offline support
