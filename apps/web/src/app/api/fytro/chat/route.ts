@@ -11,6 +11,12 @@ interface ChatMessage {
   content: string
 }
 
+// Read Groq API key from environment variables (server-side, edge, or local)
+const GROQ_KEY =
+  process.env.GROQ_API_KEY ||
+  process.env.EXPO_PUBLIC_GROQ_API_KEY ||
+  ''
+
 // Reliable Groq caller that handles both streaming and complete responses
 function callGroqHttps(apiKey: string, payload: any): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -115,7 +121,7 @@ export async function POST(req: NextRequest) {
     ]
 
     // ── Tier 1: Groq Engine (Ultra-fast LPUs, Qwen / Llama models) ──
-    if (process.env.GROQ_API_KEY) {
+    if (GROQ_KEY) {
       // Prioritize qwen/qwen3.8-27b for lightning-fast factual precision, followed by openai/gpt-oss-120b
       const groqModels = ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b']
 
@@ -129,7 +135,7 @@ export async function POST(req: NextRequest) {
             stream: true,
           }
 
-          const nodeRes = await streamGroqHttps(process.env.GROQ_API_KEY, payload)
+          const nodeRes = await streamGroqHttps(GROQ_KEY, payload)
 
           if (nodeRes.statusCode && nodeRes.statusCode >= 200 && nodeRes.statusCode < 300) {
             const encoder = new TextEncoder()
@@ -195,10 +201,10 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Tier 1B: If streaming attempt was not returned, try fast direct completion ──
-    if (process.env.GROQ_API_KEY) {
+    if (GROQ_KEY) {
       for (const groqModel of ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b']) {
         try {
-          const directText = await callGroqHttps(process.env.GROQ_API_KEY, {
+          const directText = await callGroqHttps(GROQ_KEY, {
             model: groqModel,
             messages: groqMessages,
             temperature: mode === 'creative' ? 0.7 : 0.2,
@@ -384,7 +390,6 @@ function generateSocraticResponse(userText: string, mode: FytroMode): string {
 
   // Clear, helpful default if cloud inference is momentarily unreachable
   return (
-    "I am currently operating in resilient offline mode while connecting to cloud reasoning LPUs.\n\n" +
-    "For complex reasoning or live factual lookups, please ensure connectivity or ask again in a moment. I am here to explore your thoughts and ideas."
+    "Connecting directly to online intelligence... If you see this, please send your message again and I will answer directly."
   )
 }
