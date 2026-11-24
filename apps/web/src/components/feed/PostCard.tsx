@@ -823,6 +823,19 @@ export default function PostCard({ post, currentUserId, communityRole, onDelete,
                 </h3>
                 <UserBadgesRow badges={authorBadges} size={13} />
                 {authorCommunityRole && <CommunityRoleBadge role={authorCommunityRole} size={12} />}
+                {post.flairName && (
+                  <span
+                    className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border shadow-2xs"
+                    style={{
+                      borderColor: post.flairColor || '#6366f1',
+                      color: post.flairColor || '#6366f1',
+                      backgroundColor: `${post.flairColor || '#6366f1'}15`,
+                    }}
+                  >
+                    <span>🏷️</span>
+                    <span>{post.flairName}</span>
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
                 <span className="font-mono">@{post.author.username}</span>

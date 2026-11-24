@@ -141,6 +141,9 @@ export interface Post {
   locationLat?: number | null;
   locationLng?: number | null;
   locationPlaceId?: string | null;
+  flairId?: string | null;
+  flairName?: string | null;
+  flairColor?: string | null;
   createdAt: string;
   updatedAt: string;
 }

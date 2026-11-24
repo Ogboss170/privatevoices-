@@ -94,6 +94,9 @@ export default function CommunityDetailPage(): React.JSX.Element {
 
   // Post creation state
   const [newPostContent, setNewPostContent] = useState('')
+  const [selectedFlair, setSelectedFlair] = useState<any | null>(null)
+  const [communityFlairs, setCommunityFlairs] = useState<any[]>([])
+  const [activeFlairFilter, setActiveFlairFilter] = useState<string>('all')
   const [posting, setPosting] = useState(false)
 
   // Rules editor state
@@ -222,13 +225,33 @@ export default function CommunityDetailPage(): React.JSX.Element {
         isPinned: p.is_pinned || false,
         pinnedAt: p.pinned_at || null,
         pinnedBy: p.pinned_by || null,
+        flairId: p.flair_id || null,
+        flairName: p.flair_name || null,
+        flairColor: p.flair_color || null,
         createdAt: p.created_at,
         updatedAt: p.updated_at,
       }))
       setPosts(formatted)
     }
 
-    // 5. Fetch community growth & engagement metrics (for owners & mods)
+    // 5. Fetch community flairs
+    const { data: flairsData } = await supabase
+      .from('community_flairs')
+      .select('*')
+      .eq('community_id', comm.id)
+
+    if (flairsData && flairsData.length > 0) {
+      setCommunityFlairs(flairsData)
+    } else {
+      setCommunityFlairs([
+        { id: 'f-1', name: 'Discussion', color: '#6366f1', icon: '💭' },
+        { id: 'f-2', name: 'Question', color: '#0284c7', icon: '❓' },
+        { id: 'f-3', name: 'Personal Story', color: '#d97706', icon: '📖' },
+        { id: 'f-4', name: 'Advice', color: '#16a34a', icon: '💡' },
+      ])
+    }
+
+    // 6. Fetch community growth & engagement metrics (for owners & mods)
     try {
       const { data: gMetrics } = await supabase.rpc('get_community_growth_metrics', { p_community_id: comm.id })
       if (gMetrics) {
@@ -429,10 +452,14 @@ export default function CommunityDetailPage(): React.JSX.Element {
       author_id: currentUserId,
       community_id: community.id,
       content: newPostContent.trim(),
+      flair_id: selectedFlair?.id || null,
+      flair_name: selectedFlair?.name || null,
+      flair_color: selectedFlair?.color || null,
     })
 
     if (!error) {
       setNewPostContent('')
+      setSelectedFlair(null)
       fetchCommunityData()
     }
     setPosting(false)
@@ -841,7 +868,33 @@ export default function CommunityDetailPage(): React.JSX.Element {
                   }
                   className="input-field text-sm resize-none"
                 />
-                <div className="flex justify-between items-center">
+
+                {/* Community Post Flair Picker */}
+                {communityFlairs.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                    <span className="text-[11px] font-bold text-gray-400 mr-1">Post Flair:</span>
+                    {communityFlairs.map((flair) => {
+                      const isSelected = selectedFlair?.id === flair.id
+                      return (
+                        <button
+                          key={flair.id}
+                          type="button"
+                          onClick={() => setSelectedFlair(isSelected ? null : flair)}
+                          className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full border transition-all ${
+                            isSelected
+                              ? 'border-brand-600 bg-brand-600 text-white shadow-xs'
+                              : 'border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-400 hover:border-gray-400 bg-white dark:bg-slate-800'
+                          }`}
+                        >
+                          <span>{flair.icon || '🏷️'}</span>
+                          <span>{flair.name}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center pt-2">
                   {community.broadcast_mode ? (
                     <span className="text-[11px] font-bold text-indigo-600 flex items-center gap-1">
                       <Radio size={12} />
@@ -860,6 +913,39 @@ export default function CommunityDetailPage(): React.JSX.Element {
             )
           )}
 
+          {/* Post Flair Filter Pills (Reddit Subreddit Style) */}
+          {communityFlairs.length > 0 && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-1 scrollbar-none">
+              <button
+                onClick={() => setActiveFlairFilter('all')}
+                className={`px-3 py-1 rounded-full text-xs font-bold transition-all shrink-0 ${
+                  activeFlairFilter === 'all'
+                    ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900 shadow-xs'
+                    : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-slate-700 hover:border-gray-400'
+                }`}
+              >
+                All Flairs
+              </button>
+              {communityFlairs.map((flair) => {
+                const isActive = activeFlairFilter === flair.name
+                return (
+                  <button
+                    key={flair.id}
+                    onClick={() => setActiveFlairFilter(isActive ? 'all' : flair.name)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border transition-all shrink-0 ${
+                      isActive
+                        ? 'bg-brand-600 text-white border-brand-600 shadow-xs'
+                        : 'bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-slate-700 hover:border-gray-400'
+                    }`}
+                  >
+                    <span>{flair.icon || '🏷️'}</span>
+                    <span>{flair.name}</span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
           {posts.length === 0 ? (
             <div className="card p-12 text-center space-y-2">
               <h3 className="font-bold text-gray-900">No conversations yet.</h3>
@@ -867,17 +953,19 @@ export default function CommunityDetailPage(): React.JSX.Element {
             </div>
           ) : (
             <div className="space-y-4">
-              {posts.map((post) => (
-                <PostCard
-                  key={post.id}
-                  post={post}
-                  currentUserId={currentUserId || undefined}
-                  communityRole={userRole}
-                  onTogglePin={() => {
-                    fetchCommunityData()
-                  }}
-                />
-              ))}
+              {posts
+                .filter((post) => activeFlairFilter === 'all' || post.flairName === activeFlairFilter)
+                .map((post) => (
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    currentUserId={currentUserId || undefined}
+                    communityRole={userRole}
+                    onTogglePin={() => {
+                      fetchCommunityData()
+                    }}
+                  />
+                ))}
             </div>
           )}
         </div>
