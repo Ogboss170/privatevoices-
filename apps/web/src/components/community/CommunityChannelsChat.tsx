@@ -52,7 +52,7 @@ interface ChannelMessage {
 interface CommunityChannelsChatProps {
   communityId: string
   currentUserId?: string | null
-  userRole?: 'owner' | 'moderator' | 'member' | null
+  userRole?: 'owner' | 'moderator' | 'vip' | 'contributor' | 'member' | null
   isMember?: boolean
 }
 

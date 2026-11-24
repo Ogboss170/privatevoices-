@@ -17,7 +17,7 @@ import GuestAuthModal from '../auth/GuestAuthModal'
 interface PostCardProps {
   post: Post
   currentUserId?: string
-  communityRole?: 'owner' | 'moderator' | 'member' | null
+  communityRole?: 'owner' | 'moderator' | 'vip' | 'contributor' | 'member' | null
   onDelete?: (postId: string) => void
   onToggleSave?: (postId: string, isSaved: boolean) => void
   onTogglePin?: (postId: string, isPinned: boolean) => void

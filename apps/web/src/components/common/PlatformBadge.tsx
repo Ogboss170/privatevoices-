@@ -98,6 +98,19 @@ export function PlatformBadge({
         </span>
       )
 
+    case 'contributor':
+      return (
+        <span
+          title="Community Contributor • Active participant & voice"
+          className={`inline-flex items-center gap-1 text-sky-600 flex-shrink-0 cursor-default select-none ${className}`}
+        >
+          <span className="p-0.5 rounded-full bg-sky-500/10 border border-sky-500/25">
+            <Sparkles size={size - 2} className="text-sky-600 fill-sky-500/30" />
+          </span>
+          {showLabel && <span className="text-[10px] font-bold text-sky-600">Contributor</span>}
+        </span>
+      )
+
     case 'community_ambassador':
       return (
         <span
@@ -139,7 +152,7 @@ export function CommunityRoleBadge({
   size = 14,
   showLabel = true,
 }: {
-  role?: 'owner' | 'moderator' | 'vip' | 'member' | string | null
+  role?: 'owner' | 'moderator' | 'vip' | 'contributor' | 'member' | string | null
   size?: number
   showLabel?: boolean
 }) {

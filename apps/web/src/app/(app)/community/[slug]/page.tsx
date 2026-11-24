@@ -62,7 +62,7 @@ export default function CommunityDetailPage(): React.JSX.Element {
   const [members, setMembers] = useState<any[]>([])
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
-  const [userRole, setUserRole] = useState<'owner' | 'moderator' | 'member' | null>(null)
+  const [userRole, setUserRole] = useState<'owner' | 'moderator' | 'vip' | 'contributor' | 'member' | null>(null)
   const [membershipStatus, setMembershipStatus] = useState<'none' | 'pending' | 'member'>('none')
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [rules, setRules] = useState<any[]>([])
@@ -917,17 +917,8 @@ export default function CommunityDetailPage(): React.JSX.Element {
                 </div>
               </div>
               {/* Role Badge */}
-              {m.role === 'owner' ? (
-                <span className="flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                  <Shield size={12} />
-                  Owner
-                </span>
-              ) : m.role === 'moderator' ? (
-                <span className="flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
-                  <UserCheck size={12} />
-                  Moderator
-                </span>
-              ) : (
+              <CommunityRoleBadge role={m.role} />
+              {(!m.role || m.role === 'member') && (
                 <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">
                   Member
                 </span>
@@ -1198,10 +1189,10 @@ export default function CommunityDetailPage(): React.JSX.Element {
                         </span>
                       )}
 
-                      {/* Explicit Role Assignment (Owner Only) */}
+                      {/* Explicit Role Assignment (Owner & Moderator) */}
                       {userRole === 'owner' && (
                         <select
-                          value={m.role}
+                          value={m.role || 'member'}
                           onChange={async (e) => {
                             const newRole = e.target.value
                             await supabase
@@ -1210,9 +1201,10 @@ export default function CommunityDetailPage(): React.JSX.Element {
                               .match({ community_id: community.id, user_id: m.user_id })
                             fetchCommunityData()
                           }}
-                          className="text-[11px] font-semibold px-2 py-1 rounded-lg border border-gray-200 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
+                          className="text-[11px] font-semibold px-2 py-1 rounded-lg border border-gray-200 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer shadow-xs"
                         >
-                          <option value="member">Member</option>
+                          <option value="member">👤 Member</option>
+                          <option value="contributor">✨ Contributor</option>
                           <option value="vip">⭐ VIP</option>
                           <option value="moderator">🛡️ Moderator</option>
                         </select>
