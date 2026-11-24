@@ -45,6 +45,7 @@ import { MentionSuggestions } from './MentionSuggestions'
 import { MobileInteractivePoll } from './MobileInteractivePoll'
 import { PostInsightsModal } from './PostInsightsModal'
 import { UserBadgesRow, CommunityRoleBadge } from './PlatformBadge'
+import { MobileGuestAuthBottomSheet } from './MobileGuestAuthBottomSheet'
 import { useTheme } from '../context/ThemeContext'
 
 interface MobilePostCardProps {
@@ -70,6 +71,20 @@ export function MobilePostCard({ post, currentUserId, communityRole, onDelete, o
   const [canModerateCommunity, setCanModerateCommunity] = useState(
     communityRole === 'owner' || communityRole === 'moderator'
   )
+  const [guestAuthVisible, setGuestAuthVisible] = useState(false)
+  const [guestAuthContext, setGuestAuthContext] = useState({ title: '', desc: '' })
+
+  const requireAuth = (actionName: string, desc?: string): boolean => {
+    if (!currentUserId) {
+      setGuestAuthContext({
+        title: `Sign in to ${actionName}`,
+        desc: desc || `Join Private Voices to ${actionName.toLowerCase()} and interact with members.`,
+      })
+      setGuestAuthVisible(true)
+      return false
+    }
+    return true
+  }
 
   useEffect(() => {
     async function loadAuthorBadges() {
@@ -375,8 +390,7 @@ export function MobilePostCard({ post, currentUserId, communityRole, onDelete, o
 
   async function handleToggleLike() {
     if (likeBusy) return
-    if (!currentUserId) {
-      Alert.alert('Login Required', 'Please log in to like posts.')
+    if (!requireAuth('like this Voice', 'Sign in or create an account to like posts and show your appreciation.')) {
       return
     }
 
@@ -422,8 +436,7 @@ export function MobilePostCard({ post, currentUserId, communityRole, onDelete, o
 
   async function handleToggleRepost() {
     if (repostBusy) return
-    if (!currentUserId) {
-      Alert.alert('Login Required', 'Please log in to repost.')
+    if (!requireAuth('repost this Voice', 'Sign in or create an account to repost and amplify stories you resonate with.')) {
       return
     }
 
@@ -470,6 +483,9 @@ export function MobilePostCard({ post, currentUserId, communityRole, onDelete, o
   }
 
   async function handleToggleSave() {
+    if (!requireAuth('save this Voice', 'Sign in or create an account to bookmark voices and read them later.')) {
+      return
+    }
     const prevSaved = isSaved
     const nextSaved = !prevSaved
     setIsSaved(nextSaved)
@@ -547,8 +563,7 @@ export function MobilePostCard({ post, currentUserId, communityRole, onDelete, o
   }
 
   async function handleToggleLikeComment(commentId: string) {
-    if (!currentUserId) {
-      Alert.alert('Login Required', 'Please log in to like comments.')
+    if (!requireAuth('like this comment', 'Sign in to like comments and participate in community discussions.')) {
       return
     }
 
@@ -596,8 +611,7 @@ export function MobilePostCard({ post, currentUserId, communityRole, onDelete, o
 
   async function handleAddComment() {
     if (!commentText.trim()) return
-    if (!currentUserId) {
-      Alert.alert('Login Required', 'Please log in to leave a comment.')
+    if (!requireAuth('leave a comment', 'Sign in or create an account to join the conversation and share your thoughts.')) {
       return
     }
 
@@ -1258,6 +1272,14 @@ export function MobilePostCard({ post, currentUserId, communityRole, onDelete, o
         post={post}
         currentUserId={currentUserId}
         onClose={() => setShowInsightsModal(false)}
+      />
+
+      {/* Guest Auth Bottom Sheet */}
+      <MobileGuestAuthBottomSheet
+        visible={guestAuthVisible}
+        onClose={() => setGuestAuthVisible(false)}
+        actionTitle={guestAuthContext.title}
+        actionDescription={guestAuthContext.desc}
       />
     </View>
   )

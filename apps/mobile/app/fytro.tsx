@@ -759,7 +759,7 @@ export default function FytroScreen() {
                   <Text style={{ fontSize: 11, color: themeColors.textSecondary }}>Choose from 5 distinct vocal tones</Text>
                 </View>
               </View>
-              <TouchableOpacity onPress={() => setShowVoiceModal(false)} style={styles.closeBtn}>
+              <TouchableOpacity onPress={() => setShowVoiceModal(false)} style={styles.iconBtn}>
                 <X size={18} color={themeColors.textSecondary} />
               </TouchableOpacity>
             </View>
