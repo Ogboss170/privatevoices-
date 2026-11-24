@@ -249,25 +249,32 @@ export class FytroService {
           ...messages.map((m) => ({ role: m.role, content: m.content })),
         ]
 
-        const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${DIRECT_GROQ_KEY}`,
-          },
-          body: JSON.stringify({
-            model: 'openai/gpt-oss-120b',
-            messages: groqMessages,
-            temperature: mode === 'creative' ? 0.7 : 0.3,
-            max_tokens: 1500,
-          }),
-        })
+        // Try qwen/qwen3.8-27b first for fast, direct factual answers, then fall back to openai/gpt-oss-120b
+        for (const groqModel of ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b']) {
+          try {
+            const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${DIRECT_GROQ_KEY}`,
+              },
+              body: JSON.stringify({
+                model: groqModel,
+                messages: groqMessages,
+                temperature: mode === 'creative' ? 0.7 : 0.2,
+                max_tokens: 1500,
+              }),
+            })
 
-        if (groqRes.ok) {
-          const groqData = await groqRes.json()
-          const answer = groqData.choices?.[0]?.message?.content
-          if (answer && answer.trim().length > 0) {
-            return answer.trim()
+            if (groqRes.ok) {
+              const groqData = await groqRes.json()
+              const answer = groqData.choices?.[0]?.message?.content
+              if (answer && answer.trim().length > 0) {
+                return answer.trim()
+              }
+            }
+          } catch (modelErr) {
+            console.warn(`Direct mobile Groq query failed with model ${groqModel}:`, modelErr)
           }
         }
       } catch (err) {
@@ -290,10 +297,9 @@ export class FytroService {
 
     if (mode === 'challenger') {
       return (
-        `Let's test this perspective:\n\n` +
-        `1. What is the strongest argument an intelligent critic would make against: "${lastUserMsg.slice(0, 70)}"?\n` +
-        `2. What core assumption are you taking for granted that might actually be fragile?\n\n` +
-        "Where does that leave your conviction?"
+        `Let's examine this carefully: "${lastUserMsg.slice(0, 70)}"\n\n` +
+        "1. What is the most compelling counter-perspective someone could hold against this?\n" +
+        "2. What underlying assumption might be worth re-evaluating?"
       )
     }
 
@@ -305,18 +311,10 @@ export class FytroService {
       )
     }
 
-    const cleanSnippet = lastUserMsg.trim().replace(/\n+/g, ' ')
-    if (cleanSnippet.length > 0) {
-      return (
-        `Reflecting on what you shared: "${cleanSnippet.slice(0, 90)}${cleanSnippet.length > 90 ? '...' : ''}"\n\n` +
-        "In your Mind Space, you don't have to defend or perform anything.\n\n" +
-        "What is the most honest, unfiltered reaction inside you right now?"
-      )
-    }
-
+    // Standard offline notice instead of evasive philosophical templates
     return (
-      "I'm here with you in your Mind Space. You don't have to perform or defend anything.\n\n" +
-      "What is the quietest, most honest reaction inside you right now?"
+      "I am currently in offline mode and could not connect to cloud reasoning LPUs.\n\n" +
+      "Please check your internet connection or try again in a moment. I'm ready to help answer questions and explore ideas whenever you are back online."
     )
   }
 

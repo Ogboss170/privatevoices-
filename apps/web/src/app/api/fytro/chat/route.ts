@@ -11,6 +11,49 @@ interface ChatMessage {
   content: string
 }
 
+// Reliable Groq caller that handles both streaming and complete responses
+function callGroqHttps(apiKey: string, payload: any): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(payload)
+    const req = https.request('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Length': Buffer.byteLength(data),
+        'User-Agent': 'PrivateVoices-Fytro/2.0',
+      },
+      timeout: 25000,
+    }, (res) => {
+      let body = ''
+      res.on('data', (chunk) => {
+        body += chunk
+      })
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(body)
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300 && json.choices?.[0]?.message?.content) {
+            resolve(json.choices[0].message.content)
+          } else {
+            reject(new Error(json.error?.message || `HTTP ${res.statusCode}: ${res.statusMessage}`))
+          }
+        } catch (e) {
+          reject(e)
+        }
+      })
+    })
+
+    req.on('timeout', () => {
+      req.destroy(new Error('Groq request connection timed out'))
+    })
+    req.on('error', (err) => {
+      reject(err)
+    })
+    req.write(data)
+    req.end()
+  })
+}
+
 // Resilient Node HTTPS streaming client to prevent Undici Windows connect timeouts
 function streamGroqHttps(apiKey: string, payload: any): Promise<import('node:http').IncomingMessage> {
   return new Promise((resolve, reject) => {
@@ -64,23 +107,24 @@ export async function POST(req: NextRequest) {
     const activeModeGuidance = FYTRO_MODE_INSTRUCTIONS[mode] || FYTRO_MODE_INSTRUCTIONS.sanctuary
     const completeSystemInstruction = `${FYTRO_SYSTEM_PROMPT}\n${activeModeGuidance}${memoryContextPrompt}`
 
+    const groqMessages = [
+      { role: 'system', content: completeSystemInstruction },
+      ...messages
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .map((m) => ({ role: m.role, content: m.content })),
+    ]
+
     // ── Tier 1: Groq Engine (Ultra-fast LPUs, Qwen / Llama models) ──
     if (process.env.GROQ_API_KEY) {
-      // Prioritize high-accuracy reasoning models
-      const groqModels = ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b', 'openai/gpt-oss-20b']
-      const groqMessages = [
-        { role: 'system', content: completeSystemInstruction },
-        ...messages
-          .filter((m) => m.role === 'user' || m.role === 'assistant')
-          .map((m) => ({ role: m.role, content: m.content })),
-      ]
+      // Prioritize qwen/qwen3.8-27b for lightning-fast factual precision, followed by openai/gpt-oss-120b
+      const groqModels = ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b']
 
       for (const groqModel of groqModels) {
         try {
           const payload = {
             model: groqModel,
             messages: groqMessages,
-            temperature: mode === 'creative' ? 0.7 : mode === 'challenger' ? 0.4 : 0.3,
+            temperature: mode === 'creative' ? 0.7 : mode === 'challenger' ? 0.4 : 0.2,
             max_tokens: 2000,
             stream: true,
           }
@@ -146,6 +190,42 @@ export async function POST(req: NextRequest) {
           }
         } catch (err) {
           console.error(`Groq connection error with model ${groqModel}, trying next:`, err)
+        }
+      }
+    }
+
+    // ── Tier 1B: If streaming attempt was not returned, try fast direct completion ──
+    if (process.env.GROQ_API_KEY) {
+      for (const groqModel of ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b']) {
+        try {
+          const directText = await callGroqHttps(process.env.GROQ_API_KEY, {
+            model: groqModel,
+            messages: groqMessages,
+            temperature: mode === 'creative' ? 0.7 : 0.2,
+            max_tokens: 1500,
+          })
+          if (directText && directText.trim()) {
+            const encoder = new TextEncoder()
+            const wordStream = new ReadableStream({
+              async start(controller) {
+                const words = directText.split(/(\s+)/)
+                for (const word of words) {
+                  controller.enqueue(encoder.encode(word))
+                  await new Promise((res) => setTimeout(res, 12))
+                }
+                controller.close()
+              },
+            })
+            return new Response(wordStream, {
+              headers: {
+                'Content-Type': 'text/plain; charset=utf-8',
+                'Transfer-Encoding': 'chunked',
+                'Cache-Control': 'no-cache, no-transform',
+              },
+            })
+          }
+        } catch (e) {
+          console.error(`Direct Groq fallback failed with model ${groqModel}:`, e)
         }
       }
     }
@@ -286,45 +366,25 @@ function generateSocraticResponse(userText: string, mode: FytroMode): string {
     )
   }
 
-  if (mode === 'challenger' || lower.includes('argue') || lower.includes('debate') || lower.includes('critique')) {
+  if (mode === 'challenger') {
     return (
-      `Let's examine that perspective: "${userText.slice(0, 80)}${userText.length > 80 ? '...' : ''}"\n\n` +
-      "1. **The Counter-Premise**: If someone held an opposing view in complete good faith, what core lived experience or truth would lead them there?\n" +
-      "2. **The Unseen Risk**: What potential blind spot might exist in this current framing?\n\n" +
-      "Testing your premises isn't about second-guessing yourself—it's about making sure your ideas belong genuinely to you. What part of that feels hardest to defend?"
+      `Let's examine this carefully: "${userText.slice(0, 80)}${userText.length > 80 ? '...' : ''}"\n\n` +
+      "1. **The Counter-Premise**: What is the most compelling counter-perspective someone could hold against this?\n" +
+      "2. **The Unseen Risk**: What underlying assumption might be worth re-evaluating?"
     )
   }
 
-  if (mode === 'creative' || lower.includes('brainstorm') || lower.includes('write') || lower.includes('idea')) {
+  if (mode === 'creative') {
     return (
-      `Exploring your thought: "${userText.slice(0, 80)}${userText.length > 80 ? '...' : ''}"\n\n` +
-      "• **The Emotional Core**: What is the single feeling you want someone to carry away after experiencing this?\n" +
-      "• **The Subversion**: What if you flip the standard premise upside down—what becomes unexpected?\n\n" +
-      "Where does your imagination want to take this next?"
+      `Exploring angles for: "${userText.slice(0, 80)}${userText.length > 80 ? '...' : ''}"\n\n` +
+      "• What if you inverted the primary premise to find an unexpected perspective?\n" +
+      "• How can this idea be expressed with the sharpest emotional resonance?"
     )
   }
 
-  if (lower.includes('decision') || lower.includes('dilemma') || lower.includes('choice') || lower.includes('stuck')) {
-    return (
-      "Difficult choices are rarely between simple right and wrong—they are usually about deciding which form of discomfort or growth you are willing to bear.\n\n" +
-      "• If you made this choice purely for your own integrity, without explaining or justifying it to anyone else, what would your immediate instinct say?\n" +
-      "• Looking back a year from now, which direction makes you feel more proud of who you chose to be?\n\n" +
-      "What is the nuance that feels most difficult to say out loud?"
-    )
-  }
-
-  // Meaningful, tailored responses referencing user text
-  const cleanSnippet = userText.trim().replace(/\n+/g, ' ')
-  if (cleanSnippet.length > 0) {
-    return (
-      `Reflecting on what you shared: "${cleanSnippet.slice(0, 100)}${cleanSnippet.length > 100 ? '...' : ''}"\n\n` +
-      "In this space, you can say whatever is genuine without polishing or qualifying it.\n\n" +
-      "What is the most honest thought or feeling behind this right now?"
-    )
-  }
-
+  // Clear, helpful default if cloud inference is momentarily unreachable
   return (
-    "I'm here with you in your Mind Space. You can explore whatever is on your mind freely and securely.\n\n" +
-    "What would you like to reflect on or untangle today?"
+    "I am currently operating in resilient offline mode while connecting to cloud reasoning LPUs.\n\n" +
+    "For complex reasoning or live factual lookups, please ensure connectivity or ask again in a moment. I am here to explore your thoughts and ideas."
   )
 }
